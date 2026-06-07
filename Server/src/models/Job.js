@@ -1,0 +1,22 @@
+import mongoose from "mongoose"
+
+const JobSchema = new mongoose.Schema(
+	{
+		externalId: { type: String, required: true }, // unique ID from the source, for dedupe
+		source: { type: String, enum: ["adzuna", "jsearch"], required: true },
+		title: { type: String, required: true },
+		normalizedRole: { type: String, index: true }, // "backend" | "frontend" | "fullstack"
+		companyName: String,
+		isRemote: { type: Boolean, default: false },
+		requiredSkills: [{ type: String }], // ["node.js", "react", "mongodb"]
+		salaryRange: { min: Number, max: Number, midpoint: Number, currency: String },
+		location: String,
+		postedAt: { type: Date, required: true },
+	},
+	{ timestamps: true },
+)
+
+JobSchema.index({ source: 1, externalId: 1 }, { unique: true })
+JobSchema.index({ normalizedRole: 1, postedAt: -1 })
+
+export default mongoose.model("Job", JobSchema)

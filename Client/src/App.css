@@ -1,0 +1,46 @@
+.page {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 24px;
+	font-family: system-ui, sans-serif;
+}
+
+.title {
+	margin-bottom: 4px;
+	font-size: 2.5rem;
+}
+
+.subtitle {
+	color: #666;
+	margin-top: 0;
+}
+
+.state {
+	padding: 24px;
+}
+
+.state.error {
+	color: red;
+}
+
+.chart {
+	width: 100%;
+	height: 360px;
+	margin-bottom: 24px;
+}
+
+.ranking {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.ranking th {
+	text-align: left;
+	border-bottom: 2px solid #ddd;
+	padding: 8px;
+}
+
+.ranking td {
+	padding: 8px;
+	border-bottom: 1px solid #eee;
+}
