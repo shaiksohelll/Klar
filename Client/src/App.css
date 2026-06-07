@@ -1,51 +1,161 @@
-.page {
-	max-width: 900px;
+.app {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	color: #1a1a2e;
+}
+
+/* Hero */
+.hero {
+	background: linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%);
+	color: #fff;
+	padding: 48px 24px 56px;
+}
+
+.hero-inner {
+	max-width: 960px;
 	margin: 0 auto;
-	padding: 24px;
-	font-family: system-ui, sans-serif;
 }
 
-.title {
-	margin-bottom: 4px;
-	font-size: 2.5rem;
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
 }
 
-.subtitle {
-	color: #666;
-	margin-top: 0;
+.brand-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #c4b5fd;
+	box-shadow: 0 0 0 4px rgba(196, 181, 253, 0.3);
 }
 
-.controls {
-	margin: 16px 0;
+.brand-name {
+	margin: 0;
+	font-size: 2.75rem;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+}
+
+.tagline {
+	margin: 12px 0 0;
+	font-size: 1.05rem;
+	color: #e9d5ff;
+	max-width: 620px;
+}
+
+/* Container */
+.container {
+	flex: 1;
+	width: 100%;
+	max-width: 960px;
+	margin: -24px auto 0;
+	padding: 0 24px 24px;
+}
+
+/* Toolbar */
+.toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	background: #fff;
+	border: 1px solid #ececf1;
+	border-radius: 14px;
+	padding: 16px 20px;
+	box-shadow: 0 4px 16px rgba(20, 20, 50, 0.06);
+	margin-bottom: 20px;
+}
+
+.stat {
+	display: flex;
+	flex-direction: column;
+}
+
+.stat-num {
+	font-size: 1.75rem;
+	font-weight: 800;
+	color: #6d28d9;
+	line-height: 1;
+}
+
+.stat-label {
+	font-size: 0.8rem;
+	color: #6b7280;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-top: 4px;
+}
+
+.filter {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.filter label {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: #6b7280;
 }
 
 .role-select {
-	padding: 6px 10px;
-	font-size: 1rem;
-	border: 1px solid #ccc;
-	border-radius: 6px;
+	padding: 8px 12px;
+	font-size: 0.95rem;
+	border: 1px solid #d1d5db;
+	border-radius: 8px;
 	background: #fff;
 	cursor: pointer;
+	font-weight: 500;
+	color: #1a1a2e;
 }
 
-.meta {
-	color: #666;
+.role-select:focus {
+	outline: none;
+	border-color: #6d28d9;
+	box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.15);
 }
 
-.state {
+/* Cards */
+.card {
+	background: #fff;
+	border: 1px solid #ececf1;
+	border-radius: 14px;
 	padding: 24px;
+	box-shadow: 0 4px 16px rgba(20, 20, 50, 0.06);
+	margin-bottom: 20px;
 }
 
-.state.error {
-	color: red;
+.card-title {
+	margin: 0 0 16px;
+	font-size: 1.15rem;
+	font-weight: 700;
 }
 
 .chart {
 	width: 100%;
 	height: 360px;
-	margin-bottom: 24px;
 }
 
+/* States */
+.state {
+	background: #fff;
+	border: 1px solid #ececf1;
+	border-radius: 14px;
+	padding: 40px;
+	text-align: center;
+	color: #6b7280;
+	font-size: 1rem;
+}
+
+.state.error {
+	color: #b91c1c;
+	border-color: #fecaca;
+	background: #fef2f2;
+}
+
+/* Ranking table */
 .ranking {
 	width: 100%;
 	border-collapse: collapse;
@@ -53,11 +163,74 @@
 
 .ranking th {
 	text-align: left;
-	border-bottom: 2px solid #ddd;
-	padding: 8px;
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #9ca3af;
+	padding: 8px 12px;
+	border-bottom: 1px solid #ececf1;
 }
 
 .ranking td {
-	padding: 8px;
-	border-bottom: 1px solid #eee;
+	padding: 10px 12px;
+	border-bottom: 1px solid #f3f4f6;
+	font-size: 0.95rem;
+}
+
+.ranking tbody tr:hover {
+	background: #faf5ff;
+}
+
+.col-rank {
+	width: 48px;
+	color: #9ca3af;
+	font-variant-numeric: tabular-nums;
+}
+
+.skill-name {
+	font-weight: 600;
+	text-transform: capitalize;
+}
+
+.col-remote {
+	width: 80px;
+	text-align: center;
+	color: #6b7280;
+}
+
+.demand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.bar-track {
+	flex: 1;
+	max-width: 220px;
+	height: 8px;
+	background: #f3f4f6;
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.bar-fill {
+	display: block;
+	height: 100%;
+	background: linear-gradient(90deg, #8b5cf6, #6d28d9);
+	border-radius: 999px;
+}
+
+.demand-num {
+	font-weight: 700;
+	color: #6d28d9;
+	min-width: 20px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Footer */
+.footer {
+	text-align: center;
+	padding: 24px;
+	color: #9ca3af;
+	font-size: 0.85rem;
 }

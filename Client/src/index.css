@@ -1,5 +1,19 @@
-body {
+:root {
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	line-height: 1.5;
+}
+
+* {
 	margin: 0;
-	background: #fafafa;
-	color: #1a1a1a;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	background: #f6f6fb;
+	color: #1a1a2e;
+}
+
+#root {
+	width: 100%;
 }
