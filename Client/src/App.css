@@ -234,3 +234,88 @@
 	color: #9ca3af;
 	font-size: 0.85rem;
 }
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.signin-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.18s ease;
+}
+.signin-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+/* ---- Stage 2: cinematic aurora hero ---- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: #0b0b14;
+}
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+}
+.hero::before {
+  width: 480px;
+  height: 480px;
+  top: -160px;
+  left: -80px;
+  background: radial-gradient(circle at center, #7c3aed, transparent 70%);
+  animation: aurora-a 14s ease-in-out infinite alternate;
+}
+.hero::after {
+  width: 520px;
+  height: 520px;
+  top: -200px;
+  right: -120px;
+  background: radial-gradient(circle at center, #4c1d95, transparent 70%);
+  animation: aurora-b 18s ease-in-out infinite alternate;
+}
+.hero-inner {
+  position: relative;
+  z-index: 1;
+}
+@keyframes aurora-a {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(120px, 60px) scale(1.25); }
+}
+@keyframes aurora-b {
+  from { transform: translate(0, 0) scale(1.1); }
+  to   { transform: translate(-100px, 40px) scale(1); }
+}
+
+/* the "clarity" reveal: blur -> sharp */
+.brand-name,
+.tagline {
+  animation: clarity-in 1s ease-out both;
+}
+.tagline {
+  animation-delay: 0.15s;
+}
+@keyframes clarity-in {
+  from { filter: blur(12px); opacity: 0; transform: translateY(6px); }
+  to   { filter: blur(0); opacity: 1; transform: translateY(0); }
+}
+/* fix: clean gap between hero and the toolbar */
+.container {
+  margin-top: 40px;
+}
+.toolbar {
+  margin-top: 0;
+}

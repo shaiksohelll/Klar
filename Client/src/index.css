@@ -1,19 +1,18 @@
+@import "tailwindcss";
+
 :root {
-	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-	line-height: 1.5;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
 }
-
 * {
-	margin: 0;
-	padding: 0;
-	box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
-
 body {
-	background: #f6f6fb;
-	color: #1a1a2e;
+  background: #f6f6fb;
+  color: #1a1a2e;
 }
-
 #root {
-	width: 100%;
+  width: 100%;
 }
