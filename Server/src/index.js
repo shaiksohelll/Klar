@@ -21,9 +21,9 @@ app.get("/health", (req, res) => {
 // Pull jobs into the DB
 app.get("/api/ingest/adzuna", async (req, res) => {
     try {
-        const what = req.query.what || "developer"
+        const what = req.query.what || undefined
         const country = req.query.country || "in"
-        const pages = Number(req.query.pages || 3)
+        const pages = Number(req.query.pages || 2)
         const result = await ingestAdzuna({ what, country, pages })
         res.json({ ok: true, ...result })
     } catch (err) {
@@ -58,7 +58,7 @@ mongoose
 // Keep data fresh automatically (near real-time): re-ingest every 6 hours.
 cron.schedule("0 */6 * * *", async () => {
     try {
-        const r = await ingestAdzuna({ what: "developer", country: "in", pages: 3 })
+        const r = await ingestAdzuna({ country: "in", pages: 2 })
         console.log("🔄 Auto-ingest:", r)
     } catch (e) {
         console.error("Auto-ingest failed:", e.message)
