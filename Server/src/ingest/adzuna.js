@@ -43,6 +43,7 @@ function mapJob(raw, country) {
 			currency: country === "in" ? "INR" : country === "us" ? "USD" : "GBP",
 		},
 		location: raw.location?.display_name || "",
+redirectUrl: raw.redirect_url || "", // direct link to the source posting
 		postedAt: raw.created ? new Date(raw.created) : new Date(),
 	}
 }
@@ -52,8 +53,9 @@ export async function ingestAdzuna({ what = "developer", country = "in", pages =
 		throw new Error("Missing ADZUNA_APP_ID or ADZUNA_APP_KEY in .env")
 	}
 
-	let fetched = 0
-	const ops = []
+	const runStartedAt = new Date()
+let fetched = 0
+const ops = []
 
 	for (let page = 1; page <= pages; page++) {
 		const data = await fetchPage({ country, page, what })
@@ -73,12 +75,29 @@ export async function ingestAdzuna({ what = "developer", country = "in", pages =
 	}
 
 	let upserted = 0
-	let modified = 0
-	if (ops.length > 0) {
-		const result = await Job.bulkWrite(ops, { ordered: false })
-		upserted = result.upsertedCount || 0
-		modified = result.modifiedCount || 0
-	}
+let modified = 0
+if (ops.length > 0) {
+    const result = await Job.bulkWrite(ops, { ordered: false })
+    upserted = result.upsertedCount || 0
+    modified = result.modifiedCount || 0
+}
 
-	return { fetched, upserted, modified, totalInDb: await Job.countDocuments() }
+// Prune stale Adzuna postings: any adzuna job not refreshed in this run
+// (updatedAt older than when we started) is no longer live → remove it.
+let removed = 0
+if (fetched > 0) {
+    const pruneResult = await Job.deleteMany({
+        source: "adzuna",
+        updatedAt: { $lt: runStartedAt },
+    })
+    removed = pruneResult.deletedCount || 0
+}
+
+return {
+    fetched,
+    upserted,
+    modified,
+    removed,
+    totalInDb: await Job.countDocuments(),
+}
 }

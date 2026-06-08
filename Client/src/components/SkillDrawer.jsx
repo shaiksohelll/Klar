@@ -1,0 +1,347 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
+import { StarIcon, XIcon } from "./icons";
+
+const API = "http://localhost:5000";
+
+const backdropInit = { opacity: 0 };
+const backdropShow = { opacity: 1 };
+const drawerInit = { x: "100%" };
+const drawerShow = { x: 0 };
+const drawerTrans = { type: "spring", stiffness: 300, damping: 30 };
+const shareBarStyle = (pct) => ({ width: `${pct}%` });
+const trendBarStyle = (pct) => ({ height: `${pct}%` });
+
+function monthLabel(ym) {
+  const parts = String(ym).split("-");
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+  return d.toLocaleString("en", { month: "short" });
+}
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const days = Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  return `${months}mo ago`;
+}
+
+export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }) {
+  // activeSkill lets the drawer navigate to a related skill without closing.
+  const [activeSkill, setActiveSkill] = useState(skill);
+  const [detail, setDetail] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Reset to the parent-selected skill whenever it changes (new open).
+  useEffect(() => {
+    if (skill) setActiveSkill(skill);
+  }, [skill]);
+
+  // Fetch enriched detail for the active skill.
+  useEffect(() => {
+    if (!isOpen || !activeSkill) return;
+    let cancelled = false;
+    setLoadingDetail(true);
+    setDetail(null);
+    axios
+      .get(`${API}/api/skill/${encodeURIComponent(activeSkill.id)}`, {
+        params: { months: months || 12 },
+      })
+      .then((res) => {
+        if (!cancelled) setDetail(res.data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeSkill, months]);
+
+  if (!activeSkill && !skill) return null;
+
+  const current = activeSkill || skill;
+  const name = current.name || current.id;
+  const isTracked = current ? tracked.includes(current.id) : false;
+
+  const demandVal = detail ? detail.demand : current.count ?? null;
+  const remoteCountVal = detail ? detail.remoteCount : current.remoteCount ?? null;
+  const remoteShare =
+    detail && typeof detail.remoteShare === "number"
+      ? detail.remoteShare
+      : current.count
+        ? Math.round((current.remoteCount / current.count) * 100)
+        : 0;
+  const share =
+    detail && typeof detail.share === "number" ? detail.share : current.share ?? 0;
+  const maxTrend =
+    detail && detail.trend && detail.trend.length
+      ? Math.max(...detail.trend.map((t) => t.count))
+      : 1;
+
+  const goToSkill = (skillName) => {
+    setActiveSkill({ id: skillName, name: skillName, role: current.role });
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && current && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={backdropInit}
+            animate={backdropShow}
+            exit={backdropInit}
+            onClick={onClose}
+            className="fixed inset-0 z-50 bg-[#08080A]/60 backdrop-blur-sm"
+          />
+
+          {/* Drawer */}
+          <motion.div
+            initial={drawerInit}
+            animate={drawerShow}
+            exit={drawerInit}
+            transition={drawerTrans}
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-gradient-to-b from-[#121216] to-[#1A1A20] border-l border-[#26262E] shadow-2xl flex flex-col"
+          >
+            {/* Header */}
+            <div className="p-6 md:p-8 flex justify-between items-start border-b border-[#26262E]/50 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF2740] rounded-full blur-[120px] opacity-10 pointer-events-none" />
+              <div className="relative z-10">
+                <div className="font-mono text-xs tracking-widest text-[#9A9AA6] uppercase mb-2">
+                  Skill Profile
+                </div>
+                <h2 className="font-space font-bold text-3xl text-white tracking-tight">
+                  {name}
+                </h2>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="px-2.5 py-1 rounded-full border border-[#26262E] bg-[#08080A] text-xs font-mono text-[#F4F4F6]">
+                    {current.role}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="relative z-10 p-2 text-[#9A9AA6] hover:text-white transition-colors bg-[#08080A]/50 rounded-full hover:bg-[#26262E]"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 relative z-10">
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                    Demand
+                  </div>
+                  <div className="font-mono text-2xl text-white">
+                    {demandVal != null ? demandVal.toLocaleString() : "…"}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                    Remote
+                  </div>
+                  <div className="font-mono text-2xl text-white">
+                    {remoteShare}%
+                    {remoteCountVal != null && (
+                      <span className="text-sm text-[#5C5C66] ml-1">
+                        ({remoteCountVal.toLocaleString()})
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] col-span-2">
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                    Share of Jobs
+                  </div>
+                  <div className="flex items-end gap-3">
+                    <div className="font-mono text-2xl text-white">{share}%</div>
+                    <div className="w-full bg-[#26262E] h-2 rounded-full overflow-hidden mb-1.5">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#FF2740] to-[#9E0019]"
+                        style={shareBarStyle(share)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Postings over time */}
+              {detail && detail.trend && detail.trend.length > 1 && (
+                <div>
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                    Postings Over Time
+                  </div>
+                  <div className="flex items-end gap-1.5 h-24">
+                    {detail.trend.map((t) => (
+                      <div
+                        key={t.month}
+                        className="flex-1 flex flex-col items-center gap-2 h-full"
+                      >
+                        <div className="w-full bg-[#26262E] rounded-sm flex items-end h-full overflow-hidden">
+                          <div
+                            className="w-full bg-gradient-to-t from-[#9E0019] to-[#FF2740] rounded-sm"
+                            style={trendBarStyle(
+                              Math.max(6, Math.round((t.count / maxTrend) * 100)),
+                            )}
+                          />
+                        </div>
+                        <div className="font-mono text-[10px] text-[#5C5C66]">
+                          {monthLabel(t.month)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top companies */}
+              {detail && detail.topCompanies && detail.topCompanies.length > 0 && (
+                <div>
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                    Top Companies Hiring
+                  </div>
+                  <div className="space-y-2">
+                    {detail.topCompanies.map((c) => (
+                      <div
+                        key={c.company}
+                        className="flex items-center justify-between p-3 rounded-lg bg-[#08080A] border border-[#26262E]"
+                      >
+                        <span className="text-sm text-[#F4F4F6] truncate pr-3">
+                          {c.company}
+                        </span>
+                        <span className="font-mono text-xs text-[#9A9AA6] shrink-0">
+                          {c.count} jobs
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Related skills (clickable) */}
+              {detail &&
+                detail.relatedSkills &&
+                detail.relatedSkills.length > 0 && (
+                  <div>
+                    <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                      Frequently Paired With
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {detail.relatedSkills.map((r) => (
+                        <button
+                          key={r.skill}
+                          onClick={() => goToSkill(r.skill)}
+                          className="px-3 py-1.5 rounded-full border border-[#26262E] bg-[#08080A] text-xs font-mono text-[#F4F4F6] hover:border-[#EB0029] hover:text-white transition-colors cursor-pointer"
+                        >
+                          {r.skill}
+                          <span className="text-[#5C5C66] ml-1.5">{r.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Recent postings (clickable when a source link exists) */}
+              {detail && detail.recent && detail.recent.length > 0 && (
+                <div>
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                    Recent Postings
+                  </div>
+                  <div className="space-y-2">
+                    {detail.recent.map((j, i) => {
+                      const inner = (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm text-[#F4F4F6] font-medium truncate">
+                              {j.title}
+                            </div>
+                            {j.url && (
+                              <span className="ml-auto shrink-0 font-mono text-xs text-[#9A9AA6] group-hover:text-[#FF2740]">
+                                ↗
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 font-mono text-xs text-[#5C5C66]">
+                            <span className="truncate">{j.company || "—"}</span>
+                            {j.isRemote && (
+                              <span className="px-1.5 py-0.5 rounded bg-[rgba(235,0,41,0.15)] text-[#FF2740]">
+                                Remote
+                              </span>
+                            )}
+                            <span className="ml-auto shrink-0">
+                              {timeAgo(j.postedAt)}
+                            </span>
+                          </div>
+                        </>
+                      );
+                      return j.url ? (
+                        <a
+                          key={i}
+                          href={j.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group block p-3 rounded-lg bg-[#08080A] border border-[#26262E] hover:border-[#EB0029] transition-colors"
+                        >
+                          {inner}
+                        </a>
+                      ) : (
+                        <div
+                          key={i}
+                          className="p-3 rounded-lg bg-[#08080A] border border-[#26262E]"
+                        >
+                          {inner}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Loading */}
+              {loadingDetail && !detail && (
+                <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-widest animate-pulse">
+                  Loading skill detail…
+                </div>
+              )}
+
+              {/* The Reality */}
+              <div>
+                <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                  The Reality
+                </div>
+                <p className="text-[#F4F4F6] leading-relaxed">
+                  {`${name} shows ${
+                    demandVal != null ? demandVal.toLocaleString() : "…"
+                  } active postings in this window — about ${share}% of all jobs analyzed, ${remoteShare}% of them remote. A live read on current demand, not a forecast.`}
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 md:p-8 border-t border-[#26262E]/50 bg-[#08080A]/50 relative z-10">
+              <button
+                onClick={() => onTrack(current.id)}
+                className={`w-full py-4 px-6 rounded-xl font-mono text-sm uppercase tracking-widest font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
+                  isTracked
+                    ? "bg-[#26262E] text-white hover:bg-[#32323C]"
+                    : "bg-[#EB0029] text-white shadow-[0_0_20px_rgba(235,0,41,0.3)] hover:shadow-[0_0_30px_rgba(255,39,64,0.5)] hover:bg-[#FF2740] hover:-translate-y-0.5"
+                }`}
+              >
+                <StarIcon filled={isTracked} className="w-4 h-4" />
+                {isTracked ? "Tracking" : "Track Skill"}
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}

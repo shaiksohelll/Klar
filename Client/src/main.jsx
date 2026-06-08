@@ -1,42 +1,41 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { ClerkProvider } from '@clerk/clerk-react'
-import './index.css'
-import App from './App.jsx'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { ClerkProvider } from "@clerk/clerk-react";
+import App from "./App";
+import "./index.css";
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-const clerkAppearance = {
-  variables: {
-    colorPrimary: '#7c3aed',
-    colorBackground: '#14141f',
-    colorText: '#f5f5fa',
-    colorTextSecondary: '#a1a1b5',
-    colorInputBackground: '#1d1d2b',
-    colorInputText: '#f5f5fa',
-    borderRadius: '14px',
-  },
-  elements: {
-    socialButtonsBlockButton: {
-      backgroundColor: '#ffffff',
-      color: '#1a1a2e',
-      border: '1px solid #ffffff',
-    },
-    socialButtonsBlockButtonText: {
-      color: '#1a1a2e',
-      fontWeight: '600',
-    },
-  },
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in Client/.env");
 }
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
+// Dark black + red Clerk modal to match the Klar theme
+const clerkAppearance = {
+  variables: {
+    colorPrimary: "#EB0029",
+    colorBackground: "#121216",
+    colorText: "#F4F4F6",
+    colorTextSecondary: "#9A9AA6",
+    colorInputBackground: "#08080A",
+    colorInputText: "#F4F4F6",
+    borderRadius: "0.75rem",
+  },
+  elements: {
+    card: "bg-[#121216] border border-[#26262E]",
+    headerTitle: "text-white",
+    socialButtonsBlockButton: "border border-[#26262E] text-[#F4F4F6]",
+  },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
     <ClerkProvider
       publishableKey={PUBLISHABLE_KEY}
-      afterSignOutUrl="/"
       appearance={clerkAppearance}
+      afterSignOutUrl="/"
     >
       <App />
     </ClerkProvider>
-  </StrictMode>,
-)
+  </React.StrictMode>,
+);
