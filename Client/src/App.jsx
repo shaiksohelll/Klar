@@ -15,6 +15,19 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const ALL_WINDOWS = ["3M", "6M", "12M"];
 
+// Turn an ISO timestamp into a short "Xh ago" string.
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 // Fetch + shape trending data for a role/window. Pure helper, reused for prefetch.
 async function fetchTrending(role, win) {
   const months = WINDOW_MONTHS[win];
@@ -22,6 +35,7 @@ async function fetchTrending(role, win) {
   if (role !== "All") params.role = role.toLowerCase();
   const res = await axios.get(`${API}/api/skills/trending`, { params });
   const total = res.data.totalJobs || 0;
+  const lastUpdated = res.data.lastUpdated || null;
   const skills = (res.data.skills || []).map((s) => ({
     id: s.skill,
     name: s.skill,
@@ -30,12 +44,13 @@ async function fetchTrending(role, win) {
     share: total ? Math.round((s.demand / total) * 100) : 0,
     role: role === "All" ? "General" : role,
   }));
-  return { skills, totalJobs: total };
+  return { skills, totalJobs: total, lastUpdated };
 }
 
 export default function App() {
   const [skills, setSkills] = useState([]);
   const [totalJobs, setTotalJobs] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [activeRole, setActiveRole] = useState("All");
   const [activeWindow, setActiveWindow] = useState("12M");
   const [trackedSkills, setTrackedSkills] = useState([]);
@@ -58,6 +73,7 @@ export default function App() {
       // Serve instantly from cache, no spinner.
       setSkills(cached.skills);
       setTotalJobs(cached.totalJobs);
+      setLastUpdated(cached.lastUpdated);
       setLoading(false);
       setError(null);
     } else {
@@ -72,6 +88,7 @@ export default function App() {
         cacheRef.current.set(key, data);
         setSkills(data.skills);
         setTotalJobs(data.totalJobs);
+        setLastUpdated(data.lastUpdated);
         setError(null);
       } catch (err) {
         if (!cancelled && !cached)
@@ -174,7 +191,7 @@ export default function App() {
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#EB0029] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
 
       <nav className="sticky top-0 z-40 bg-[#08080A]/70 backdrop-blur-xl border-b border-[#26262E]">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="relative max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <NavLink
             to="/"
             className="font-space font-bold text-xl tracking-tight text-white flex items-baseline"
@@ -182,7 +199,7 @@ export default function App() {
             Klar<span className="text-[#EB0029]">.</span>
           </NavLink>
 
-          <div className="hidden md:flex items-center gap-8 font-mono text-xs uppercase tracking-widest text-[#9A9AA6]">
+          <div className="hidden md:flex items-center gap-8 font-mono text-xs uppercase tracking-widest text-[#9A9AA6] absolute left-1/2 -translate-x-1/2">
             <NavLink to="/" end className={navClass}>
               Demand
             </NavLink>
@@ -195,6 +212,12 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {lastUpdated && (
+              <span className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-[#5C5C66] mr-1 pr-4 border-r border-[#26262E]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#EB0029] animate-pulse" />
+                Updated {timeAgo(lastUpdated)}
+              </span>
+            )}
             <SignedOut>
               <SignInButton mode="modal">
                 <button className="bg-[#EB0029] hover:bg-[#FF2740] text-white px-5 py-2 rounded-full font-medium text-sm transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5">
