@@ -160,11 +160,8 @@ export default function DemandPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-          <div className="lg:col-span-7 xl:col-span-8 h-[500px]">
+          <div className="lg:col-span-7 xl:col-span-8">
             <TiltCard>
-              <div className="absolute top-6 left-6 md:top-8 md:left-8 font-mono text-xs uppercase tracking-widest text-[#5C5C66] z-20">
-                Top Skills by Volume
-              </div>
               {/*
                 key={activeRole + activeWindow} forces BarChart to re-mount
                 (and thus re-run entrance animations) on filter changes.

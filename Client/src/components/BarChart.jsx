@@ -1,122 +1,198 @@
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
-// Bar spring: stiffness 150, damping 18
+// ── Springs ──────────────────────────────────────────────────────────────────
+// Bar entrance spring: stiffness 150, damping 18
 const BAR_SPRING = { type: "spring", stiffness: 150, damping: 18 };
-// Staggered entrance: 50 ms between each bar (left-to-right)
-const BAR_STAGGER_MS = 0.05; // seconds
+// Stagger: 50 ms between each bar (left-to-right)
+const BAR_STAGGER_S = 0.05;
+// Hover spring: UI spring, stiffness 180, damping 22
+const UI_SPRING = { type: "spring", stiffness: 180, damping: 22 };
 
-const labelInit = { opacity: 0 };
-const labelShow = { opacity: 1 };
-const tipInit = { opacity: 0, y: 8, scale: 0.95 };
+const tipInit = { opacity: 0, y: 6, scale: 0.96 };
 const tipShow = { opacity: 1, y: 0, scale: 1 };
-const tipTrans = { type: "spring", stiffness: 420, damping: 34 };
-const barStyle = { background: "linear-gradient(180deg, #FF2740 0%, #9E0019 100%)" };
-const nameWrapStyle = { transform: "rotate(-45deg)" };
+
+// ── Display name formatter ───────────────────────────────────────────────────
+// Capitalizes skill names for DISPLAY ONLY — never mutates the underlying key.
+const KNOWN_NAMES = {
+  html: "HTML",
+  css: "CSS",
+  aws: "AWS",
+  "ci/cd": "CI/CD",
+  sql: "SQL",
+  api: "API",
+  typescript: "TypeScript",
+  javascript: "JavaScript",
+  node: "Node.js",
+  nodejs: "Node.js",
+  "node.js": "Node.js",
+  php: "PHP",
+};
+
+function displayName(raw) {
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  if (KNOWN_NAMES[lower]) return KNOWN_NAMES[lower];
+  // Capitalize first letter, leave rest as-is
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+// ── Plot geometry ────────────────────────────────────────────────────────────
+const PLOT_HEIGHT = 320; // px — fixed height for the bar plot area
+const MAX_FILL = 0.88; // tallest bar fills 88% of plot height
+const BAR_GRADIENT = "linear-gradient(180deg, #FF2740 0%, #9E0019 100%)";
 
 export function BarChart({ skills, maxCount, onSelect }) {
   const [hoveredId, setHoveredId] = useState(null);
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <div className="w-full h-full flex flex-col pt-10 pb-[100px] px-2 md:px-4 relative">
-      <div className="flex-1 flex items-end justify-between gap-2 md:gap-4 relative border-b border-[#26262E]">
+    <div className="w-full flex flex-col">
+      {/* Eyebrow title */}
+      <div
+        className="font-mono uppercase text-[#5C5C66] tracking-[0.18em] mb-5 select-none"
+        style={{ fontSize: 11 }}
+      >
+        Top Skills by Volume
+      </div>
+
+      {/* Plot area — fixed height, bars bottom-aligned */}
+      <div
+        className="relative flex items-end gap-1"
+        style={{ height: PLOT_HEIGHT }}
+      >
         {skills.map((skill, index) => {
-          const heightPct = Math.max((skill.count / maxCount) * 100, 5);
+          const heightPx = Math.max(
+            (skill.count / maxCount) * PLOT_HEIGHT * MAX_FILL,
+            8,
+          );
           const isHovered = hoveredId === skill.id;
           const isFaded = hoveredId !== null && hoveredId !== skill.id;
 
-          // Equalizer entrance: bars grow from height 0 → target, staggered
-          // 50 ms left-to-right using the bar spring.  When reduced-motion is
-          // preferred we skip transforms and just fade in.
-          const barInitial = shouldReduceMotion ? { opacity: 0 } : { height: 0, opacity: 1 };
+          // Entrance animation
+          const barInitial = shouldReduceMotion
+            ? { opacity: 0 }
+            : { height: 0, opacity: 1 };
           const barAnimate = shouldReduceMotion
             ? { opacity: 1 }
-            : { height: `${heightPct}%`, opacity: 1 };
+            : { height: heightPx, opacity: 1 };
           const barTransition = shouldReduceMotion
-            ? { duration: 0.3, delay: index * BAR_STAGGER_MS }
-            : { ...BAR_SPRING, delay: index * BAR_STAGGER_MS };
+            ? { duration: 0.3, delay: index * BAR_STAGGER_S }
+            : { ...BAR_SPRING, delay: index * BAR_STAGGER_S };
 
           const remotePct = skill.count
             ? Math.round((skill.remoteCount / skill.count) * 100)
             : 0;
 
+          const display = displayName(skill.name);
+
           return (
             <div
               key={skill.id}
-              className="relative flex flex-col items-center flex-1 h-full justify-end group cursor-pointer"
+              className="flex-1 flex flex-col items-center justify-end cursor-pointer relative"
+              style={{ height: PLOT_HEIGHT }}
               onMouseEnter={() => setHoveredId(skill.id)}
               onMouseLeave={() => setHoveredId(null)}
               onClick={() => onSelect(skill)}
             >
-              {/* Permanent value label */}
+              {/* Value label — sits just above the bar top, always visible */}
               <motion.div
-                initial={labelInit}
-                animate={labelShow}
-                className={`absolute bottom-full mb-2 left-1/2 -translate-x-1/2 font-mono text-[10px] md:text-xs tracking-tight transition-colors duration-300 ${
-                  isHovered ? "text-white" : "text-[#9A9AA6]"
-                }`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * BAR_STAGGER_S + 0.15 }}
+                className="font-mono text-[11px] tabular-nums text-white mb-1.5 select-none"
               >
                 {skill.count.toLocaleString()}
               </motion.div>
 
-              {/* Floating tooltip */}
+              {/* The bar */}
+              <motion.div
+                initial={barInitial}
+                animate={{
+                  ...barAnimate,
+                  y: !shouldReduceMotion && isHovered ? -5 : 0,
+                  filter: isHovered ? "brightness(1.15)" : "brightness(1)",
+                }}
+                transition={barTransition}
+                whileHover={
+                  shouldReduceMotion ? undefined : { y: -5, transition: UI_SPRING }
+                }
+                className="w-full rounded-t-sm relative"
+                style={{
+                  background: BAR_GRADIENT,
+                  opacity: isFaded ? 0.7 : 1,
+                  transition: "opacity 0.25s ease",
+                  maxWidth: 48,
+                  margin: "0 auto",
+                }}
+              >
+                {/* Glow */}
+                <div
+                  className="absolute inset-0 bg-[#FF2740] rounded-t-sm -z-10 transition-opacity duration-300"
+                  style={{
+                    filter: "blur(10px)",
+                    opacity: isHovered ? 0.6 : 0,
+                  }}
+                />
+                {/* Top edge highlight */}
+                <div className="absolute top-0 inset-x-0 h-px bg-white/25 rounded-t-sm" />
+              </motion.div>
+
+              {/* Hover tooltip — positioned just above the value label, tracks bar */}
               <AnimatePresence>
                 {isHovered && (
-                  <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-                    <motion.div
-                      initial={tipInit}
-                      animate={tipShow}
-                      exit={tipInit}
-                      transition={tipTrans}
-                      className="bg-[#08080A] border border-[#26262E] rounded-lg p-3 shadow-2xl flex flex-col gap-1 min-w-[120px]"
-                    >
-                      <div className="font-sans text-sm font-medium text-white">{skill.name}</div>
+                  <motion.div
+                    initial={tipInit}
+                    animate={tipShow}
+                    exit={tipInit}
+                    transition={UI_SPRING}
+                    className="absolute z-30 pointer-events-none"
+                    style={{ bottom: heightPx + 34 }}
+                  >
+                    <div className="bg-[#08080A] border border-[#26262E] rounded-lg px-3 py-2.5 shadow-2xl flex flex-col gap-0.5 min-w-[110px] whitespace-nowrap">
+                      <div className="font-sans text-sm font-medium text-white">
+                        {display}
+                      </div>
                       <div className="font-mono text-xs text-[#9A9AA6]">
                         {skill.count.toLocaleString()} jobs
                       </div>
                       <div className="font-mono text-[10px] text-[#EB0029] uppercase tracking-wider">
                         {remotePct}% Remote
                       </div>
-                    </motion.div>
-                  </div>
+                    </div>
+                  </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
 
-              {/* The bar — grows from bottom using bar spring */}
-              <div className="w-full max-w-[48px] relative h-full flex items-end">
-                <motion.div
-                  initial={barInitial}
-                  animate={barAnimate}
-                  transition={barTransition}
-                  className={`w-full rounded-t-sm relative ${
-                    isFaded ? "opacity-30 saturate-50" : "opacity-100"
-                  } ${!shouldReduceMotion && isHovered ? "-translate-y-1.5" : ""}`}
-                  style={barStyle}
-                >
-                  {/* Glow — brightens on hover per spec */}
-                  <div
-                    className={`absolute inset-0 bg-[#FF2740] blur-md rounded-t-sm -z-10 transition-opacity duration-300 ${
-                      isHovered ? "opacity-80" : "opacity-0 group-hover:opacity-30"
-                    }`}
-                  />
-                  <div className="absolute top-0 inset-x-0 h-px bg-white/30 rounded-t-sm" />
-                </motion.div>
-              </div>
+      {/* Baseline */}
+      <div className="h-px bg-[#26262E]" />
 
-              {/* Rotated name label below the axis */}
-              <div
-                className="absolute -bottom-3 left-1/2 flex justify-end items-center origin-top-left pointer-events-none"
-                style={nameWrapStyle}
+      {/* Horizontal skill labels — no rotation, centered under bars */}
+      <div className="flex gap-1 mt-2.5">
+        {skills.map((skill) => {
+          const isHovered = hoveredId === skill.id;
+          return (
+            <div
+              key={skill.id}
+              className="flex-1 text-center"
+              style={{ minWidth: 0 }}
+            >
+              <span
+                className="font-mono leading-tight inline-block transition-colors duration-200"
+                style={{
+                  fontSize: skill.name.length > 10 ? 10 : 11,
+                  color: isHovered ? "#FFFFFF" : "#9A9AA6",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                  hyphens: "auto",
+                }}
               >
-                <span
-                  className={`font-sans text-xs md:text-sm whitespace-nowrap pl-2 transition-colors duration-300 ${
-                    isHovered ? "text-white font-medium" : "text-[#9A9AA6]"
-                  }`}
-                >
-                  {skill.name}
-                </span>
-              </div>
+                {displayName(skill.name)}
+              </span>
             </div>
           );
         })}
