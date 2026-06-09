@@ -39,14 +39,16 @@ for (const v of PROD_ONLY_VARS) {
 
 const INGEST_SECRET = process.env.INGEST_SECRET;
 if (!INGEST_SECRET) {
-  if (process.env.NODE_ENV === "production") {
+  if (IS_PROD) {
     // Fail-closed: refuse to start without the secret in production so the
     // ingest endpoint can never be publicly triggered and burn Adzuna quota.
     console.error("❌ INGEST_SECRET must be set in production");
     process.exit(1);
   } else {
+    // The route guard returns 401 when INGEST_SECRET is unset, so the
+    // endpoint is locked — not merely unprotected. The message says so.
     console.warn(
-      "⚠️  INGEST_SECRET is not set — /api/ingest/adzuna is unprotected",
+      "⚠️  INGEST_SECRET is not set — /api/ingest/adzuna is DISABLED until it is configured",
     );
   }
 }
