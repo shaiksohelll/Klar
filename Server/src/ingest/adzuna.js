@@ -156,21 +156,36 @@ export async function ingestAdzuna({
   // snapshot failure never breaks or throws out of ingest.
   try {
     if (totalInDb > 0) {
-      // Mirror the same 12-month window the trending-skills endpoint uses so
-      // snapshot counts match the demand numbers shown in the UI.
+      // Outer window matches the Demand page default (12 months).
+      // count30 is a conditional sum inside the same pass — one aggregation.
       const since = new Date();
       since.setMonth(since.getMonth() - 12);
+      const since30 = new Date();
+      since30.setDate(since30.getDate() - 30);
 
       const counts = await Job.aggregate([
         { $match: { postedAt: { $gte: since } } },
         { $unwind: "$requiredSkills" },
-        { $group: { _id: "$requiredSkills", count: { $sum: 1 } } },
+        {
+          $group: {
+            _id: "$requiredSkills",
+            count: { $sum: 1 },
+            count30: {
+              $sum: { $cond: [{ $gte: ["$postedAt", since30] }, 1, 0] },
+            },
+          },
+        },
       ]);
 
       if (counts.length > 0) {
         const capturedAt = new Date();
         await SkillSnapshot.insertMany(
-          counts.map(({ _id, count }) => ({ skill: _id, count, capturedAt })),
+          counts.map(({ _id, count, count30 }) => ({
+            skill: _id,
+            count,
+            count30,
+            capturedAt,
+          })),
           { ordered: false },
         );
         console.log(`snapshot: recorded demand for ${counts.length} skills`);
