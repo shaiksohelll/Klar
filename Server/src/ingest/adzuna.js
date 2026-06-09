@@ -16,17 +16,26 @@ const ROLE_QUERIES = [
 ];
 
 // Fetch one page of results from Adzuna
+// Wraps the request in a 10-second AbortController timeout so a stalled
+// connection settles the Promise.allSettled entry (rejected) rather than
+// hanging the entire ingest run indefinitely.
 async function fetchPage({ country, page, what }) {
-  const url =
-    `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}` +
-    `?app_id=${APP_ID}&app_key=${APP_KEY}` +
-    `&results_per_page=50&what=${encodeURIComponent(what)}&content-type=application/json`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Adzuna ${res.status}: ${body.slice(0, 200)}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const url =
+      `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}` +
+      `?app_id=${APP_ID}&app_key=${APP_KEY}` +
+      `&results_per_page=50&what=${encodeURIComponent(what)}&content-type=application/json`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Adzuna ${res.status}: ${body.slice(0, 200)}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 // Map one Adzuna job into our Job schema shape
@@ -88,8 +97,10 @@ export async function ingestAdzuna({
     fetchJobs.map(({ term, page }) => fetchPage({ country, page, what: term })),
   );
 
+  let hadFailures = false;
   for (let i = 0; i < responses.length; i++) {
     if (responses[i].status === "rejected") {
+      hadFailures = true;
       console.warn(
         `Adzuna fetch failed [term="${fetchJobs[i].term}" page=${fetchJobs[i].page}]:`,
         responses[i].reason?.message,
@@ -121,7 +132,13 @@ export async function ingestAdzuna({
   }
 
   let removed = 0;
-  if (shouldPrune && fetched > 0) {
+  // Skip pruning whenever any fetch failed: we only saw a partial snapshot of
+  // the current market, so jobs that weren't refreshed this run should not be
+  // deleted — they may still be live, we just couldn't reach Adzuna for them.
+  if (hadFailures && shouldPrune) {
+    console.warn("prune skipped due to fetch failures");
+  }
+  if (shouldPrune && !hadFailures && fetched > 0) {
     const pruneResult = await Job.deleteMany({
       source: "adzuna",
       updatedAt: { $lt: runStartedAt },
