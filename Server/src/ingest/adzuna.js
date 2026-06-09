@@ -1,4 +1,5 @@
 import Job from "../models/Job.js";
+import SkillSnapshot from "../models/SkillSnapshot.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
@@ -146,12 +147,60 @@ export async function ingestAdzuna({
     removed = pruneResult.deletedCount || 0;
   }
 
+  // Count once: used both as the snapshot safety guard and the return value.
+  const totalInDb = await Job.countDocuments();
+
+  // ── Skill-velocity snapshot ──────────────────────────────────────────────
+  // Records a point-in-time demand reading for every skill so we can later
+  // compute velocity (rising / falling). Isolated in its own try/catch so a
+  // snapshot failure never breaks or throws out of ingest.
+  try {
+    if (totalInDb > 0) {
+      // Outer window matches the Demand page default (12 months).
+      // count30 is a conditional sum inside the same pass — one aggregation.
+      const since = new Date();
+      since.setMonth(since.getMonth() - 12);
+      const since30 = new Date();
+      since30.setDate(since30.getDate() - 30);
+
+      const counts = await Job.aggregate([
+        { $match: { postedAt: { $gte: since } } },
+        { $unwind: "$requiredSkills" },
+        {
+          $group: {
+            _id: "$requiredSkills",
+            count: { $sum: 1 },
+            count30: {
+              $sum: { $cond: [{ $gte: ["$postedAt", since30] }, 1, 0] },
+            },
+          },
+        },
+      ]);
+
+      if (counts.length > 0) {
+        const capturedAt = new Date();
+        await SkillSnapshot.insertMany(
+          counts.map(({ _id, count, count30 }) => ({
+            skill: _id,
+            count,
+            count30,
+            capturedAt,
+          })),
+          { ordered: false },
+        );
+        console.log(`snapshot: recorded demand for ${counts.length} skills`);
+      }
+    }
+  } catch (err) {
+    console.warn("snapshot failed:", err.message);
+  }
+
   return {
     fetched,
     unique: docsById.size,
     upserted,
     modified,
     removed,
-    totalInDb: await Job.countDocuments(),
+    totalInDb,
   };
 }
