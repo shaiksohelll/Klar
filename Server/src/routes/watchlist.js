@@ -32,7 +32,7 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { skill } = req.body;
+    const { skill } = req.body || {};
     if (!skill) return res.status(400).json({ error: "skill is required" });
     await Watchlist.updateOne(
       { userId, skill },
@@ -50,7 +50,7 @@ router.post("/", async (req, res) => {
 router.delete("/", async (req, res) => {
   try {
     const userId = req.auth.userId;
-    const { skill } = req.body;
+    const { skill } = req.body || {};
     if (!skill) return res.status(400).json({ error: "skill is required" });
     await Watchlist.deleteOne({ userId, skill });
     res.json({ skills: await getSkills(userId) });
