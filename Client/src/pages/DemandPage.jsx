@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { TiltCard } from "../components/TiltCard";
 import { BarChart } from "../components/BarChart";
 import { RankingList } from "../components/RankingList";
+import { useCountUp } from "../hooks/useCountUp";
 
 const ROLES = [
   "All",
@@ -16,6 +17,9 @@ const ROLES = [
 const WINDOWS = ["3M", "6M", "12M"];
 const EASE = [0.16, 1, 0.3, 1];
 
+// Sliding pill springs — stiffness 180, damping 22 (UI spring)
+const pillSpring = { type: "spring", stiffness: 180, damping: 22 };
+
 const heroEyebrowInit = { opacity: 0 };
 const heroShow = { opacity: 1 };
 const heroItemInit = { opacity: 0, y: 20 };
@@ -24,7 +28,6 @@ const heroPTrans = { delay: 0.2, duration: 0.6, ease: EASE };
 const heroCountInit = { opacity: 0 };
 const heroCountShow = { opacity: 1 };
 const heroCountTrans = { delay: 0.4, duration: 0.6 };
-const pillSpring = { type: "spring", stiffness: 380, damping: 30 };
 
 export default function DemandPage() {
   const ctx = useOutletContext();
@@ -44,6 +47,9 @@ export default function DemandPage() {
     velocityReady,
     velocityBasisDays,
   } = ctx;
+
+  // Count-up for the hero stat — re-triggers on totalJobs change (filter change)
+  const animatedTotal = useCountUp(totalJobs, 700);
 
   const visibleSkills = sorted;
 
@@ -82,12 +88,16 @@ export default function DemandPage() {
           className="font-mono text-[#5C5C66] text-sm uppercase tracking-widest pt-4 flex items-center justify-center gap-3"
         >
           <div className="w-12 h-px bg-[#26262E]" />
-          {totalJobs.toLocaleString()} jobs analyzed
+          {/* Count-up number — key forces re-mount (re-animation) on filter change */}
+          <span key={totalJobs} aria-live="polite" aria-atomic="true">
+            {animatedTotal.toLocaleString()} jobs analyzed
+          </span>
           <div className="w-12 h-px bg-[#26262E]" />
         </motion.div>
       </section>
 
       <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[#26262E] pb-6">
+        {/* Role segmented control — sliding red pill */}
         <div className="flex flex-wrap justify-center gap-2">
           {ROLES.map((role) => (
             <button
@@ -111,6 +121,7 @@ export default function DemandPage() {
           ))}
         </div>
 
+        {/* Window segmented control — sliding red pill (was grey, now red per spec) */}
         <div className="flex bg-[#121216] border border-[#26262E] rounded-full p-1">
           {WINDOWS.map((w) => (
             <button
@@ -125,7 +136,7 @@ export default function DemandPage() {
               {activeWindow === w && (
                 <motion.div
                   layoutId="activeWindow"
-                  className="absolute inset-0 bg-[#26262E] rounded-full -z-10"
+                  className="absolute inset-0 bg-[#EB0029] rounded-full -z-10"
                   transition={pillSpring}
                 />
               )}
@@ -154,7 +165,12 @@ export default function DemandPage() {
               <div className="absolute top-6 left-6 md:top-8 md:left-8 font-mono text-xs uppercase tracking-widest text-[#5C5C66] z-20">
                 Top Skills by Volume
               </div>
+              {/*
+                key={activeRole + activeWindow} forces BarChart to re-mount
+                (and thus re-run entrance animations) on filter changes.
+              */}
               <BarChart
+                key={`${activeRole}|${activeWindow}`}
                 skills={visibleSkills.slice(0, 12)}
                 maxCount={maxCount}
                 onSelect={setSelectedSkill}

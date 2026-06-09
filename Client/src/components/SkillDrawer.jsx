@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { StarIcon, XIcon } from "./icons";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const backdropInit = { opacity: 0 };
-const backdropShow = { opacity: 1 };
-const drawerInit = { x: "100%" };
-const drawerShow = { x: 0 };
-const drawerTrans = { type: "spring", stiffness: 300, damping: 30 };
+// UI spring: stiffness 180, damping 22
+const UI_SPRING = { type: "spring", stiffness: 180, damping: 22 };
+// Snappy spring: stiffness 420, damping 34 (star pop)
+const SNAPPY_SPRING = { type: "spring", stiffness: 420, damping: 34 };
+
 const shareBarStyle = (pct) => ({ width: `${pct}%` });
 const trendBarStyle = (pct) => ({ height: `${pct}%` });
 
@@ -37,6 +37,8 @@ export function SkillDrawer({
   tracked,
   months,
 }) {
+  const shouldReduceMotion = useReducedMotion();
+
   // activeSkill lets the drawer navigate to a related skill without closing.
   const [activeSkill, setActiveSkill] = useState(skill);
   const [detail, setDetail] = useState(null);
@@ -100,25 +102,36 @@ export function SkillDrawer({
     setActiveSkill({ id: skillName, name: skillName, role: current.role });
   };
 
+  // When reduced motion is preferred, use simple fade instead of slide
+  const drawerInitial = shouldReduceMotion ? { opacity: 0 } : { x: "100%", opacity: 1 };
+  const drawerAnimate = shouldReduceMotion ? { opacity: 1 } : { x: 0, opacity: 1 };
+  const drawerExit = shouldReduceMotion ? { opacity: 0 } : { x: "100%", opacity: 1 };
+  const drawerTransition = shouldReduceMotion
+    ? { duration: 0.2 }
+    : UI_SPRING;
+
   return (
     <AnimatePresence>
       {isOpen && current && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — blurred dark overlay, animates IN and OUT */}
           <motion.div
-            initial={backdropInit}
-            animate={backdropShow}
-            exit={backdropInit}
+            key="skill-drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-[#08080A]/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-[#08080A]/70 backdrop-blur-sm"
           />
 
-          {/* Drawer */}
+          {/* Drawer — slides in from right using UI spring, slides out on close */}
           <motion.div
-            initial={drawerInit}
-            animate={drawerShow}
-            exit={drawerInit}
-            transition={drawerTrans}
+            key="skill-drawer-panel"
+            initial={drawerInitial}
+            animate={drawerAnimate}
+            exit={drawerExit}
+            transition={drawerTransition}
             className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-linear-to-b from-[#121216] to-[#1A1A20] border-l border-[#26262E] shadow-2xl flex flex-col"
           >
             {/* Header */}
@@ -361,7 +374,7 @@ export function SkillDrawer({
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Footer — track button with star pop animation */}
             <div className="p-6 md:p-8 border-t border-[#26262E]/50 bg-[#08080A]/50 relative z-10">
               <button
                 onClick={() => onTrack(current.id)}
@@ -371,7 +384,18 @@ export function SkillDrawer({
                     : "bg-[#EB0029] text-white shadow-[0_0_20px_rgba(235,0,41,0.3)] hover:shadow-[0_0_30px_rgba(255,39,64,0.5)] hover:bg-[#FF2740] hover:-translate-y-0.5"
                 }`}
               >
-                <StarIcon filled={isTracked} className="w-4 h-4" />
+                {/* Star with snappy spring pop on track */}
+                <motion.span
+                  animate={
+                    isTracked && !shouldReduceMotion
+                      ? { scale: [1, 1.25, 1] }
+                      : { scale: 1 }
+                  }
+                  transition={SNAPPY_SPRING}
+                  className="flex items-center"
+                >
+                  <StarIcon filled={isTracked} className="w-4 h-4" />
+                </motion.span>
                 {isTracked ? "Tracking" : "Track Skill"}
               </button>
             </div>

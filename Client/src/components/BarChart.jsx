@@ -1,17 +1,22 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
-const EASE = [0.16, 1, 0.3, 1];
+// Bar spring: stiffness 150, damping 18
+const BAR_SPRING = { type: "spring", stiffness: 150, damping: 18 };
+// Staggered entrance: 50 ms between each bar (left-to-right)
+const BAR_STAGGER_MS = 0.05; // seconds
+
 const labelInit = { opacity: 0 };
 const labelShow = { opacity: 1 };
 const tipInit = { opacity: 0, y: 8, scale: 0.95 };
 const tipShow = { opacity: 1, y: 0, scale: 1 };
-const barInit = { height: 0 };
+const tipTrans = { type: "spring", stiffness: 420, damping: 34 };
 const barStyle = { background: "linear-gradient(180deg, #FF2740 0%, #9E0019 100%)" };
 const nameWrapStyle = { transform: "rotate(-45deg)" };
 
 export function BarChart({ skills, maxCount, onSelect }) {
   const [hoveredId, setHoveredId] = useState(null);
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <div className="w-full h-full flex flex-col pt-10 pb-[100px] px-2 md:px-4 relative">
@@ -20,8 +25,18 @@ export function BarChart({ skills, maxCount, onSelect }) {
           const heightPct = Math.max((skill.count / maxCount) * 100, 5);
           const isHovered = hoveredId === skill.id;
           const isFaded = hoveredId !== null && hoveredId !== skill.id;
-          const barAnim = { height: `${heightPct}%` };
-          const barTrans = { duration: 0.8, delay: index * 0.05, ease: EASE };
+
+          // Equalizer entrance: bars grow from height 0 → target, staggered
+          // 50 ms left-to-right using the bar spring.  When reduced-motion is
+          // preferred we skip transforms and just fade in.
+          const barInitial = shouldReduceMotion ? { opacity: 0 } : { height: 0, opacity: 1 };
+          const barAnimate = shouldReduceMotion
+            ? { opacity: 1 }
+            : { height: `${heightPct}%`, opacity: 1 };
+          const barTransition = shouldReduceMotion
+            ? { duration: 0.3, delay: index * BAR_STAGGER_MS }
+            : { ...BAR_SPRING, delay: index * BAR_STAGGER_MS };
+
           const remotePct = skill.count
             ? Math.round((skill.remoteCount / skill.count) * 100)
             : 0;
@@ -53,6 +68,7 @@ export function BarChart({ skills, maxCount, onSelect }) {
                       initial={tipInit}
                       animate={tipShow}
                       exit={tipInit}
+                      transition={tipTrans}
                       className="bg-[#08080A] border border-[#26262E] rounded-lg p-3 shadow-2xl flex flex-col gap-1 min-w-[120px]"
                     >
                       <div className="font-sans text-sm font-medium text-white">{skill.name}</div>
@@ -67,20 +83,21 @@ export function BarChart({ skills, maxCount, onSelect }) {
                 )}
               </AnimatePresence>
 
-              {/* The bar */}
+              {/* The bar — grows from bottom using bar spring */}
               <div className="w-full max-w-[48px] relative h-full flex items-end">
                 <motion.div
-                  initial={barInit}
-                  animate={barAnim}
-                  transition={barTrans}
-                  className={`w-full rounded-t-sm relative transition-transform duration-300 ${
+                  initial={barInitial}
+                  animate={barAnimate}
+                  transition={barTransition}
+                  className={`w-full rounded-t-sm relative ${
                     isFaded ? "opacity-30 saturate-50" : "opacity-100"
-                  } ${isHovered ? "-translate-y-1.5" : ""}`}
+                  } ${!shouldReduceMotion && isHovered ? "-translate-y-1.5" : ""}`}
                   style={barStyle}
                 >
+                  {/* Glow — brightens on hover per spec */}
                   <div
                     className={`absolute inset-0 bg-[#FF2740] blur-md rounded-t-sm -z-10 transition-opacity duration-300 ${
-                      isHovered ? "opacity-60" : "opacity-0 group-hover:opacity-30"
+                      isHovered ? "opacity-80" : "opacity-0 group-hover:opacity-30"
                     }`}
                   />
                   <div className="absolute top-0 inset-x-0 h-px bg-white/30 rounded-t-sm" />
