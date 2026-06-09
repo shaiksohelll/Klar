@@ -55,12 +55,19 @@ export default function App() {
   const [activeRole, setActiveRole] = useState("All");
   const [activeWindow, setActiveWindow] = useState("12M");
   const [trackedSkills, setTrackedSkills] = useState([]);
+  const [watchlistError, setWatchlistError] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Incrementing this forces the watchlist effect to re-run (manual retry).
+  const [watchlistRetry, setWatchlistRetry] = useState(0);
 
   // In-memory cache keyed by "role|window" so repeat switches are instant.
   const cacheRef = useRef(new Map());
+  // Tracks the most recently seen signed-in user id so we can distinguish an
+  // initial null → id transition (Clerk resolving on load) from a genuine
+  // account switch between two different signed-in users.
+  const prevUserIdRef = useRef(null);
 
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
@@ -134,29 +141,57 @@ export default function App() {
     [sorted],
   );
 
-  // Load the user's watchlist from the server whenever they sign in or the
-  // active account changes. Clear immediately on any identity change so the
-  // previous account's list is never shown to the new account, even briefly.
+  // Load the user's watchlist whenever they sign in, the account changes, or
+  // the user manually retries after an error.
   useEffect(() => {
-    if (!isSignedIn || !user) {
+    const currentId = user?.id ?? null;
+    const prevId = prevUserIdRef.current;
+
+    if (!isSignedIn || !currentId) {
+      // Signed out or Clerk still resolving. Reset ref and wipe the list.
+      prevUserIdRef.current = null;
       setTrackedSkills([]);
+      setWatchlistError(null);
       return;
     }
-    setTrackedSkills([]);
+
+    // Record the current id before the async work so the NEXT run can compare.
+    prevUserIdRef.current = currentId;
+
+    // Only wipe the in-memory list when genuinely switching between two
+    // different signed-in accounts. The initial null → id transition (Clerk
+    // resolving the session on page load) is NOT a switch — skipping the clear
+    // there prevents a flash of the empty watchlist while getToken() runs.
+    if (prevId !== null && prevId !== currentId) {
+      setTrackedSkills([]);
+      setWatchlistError(null);
+    }
+
     let cancelled = false;
     (async () => {
       try {
-        const config = await authConfig();
-        const res = await axios.get(`${API}/api/watchlist`, config);
-        if (!cancelled) setTrackedSkills(res.data.skills || []);
+        const token = await getToken();
+        if (!token) {
+          // Clerk is still initialising; keep whatever list is in memory.
+          if (!cancelled) setWatchlistError("Watchlist unavailable — retry");
+          return;
+        }
+        const res = await axios.get(`${API}/api/watchlist`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!cancelled) {
+          setTrackedSkills(res.data.skills || []);
+          setWatchlistError(null);
+        }
       } catch {
-        // Non-critical: watchlist just stays empty if the fetch fails.
+        // Network or auth error. Keep existing items; surface a retry prompt.
+        if (!cancelled) setWatchlistError("Watchlist unavailable — retry");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn, user?.id]);
+  }, [isSignedIn, user?.id, watchlistRetry]);
 
   const handleTrack = async (id) => {
     if (!isSignedIn) {
@@ -201,6 +236,8 @@ export default function App() {
     setSelectedSkill,
     loading,
     error,
+    watchlistError,
+    retryWatchlist: () => setWatchlistRetry((c) => c + 1),
   };
 
   return (
