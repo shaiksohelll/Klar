@@ -30,12 +30,23 @@ for (const v of REQUIRED_VARS) {
 
 const INGEST_SECRET = process.env.INGEST_SECRET;
 if (!INGEST_SECRET) {
-  console.warn(
-    "⚠️  INGEST_SECRET is not set — /api/ingest/adzuna is unprotected",
-  );
+  if (process.env.NODE_ENV === "production") {
+    // Fail-closed: refuse to start without the secret in production so the
+    // ingest endpoint can never be publicly triggered and burn Adzuna quota.
+    console.error("❌ INGEST_SECRET must be set in production");
+    process.exit(1);
+  } else {
+    console.warn(
+      "⚠️  INGEST_SECRET is not set — /api/ingest/adzuna is unprotected",
+    );
+  }
 }
 
 const app = express();
+// Tell Express to trust the first hop from Render's reverse proxy so
+// express-rate-limit sees the real client IP via X-Forwarded-For, not the
+// proxy's internal IP (which would make the limiter count all users as one).
+app.set("trust proxy", 1);
 app.use(helmet());
 
 // ── CORS ───────────────────────────────────────────────────────────────────
@@ -93,14 +104,20 @@ app.get("/health", (req, res) => {
 // The in-process cron (below) calls ingestAdzuna() directly, so it is
 // never blocked by this check.
 app.get("/api/ingest/adzuna", async (req, res) => {
-  if (INGEST_SECRET && req.headers["x-ingest-secret"] !== INGEST_SECRET) {
-    return res.status(403).json({ ok: false, error: "Forbidden" });
+  // Fail-closed: reject if the secret is unset OR the header doesn't match.
+  // This ensures the route never falls through to run ingestion without a key.
+  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   try {
     const what = req.query.what || undefined;
     const country = req.query.country || "in";
-    // Cap pages at 5 to limit quota usage per manual trigger
-    const pages = Math.min(Number(req.query.pages || 2), 5);
+    // parseInt with radix avoids octal/float surprises; lower-bound 1 so
+    // NaN || 2 still works; upper-bound 5 caps quota usage per manual trigger.
+    const pages = Math.min(
+      Math.max(Number.parseInt(req.query.pages, 10) || 2, 1),
+      5,
+    );
     const result = await ingestAdzuna({ what, country, pages });
     res.json({ ok: true, ...result });
   } catch (err) {
