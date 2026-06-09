@@ -62,7 +62,7 @@ export default function App() {
   // In-memory cache keyed by "role|window" so repeat switches are instant.
   const cacheRef = useRef(new Map());
 
-  const { isSignedIn } = useUser();
+  const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const { openSignIn, signOut } = useClerk();
 
@@ -134,13 +134,15 @@ export default function App() {
     [sorted],
   );
 
-  // Load the user's watchlist from the server whenever they sign in.
-  // We send the Clerk session token so the server knows who is asking.
+  // Load the user's watchlist from the server whenever they sign in or the
+  // active account changes. Clear immediately on any identity change so the
+  // previous account's list is never shown to the new account, even briefly.
   useEffect(() => {
-    if (!isSignedIn) {
+    if (!isSignedIn || !user) {
       setTrackedSkills([]);
       return;
     }
+    setTrackedSkills([]);
     let cancelled = false;
     (async () => {
       try {
@@ -154,7 +156,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn]);
+  }, [isSignedIn, user?.id]);
 
   const handleTrack = async (id) => {
     if (!isSignedIn) {
