@@ -68,15 +68,21 @@ export default function App() {
   // initial null → id transition (Clerk resolving on load) from a genuine
   // account switch between two different signed-in users.
   const prevUserIdRef = useRef(null);
+  // Monotonically incrementing counter shared by the watchlist GET and every
+  // track/untrack mutation. The operation that sets the highest number is the
+  // most recent; any response that arrives with a lower number is stale and
+  // is discarded before it can overwrite newer state.
+  const watchlistSeqRef = useRef(0);
 
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const { openSignIn, signOut } = useClerk();
 
   // Build an axios config with a fresh Clerk JWT in the Authorization header.
-  // The server verifies this token — the userId is never trusted from the client.
+  // Throws if the token is unavailable so callers never send "Bearer null".
   const authConfig = async () => {
     const token = await getToken();
+    if (!token) throw new Error("Clerk token unavailable");
     return { headers: { Authorization: `Bearer ${token}` } };
   };
 
@@ -167,25 +173,31 @@ export default function App() {
       setWatchlistError(null);
     }
 
+    // Claim a sequence slot for this GET. Any handleTrack mutation that starts
+    // while this request is in-flight will take a higher number; when this
+    // response arrives it will see the higher number and self-discard.
+    const seq = ++watchlistSeqRef.current;
     let cancelled = false;
     (async () => {
       try {
         const token = await getToken();
         if (!token) {
           // Clerk is still initialising; keep whatever list is in memory.
-          if (!cancelled) setWatchlistError("Watchlist unavailable — retry");
+          if (!cancelled && watchlistSeqRef.current === seq)
+            setWatchlistError("Watchlist unavailable — retry");
           return;
         }
         const res = await axios.get(`${API}/api/watchlist`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!cancelled) {
+        if (!cancelled && watchlistSeqRef.current === seq) {
           setTrackedSkills(res.data.skills || []);
           setWatchlistError(null);
         }
       } catch {
         // Network or auth error. Keep existing items; surface a retry prompt.
-        if (!cancelled) setWatchlistError("Watchlist unavailable — retry");
+        if (!cancelled && watchlistSeqRef.current === seq)
+          setWatchlistError("Watchlist unavailable — retry");
       }
     })();
     return () => {
@@ -203,6 +215,9 @@ export default function App() {
     setTrackedSkills((prev) =>
       wasTracked ? prev.filter((s) => s !== id) : [...prev, id],
     );
+    // Claim the sequence BEFORE any await so that an in-flight initial GET
+    // will see a lower number and discard its (now stale) response.
+    const seq = ++watchlistSeqRef.current;
     try {
       const config = await authConfig();
       const res = wasTracked
@@ -211,7 +226,9 @@ export default function App() {
             data: { skill: id },
           })
         : await axios.post(`${API}/api/watchlist`, { skill: id }, config);
-      setTrackedSkills(res.data.skills || []);
+      if (watchlistSeqRef.current === seq) {
+        setTrackedSkills(res.data.skills || []);
+      }
     } catch {
       // Roll back the optimistic update.
       setTrackedSkills((prev) =>
