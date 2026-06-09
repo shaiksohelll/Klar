@@ -13,18 +13,27 @@ import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
 
 // ── Startup validation ─────────────────────────────────────────────────────
-// Fail loudly in production if critical env vars are missing so Render shows
-// a clear error in the deploy log instead of a cryptic runtime crash.
-const REQUIRED_VARS = [
-  "MONGODB_URI",
-  "ADZUNA_APP_ID",
-  "ADZUNA_APP_KEY",
-  "CLERK_SECRET_KEY",
-];
-for (const v of REQUIRED_VARS) {
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// MONGODB_URI is required in every environment — the server has no purpose
+// without a database.
+if (!process.env.MONGODB_URI) {
+  console.error("❌ Missing required environment variable: MONGODB_URI");
+  process.exit(1);
+}
+
+// These vars are only hard-required in production. In development they emit
+// a warning so you can boot with a partial .env (e.g. to test DB queries
+// without real Adzuna or Clerk credentials set up yet).
+const PROD_ONLY_VARS = ["ADZUNA_APP_ID", "ADZUNA_APP_KEY", "CLERK_SECRET_KEY"];
+for (const v of PROD_ONLY_VARS) {
   if (!process.env[v]) {
-    console.error(`❌ Missing required environment variable: ${v}`);
-    process.exit(1);
+    if (IS_PROD) {
+      console.error(`❌ Missing required environment variable: ${v}`);
+      process.exit(1);
+    } else {
+      console.warn(`⚠️  ${v} is not set — some features will not work`);
+    }
   }
 }
 
