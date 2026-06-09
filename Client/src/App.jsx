@@ -6,6 +6,7 @@ import {
   SignInButton,
   UserButton,
   useUser,
+  useAuth,
   useClerk,
 } from "@clerk/clerk-react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -61,8 +62,16 @@ export default function App() {
   // In-memory cache keyed by "role|window" so repeat switches are instant.
   const cacheRef = useRef(new Map());
 
-  const { user, isSignedIn } = useUser();
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
   const { openSignIn, signOut } = useClerk();
+
+  // Build an axios config with a fresh Clerk JWT in the Authorization header.
+  // The server verifies this token — the userId is never trusted from the client.
+  const authConfig = async () => {
+    const token = await getToken();
+    return { headers: { Authorization: `Bearer ${token}` } };
+  };
 
   useEffect(() => {
     const key = `${activeRole}|${activeWindow}`;
@@ -125,43 +134,49 @@ export default function App() {
     [sorted],
   );
 
+  // Load the user's watchlist from the server whenever they sign in.
+  // We send the Clerk session token so the server knows who is asking.
   useEffect(() => {
-    if (!isSignedIn || !user) {
+    if (!isSignedIn) {
       setTrackedSkills([]);
       return;
     }
     let cancelled = false;
-    axios
-      .get(`${API}/api/watchlist`, { params: { userId: user.id } })
-      .then((res) => {
+    (async () => {
+      try {
+        const config = await authConfig();
+        const res = await axios.get(`${API}/api/watchlist`, config);
         if (!cancelled) setTrackedSkills(res.data.skills || []);
-      })
-      .catch(() => {});
+      } catch {
+        // Non-critical: watchlist just stays empty if the fetch fails.
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn, user]);
+  }, [isSignedIn]);
 
   const handleTrack = async (id) => {
-    if (!isSignedIn || !user) {
+    if (!isSignedIn) {
       openSignIn();
       return;
     }
     const wasTracked = trackedSkills.includes(id);
+    // Optimistic update — roll back on failure.
     setTrackedSkills((prev) =>
       wasTracked ? prev.filter((s) => s !== id) : [...prev, id],
     );
     try {
+      const config = await authConfig();
       const res = wasTracked
         ? await axios.delete(`${API}/api/watchlist`, {
-            data: { userId: user.id, skill: id },
+            ...config,
+            data: { skill: id },
           })
-        : await axios.post(`${API}/api/watchlist`, {
-            userId: user.id,
-            skill: id,
-          });
+        : await axios.post(`${API}/api/watchlist`, { skill: id }, config);
       setTrackedSkills(res.data.skills || []);
-    } catch (e) {
+    } catch {
+      // Roll back the optimistic update.
       setTrackedSkills((prev) =>
         wasTracked ? [...prev, id] : prev.filter((s) => s !== id),
       );
