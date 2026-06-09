@@ -44,6 +44,7 @@ export function SkillDrawer({
 
   // Reset to the parent-selected skill whenever it changes (new open).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (skill) setActiveSkill(skill);
   }, [skill]);
 
@@ -51,6 +52,7 @@ export function SkillDrawer({
   useEffect(() => {
     if (!isOpen || !activeSkill) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingDetail(true);
     setDetail(null);
     axios
@@ -117,7 +119,7 @@ export function SkillDrawer({
             animate={drawerShow}
             exit={drawerInit}
             transition={drawerTrans}
-            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-gradient-to-b from-[#121216] to-[#1A1A20] border-l border-[#26262E] shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-linear-to-b from-[#121216] to-[#1A1A20] border-l border-[#26262E] shadow-2xl flex flex-col"
           >
             {/* Header */}
             <div className="p-6 md:p-8 flex justify-between items-start border-b border-[#26262E]/50 relative overflow-hidden">
@@ -178,7 +180,7 @@ export function SkillDrawer({
                     </div>
                     <div className="w-full bg-[#26262E] h-2 rounded-full overflow-hidden mb-1.5">
                       <div
-                        className="h-full bg-gradient-to-r from-[#FF2740] to-[#9E0019]"
+                        className="h-full bg-linear-to-r from-[#FF2740] to-[#9E0019]"
                         style={shareBarStyle(share)}
                       />
                     </div>
@@ -200,7 +202,7 @@ export function SkillDrawer({
                       >
                         <div className="w-full bg-[#26262E] rounded-sm flex items-end h-full overflow-hidden">
                           <div
-                            className="w-full bg-gradient-to-t from-[#9E0019] to-[#FF2740] rounded-sm"
+                            className="w-full bg-linear-to-t from-[#9E0019] to-[#FF2740] rounded-sm"
                             style={trendBarStyle(
                               Math.max(
                                 6,

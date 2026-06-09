@@ -169,10 +169,12 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("✅ Mongo connected");
-    // Keep data fresh automatically: re-ingest every 6 hours.
-    cron.schedule("0 */6 * * *", async () => {
+    // Keep data fresh automatically: re-ingest every 8 hours.
+    // 7 roles × 3 pages = 21 req/run · 3 runs/day = 63/day · ~1890/month
+    // — safely under Adzuna limits (25/min, 250/day, 2 500/month).
+    cron.schedule("0 */8 * * *", async () => {
       try {
-        const r = await ingestAdzuna({ country: "in", pages: 2 });
+        const r = await ingestAdzuna({ country: "in", pages: 3 });
         console.log("🔄 Auto-ingest:", r);
       } catch (e) {
         console.error("Auto-ingest failed:", e.message);
