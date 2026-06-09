@@ -54,10 +54,10 @@ if (!INGEST_SECRET) {
 }
 
 const app = express();
-// Tell Express to trust the first hop from Render's reverse proxy so
-// express-rate-limit sees the real client IP via X-Forwarded-For, not the
-// proxy's internal IP (which would make the limiter count all users as one).
-app.set("trust proxy", 1);
+// Trust Render's proxy in production so express-rate-limit sees the real
+// client IP via X-Forwarded-For. Disabled in development to avoid trusting
+// spoofed X-Forwarded-For headers from a local network.
+app.set("trust proxy", IS_PROD ? 1 : false);
 app.use(helmet());
 
 // ── CORS ───────────────────────────────────────────────────────────────────

@@ -163,9 +163,11 @@ export default function App() {
     const prevId = prevUserIdRef.current;
 
     if (!isSignedIn || !currentId) {
-      // Signed out or Clerk still resolving — reset the ref and bail.
-      // State is cleared by the dedicated effect above.
+      // Signed out or Clerk still resolving — reset the ref, invalidate any
+      // in-flight fetch so a late response can't repopulate the list after
+      // sign-out, then bail (state is cleared by effectiveTrackedSkills).
       prevUserIdRef.current = null;
+      ++watchlistSeqRef.current;
       return;
     }
 
@@ -238,10 +240,13 @@ export default function App() {
         setTrackedSkills(res.data.skills || []);
       }
     } catch {
-      // Roll back the optimistic update.
-      setTrackedSkills((prev) =>
-        wasTracked ? [...prev, id] : prev.filter((s) => s !== id),
-      );
+      // Roll back the optimistic update only if no newer request has since
+      // taken ownership — a stale failed request must not undo newer state.
+      if (watchlistSeqRef.current === seq) {
+        setTrackedSkills((prev) =>
+          wasTracked ? [...prev, id] : prev.filter((s) => s !== id),
+        );
+      }
     }
   };
 

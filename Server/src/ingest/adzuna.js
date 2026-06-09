@@ -80,7 +80,7 @@ export async function ingestAdzuna({
   // What to search: explicit queries → single `what` → else all roles (breadth)
   const searchTerms = queries?.length ? queries : what ? [what] : ROLE_QUERIES;
   // Only prune stale jobs on a full sweep (not a narrow single-term query)
-  const shouldPrune = prune ?? (!what && !queries);
+  const shouldPrune = prune ?? (!what && !queries?.length);
 
   const runStartedAt = new Date();
   let fetched = 0;
