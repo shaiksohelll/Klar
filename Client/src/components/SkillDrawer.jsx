@@ -244,26 +244,40 @@ export function SkillDrawer({
                   </div>
                 )}
 
-              {/* Related skills (clickable) */}
+              {/* Pairs Well With */}
               {detail &&
-                detail.relatedSkills &&
-                detail.relatedSkills.length > 0 && (
+                detail.pairs &&
+                detail.pairs.length > 0 && (
                   <div>
-                    <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
-                      Frequently Paired With
+                    <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-1">
+                      Pairs Well With
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {detail.relatedSkills.map((r) => (
-                        <button
-                          key={r.skill}
-                          onClick={() => goToSkill(r.skill)}
-                          className="px-3 py-1.5 rounded-full border border-[#26262E] bg-[#08080A] text-xs font-mono text-[#F4F4F6] hover:border-[#EB0029] hover:text-white transition-colors cursor-pointer"
-                        >
-                          {r.skill}
-                          <span className="text-[#5C5C66] ml-1.5">
-                            {r.count}
-                          </span>
-                        </button>
+                    {detail.pairsBaseCount > 0 && (
+                      <div className="font-mono text-[10px] text-[#5C5C66] mb-3 leading-relaxed">
+                        Of {detail.pairsBaseCount.toLocaleString()} jobs requiring {name}, this share also asks for:
+                      </div>
+                    )}
+                    <div className="space-y-2.5">
+                      {detail.pairs.map((p) => (
+                        <div key={p.skill}>
+                          <div className="flex items-center justify-between mb-1">
+                            <button
+                              onClick={() => goToSkill(p.skill)}
+                              className="font-mono text-xs text-[#F4F4F6] hover:text-white transition-colors cursor-pointer text-left"
+                            >
+                              {p.skill}
+                            </button>
+                            <span className="font-mono text-xs text-[#9A9AA6] shrink-0 ml-3">
+                              {p.percentage}%
+                            </span>
+                          </div>
+                          <div className="h-1 rounded-full bg-[#26262E] overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-[#FF2740]"
+                              style={{ width: `${p.percentage}%` }}
+                            />
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
