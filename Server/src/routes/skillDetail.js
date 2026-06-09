@@ -1,5 +1,6 @@
 import { Router } from "express";
 import Job from "../models/Job.js";
+import { getSkillPairs } from "../aggregations/skillPairs.js";
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.get("/:name", async (req, res) => {
       relatedSkills,
       trend,
       recent,
+      pairsResult,
     ] = await Promise.all([
       Job.countDocuments(baseMatch),
       Job.countDocuments({ ...baseMatch, isRemote: true }),
@@ -55,8 +57,11 @@ router.get("/:name", async (req, res) => {
       Job.find(baseMatch)
         .sort({ postedAt: -1 })
         .limit(5)
-        .select("title companyName location isRemote postedAt salaryRange redirectUrl")
+        .select(
+          "title companyName location isRemote postedAt salaryRange redirectUrl",
+        )
         .lean(),
+      getSkillPairs(name),
     ]);
 
     res.json({
@@ -74,6 +79,8 @@ router.get("/:name", async (req, res) => {
         .filter((s) => s._id)
         .map((s) => ({ skill: s._id, count: s.count })),
       trend: trend.map((t) => ({ month: t._id, count: t.count })),
+      pairs: pairsResult.pairs,
+      pairsBaseCount: pairsResult.baseCount,
       recent: recent.map((j) => ({
         title: j.title,
         company: j.companyName,
