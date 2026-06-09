@@ -56,6 +56,9 @@ export default function App() {
   const [activeWindow, setActiveWindow] = useState("12M");
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
+  // Which userId the current trackedSkills were fetched for. null means the
+  // data is stale/absent; effectiveTrackedSkills returns [] until it matches.
+  const [trackedSkillsOwner, setTrackedSkillsOwner] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -151,9 +154,13 @@ export default function App() {
   // is still resolving), return a stable empty array so child components never
   // render a previous account's tracked skills. The raw `trackedSkills` state
   // keeps its value in memory so it is ready the instant the next fetch lands.
+  // Return the loaded list only when the data was fetched for the currently
+  // signed-in user. Comparing against user (not user?.id) matches the dep the
+  // React Compiler infers. Returns [] when: signed out, mid-fetch, or the
+  // owner doesn't match yet (e.g. right after an account switch or sign-in).
   const effectiveTrackedSkills = useMemo(
-    () => (isSignedIn && user?.id ? trackedSkills : []),
-    [isSignedIn, user?.id, trackedSkills],
+    () => (isSignedIn && trackedSkillsOwner === user?.id ? trackedSkills : []),
+    [isSignedIn, user, trackedSkillsOwner, trackedSkills],
   );
 
   // Load the user's watchlist whenever they sign in, the account changes, or
@@ -163,9 +170,10 @@ export default function App() {
     const prevId = prevUserIdRef.current;
 
     if (!isSignedIn || !currentId) {
-      // Signed out or Clerk still resolving — reset the ref, invalidate any
-      // in-flight fetch so a late response can't repopulate the list after
-      // sign-out, then bail (state is cleared by effectiveTrackedSkills).
+      // Signed out or Clerk still resolving — reset the id ref and invalidate
+      // any in-flight fetch. effectiveTrackedSkills already returns [] when
+      // isSignedIn is false, and the owner comparison guards the next sign-in,
+      // so no setState is needed here.
       prevUserIdRef.current = null;
       ++watchlistSeqRef.current;
       return;
@@ -179,6 +187,11 @@ export default function App() {
     // resolving the session on page load) is NOT a switch — skipping the clear
     // there prevents a flash of the empty watchlist while getToken() runs.
     if (prevId !== null && prevId !== currentId) {
+      // Clear the owner immediately so effectiveTrackedSkills returns [] for
+      // this render, and bump the sequence to invalidate the previous
+      // account's in-flight requests before the new fetch begins.
+      setTrackedSkillsOwner(null);
+      ++watchlistSeqRef.current;
       setTrackedSkills([]);
       setWatchlistError(null);
     }
@@ -201,6 +214,9 @@ export default function App() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!cancelled && watchlistSeqRef.current === seq) {
+          // Batch the owner update with the data update so effectiveTracked
+          // Skills transitions from [] to the real list in a single render.
+          setTrackedSkillsOwner(currentId);
           setTrackedSkills(res.data.skills || []);
           setWatchlistError(null);
         }
