@@ -68,6 +68,8 @@ export function BarChart({ skills, maxCount, onSelect }) {
           );
           const isHovered = hoveredId === skill.id;
           const isFaded = hoveredId !== null && hoveredId !== skill.id;
+          // #1 bar (highest value) — skills are sorted count-desc, so index 0 is top.
+          const isTop = index === 0;
 
           // Entrance animation
           const barInitial = shouldReduceMotion
@@ -110,28 +112,43 @@ export function BarChart({ skills, maxCount, onSelect }) {
                 initial={barInitial}
                 animate={{
                   ...barAnimate,
+                  // Resting top bar: full red. Resting others: muted.
+                  // Hover overrides: active bar bright, every other dims.
+                  // Skip y-transform when reduced motion is on.
                   y: !shouldReduceMotion && isHovered ? -5 : 0,
-                  filter: isHovered ? "brightness(1.15)" : "brightness(1)",
+                  filter: isHovered
+                    ? "saturate(1) opacity(1) brightness(1.15)"
+                    : isFaded
+                      ? "saturate(0.4) opacity(0.4)"
+                      : isTop
+                        ? "saturate(1) opacity(1) brightness(1)"
+                        : "saturate(0.55) opacity(0.7)",
                 }}
-                transition={barTransition}
-                whileHover={
-                  shouldReduceMotion ? undefined : { y: -5, transition: UI_SPRING }
-                }
+                transition={{
+                  // Entrance uses bar spring; after mount, filter/y use UI spring.
+                  ...barTransition,
+                  filter: UI_SPRING,
+                  y: UI_SPRING,
+                }}
                 className="w-full rounded-t-sm relative"
                 style={{
                   background: BAR_GRADIENT,
-                  opacity: isFaded ? 0.7 : 1,
-                  transition: "opacity 0.25s ease",
                   maxWidth: 48,
                   margin: "0 auto",
+                  // Static red glow for top bar at rest; removed while any bar is hovered.
+                  boxShadow:
+                    isTop && hoveredId === null
+                      ? "0 0 24px rgba(255,39,64,0.35)"
+                      : "none",
+                  transition: "box-shadow 0.3s ease",
                 }}
               >
-                {/* Glow */}
+                {/* Glow overlay — active when hovered, or for top bar at rest */}
                 <div
                   className="absolute inset-0 bg-[#FF2740] rounded-t-sm -z-10 transition-opacity duration-300"
                   style={{
                     filter: "blur(10px)",
-                    opacity: isHovered ? 0.6 : 0,
+                    opacity: isHovered || (isTop && hoveredId === null) ? 0.6 : 0,
                   }}
                 />
                 {/* Top edge highlight */}
@@ -184,11 +201,11 @@ export function BarChart({ skills, maxCount, onSelect }) {
               <span
                 className="font-mono leading-tight inline-block transition-colors duration-200"
                 style={{
-                  fontSize: skill.name.length > 10 ? 10 : 11,
+                  // Three tiers so names always fit on one line — no mid-word breaks.
+                  fontSize:
+                    skill.name.length > 11 ? 9 : skill.name.length > 8 ? 10 : 11,
                   color: isHovered ? "#FFFFFF" : "#9A9AA6",
-                  wordBreak: "break-word",
-                  overflowWrap: "break-word",
-                  hyphens: "auto",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {displayName(skill.name)}
