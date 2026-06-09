@@ -1,4 +1,5 @@
 import Job from "../models/Job.js";
+import SkillSnapshot from "../models/SkillSnapshot.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
@@ -146,12 +147,45 @@ export async function ingestAdzuna({
     removed = pruneResult.deletedCount || 0;
   }
 
+  // Count once: used both as the snapshot safety guard and the return value.
+  const totalInDb = await Job.countDocuments();
+
+  // ── Skill-velocity snapshot ──────────────────────────────────────────────
+  // Records a point-in-time demand reading for every skill so we can later
+  // compute velocity (rising / falling). Isolated in its own try/catch so a
+  // snapshot failure never breaks or throws out of ingest.
+  try {
+    if (totalInDb > 0) {
+      // Mirror the same 12-month window the trending-skills endpoint uses so
+      // snapshot counts match the demand numbers shown in the UI.
+      const since = new Date();
+      since.setMonth(since.getMonth() - 12);
+
+      const counts = await Job.aggregate([
+        { $match: { postedAt: { $gte: since } } },
+        { $unwind: "$requiredSkills" },
+        { $group: { _id: "$requiredSkills", count: { $sum: 1 } } },
+      ]);
+
+      if (counts.length > 0) {
+        const capturedAt = new Date();
+        await SkillSnapshot.insertMany(
+          counts.map(({ _id, count }) => ({ skill: _id, count, capturedAt })),
+          { ordered: false },
+        );
+        console.log(`snapshot: recorded demand for ${counts.length} skills`);
+      }
+    }
+  } catch (err) {
+    console.warn("snapshot failed:", err.message);
+  }
+
   return {
     fetched,
     unique: docsById.size,
     upserted,
     modified,
     removed,
-    totalInDb: await Job.countDocuments(),
+    totalInDb,
   };
 }
