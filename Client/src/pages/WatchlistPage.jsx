@@ -4,7 +4,16 @@ import { RankingList } from "../components/RankingList";
 
 export default function WatchlistPage() {
   const ctx = useOutletContext();
-  const { sorted, maxCount, trackedSkills, handleTrack, setSelectedSkill, loading } = ctx;
+  const {
+    sorted,
+    maxCount,
+    trackedSkills,
+    handleTrack,
+    setSelectedSkill,
+    loading,
+    watchlistError,
+    retryWatchlist,
+  } = ctx;
 
   const watched = useMemo(
     () => sorted.filter((s) => trackedSkills.includes(s.id)),
@@ -28,6 +37,16 @@ export default function WatchlistPage() {
       {loading ? (
         <div className="text-center py-20 font-mono text-sm text-[#5C5C66] uppercase tracking-widest animate-pulse">
           Loading…
+        </div>
+      ) : watched.length === 0 && watchlistError ? (
+        <div className="text-center py-20 font-mono text-sm text-[#9A9AA6] space-y-4">
+          <p>{watchlistError}</p>
+          <button
+            onClick={retryWatchlist}
+            className="underline hover:text-white transition-colors"
+          >
+            Try again
+          </button>
         </div>
       ) : watched.length === 0 ? (
         <div className="text-center py-20 font-mono text-sm text-[#5C5C66] leading-relaxed">

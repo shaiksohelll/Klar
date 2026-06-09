@@ -3,7 +3,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarIcon, XIcon } from "./icons";
 
-const API = "http://localhost:5000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const backdropInit = { opacity: 0 };
 const backdropShow = { opacity: 1 };
@@ -29,7 +29,14 @@ function timeAgo(iso) {
   return `${months}mo ago`;
 }
 
-export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }) {
+export function SkillDrawer({
+  skill,
+  isOpen,
+  onClose,
+  onTrack,
+  tracked,
+  months,
+}) {
   // activeSkill lets the drawer navigate to a related skill without closing.
   const [activeSkill, setActiveSkill] = useState(skill);
   const [detail, setDetail] = useState(null);
@@ -68,8 +75,10 @@ export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }
   const name = current.name || current.id;
   const isTracked = current ? tracked.includes(current.id) : false;
 
-  const demandVal = detail ? detail.demand : current.count ?? null;
-  const remoteCountVal = detail ? detail.remoteCount : current.remoteCount ?? null;
+  const demandVal = detail ? detail.demand : (current.count ?? null);
+  const remoteCountVal = detail
+    ? detail.remoteCount
+    : (current.remoteCount ?? null);
   const remoteShare =
     detail && typeof detail.remoteShare === "number"
       ? detail.remoteShare
@@ -77,7 +86,9 @@ export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }
         ? Math.round((current.remoteCount / current.count) * 100)
         : 0;
   const share =
-    detail && typeof detail.share === "number" ? detail.share : current.share ?? 0;
+    detail && typeof detail.share === "number"
+      ? detail.share
+      : (current.share ?? 0);
   const maxTrend =
     detail && detail.trend && detail.trend.length
       ? Math.max(...detail.trend.map((t) => t.count))
@@ -162,7 +173,9 @@ export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }
                     Share of Jobs
                   </div>
                   <div className="flex items-end gap-3">
-                    <div className="font-mono text-2xl text-white">{share}%</div>
+                    <div className="font-mono text-2xl text-white">
+                      {share}%
+                    </div>
                     <div className="w-full bg-[#26262E] h-2 rounded-full overflow-hidden mb-1.5">
                       <div
                         className="h-full bg-gradient-to-r from-[#FF2740] to-[#9E0019]"
@@ -189,7 +202,10 @@ export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }
                           <div
                             className="w-full bg-gradient-to-t from-[#9E0019] to-[#FF2740] rounded-sm"
                             style={trendBarStyle(
-                              Math.max(6, Math.round((t.count / maxTrend) * 100)),
+                              Math.max(
+                                6,
+                                Math.round((t.count / maxTrend) * 100),
+                              ),
                             )}
                           />
                         </div>
@@ -203,28 +219,30 @@ export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }
               )}
 
               {/* Top companies */}
-              {detail && detail.topCompanies && detail.topCompanies.length > 0 && (
-                <div>
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
-                    Top Companies Hiring
+              {detail &&
+                detail.topCompanies &&
+                detail.topCompanies.length > 0 && (
+                  <div>
+                    <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                      Top Companies Hiring
+                    </div>
+                    <div className="space-y-2">
+                      {detail.topCompanies.map((c) => (
+                        <div
+                          key={c.company}
+                          className="flex items-center justify-between p-3 rounded-lg bg-[#08080A] border border-[#26262E]"
+                        >
+                          <span className="text-sm text-[#F4F4F6] truncate pr-3">
+                            {c.company}
+                          </span>
+                          <span className="font-mono text-xs text-[#9A9AA6] shrink-0">
+                            {c.count} jobs
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {detail.topCompanies.map((c) => (
-                      <div
-                        key={c.company}
-                        className="flex items-center justify-between p-3 rounded-lg bg-[#08080A] border border-[#26262E]"
-                      >
-                        <span className="text-sm text-[#F4F4F6] truncate pr-3">
-                          {c.company}
-                        </span>
-                        <span className="font-mono text-xs text-[#9A9AA6] shrink-0">
-                          {c.count} jobs
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Related skills (clickable) */}
               {detail &&
@@ -242,7 +260,9 @@ export function SkillDrawer({ skill, isOpen, onClose, onTrack, tracked, months }
                           className="px-3 py-1.5 rounded-full border border-[#26262E] bg-[#08080A] text-xs font-mono text-[#F4F4F6] hover:border-[#EB0029] hover:text-white transition-colors cursor-pointer"
                         >
                           {r.skill}
-                          <span className="text-[#5C5C66] ml-1.5">{r.count}</span>
+                          <span className="text-[#5C5C66] ml-1.5">
+                            {r.count}
+                          </span>
                         </button>
                       ))}
                     </div>
