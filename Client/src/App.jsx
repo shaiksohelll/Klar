@@ -37,6 +37,8 @@ async function fetchTrending(role, win) {
   const res = await axios.get(`${API}/api/skills/trending`, { params });
   const total = res.data.totalJobs || 0;
   const lastUpdated = res.data.lastUpdated || null;
+  const velocityReady = res.data.velocityReady ?? false;
+  const velocityBasisDays = res.data.velocityBasisDays ?? null;
   const skills = (res.data.skills || []).map((s) => ({
     id: s.skill,
     name: s.skill,
@@ -44,14 +46,24 @@ async function fetchTrending(role, win) {
     remoteCount: s.remoteCount || 0,
     share: total ? Math.round((s.demand / total) * 100) : 0,
     role: role === "All" ? "General" : role,
+    velocity: s.velocity ?? null,
+    trend: s.trend ?? "flat",
   }));
-  return { skills, totalJobs: total, lastUpdated };
+  return {
+    skills,
+    totalJobs: total,
+    lastUpdated,
+    velocityReady,
+    velocityBasisDays,
+  };
 }
 
 export default function App() {
   const [skills, setSkills] = useState([]);
   const [totalJobs, setTotalJobs] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [velocityReady, setVelocityReady] = useState(false);
+  const [velocityBasisDays, setVelocityBasisDays] = useState(null);
   const [activeRole, setActiveRole] = useState("All");
   const [activeWindow, setActiveWindow] = useState("12M");
   const [trackedSkills, setTrackedSkills] = useState([]);
@@ -99,6 +111,8 @@ export default function App() {
       setSkills(cached.skills);
       setTotalJobs(cached.totalJobs);
       setLastUpdated(cached.lastUpdated);
+      setVelocityReady(cached.velocityReady ?? false);
+      setVelocityBasisDays(cached.velocityBasisDays ?? null);
       setLoading(false);
       setError(null);
     } else {
@@ -114,6 +128,8 @@ export default function App() {
         setSkills(data.skills);
         setTotalJobs(data.totalJobs);
         setLastUpdated(data.lastUpdated);
+        setVelocityReady(data.velocityReady);
+        setVelocityBasisDays(data.velocityBasisDays);
         setError(null);
       } catch {
         if (!cancelled && !cached)
@@ -282,6 +298,8 @@ export default function App() {
     setSelectedSkill,
     loading,
     error,
+    velocityReady,
+    velocityBasisDays,
     watchlistError,
     retryWatchlist: () => setWatchlistRetry((c) => c + 1),
   };

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { StarIcon } from "./icons";
+import { VelocityBadge } from "./VelocityBadge";
 
 const rowHover = { x: 7, backgroundColor: "rgba(235,0,41,0.06)" };
 const barInit = { width: 0 };
@@ -20,7 +21,11 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
           const isTracked = tracked.includes(skill.id);
           const widthPct = Math.max((skill.count / maxCount) * 100, 2);
           const barAnim = { width: `${widthPct}%` };
-          const barTrans = { duration: 0.8, delay: index * 0.03, ease: [0.16, 1, 0.3, 1] };
+          const barTrans = {
+            duration: 0.8,
+            delay: index * 0.03,
+            ease: [0.16, 1, 0.3, 1],
+          };
 
           return (
             <motion.div
@@ -34,10 +39,14 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
               </div>
 
               <div className="flex-1 pr-4 relative">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="font-sans font-medium text-[#F4F4F6] group-hover:text-white transition-colors">
                     {skill.name}
                   </span>
+                  <VelocityBadge
+                    velocity={skill.velocity}
+                    trend={skill.trend}
+                  />
                   <div className="font-mono text-xs text-[#5C5C66] opacity-0 group-hover:opacity-100 transition-opacity">
                     {skill.count.toLocaleString()}
                   </div>

@@ -4,7 +4,15 @@ import { TiltCard } from "../components/TiltCard";
 import { BarChart } from "../components/BarChart";
 import { RankingList } from "../components/RankingList";
 
-const ROLES = ["All", "Frontend", "Backend", "Fullstack", "DevOps", "Data", "Mobile"];
+const ROLES = [
+  "All",
+  "Frontend",
+  "Backend",
+  "Fullstack",
+  "DevOps",
+  "Data",
+  "Mobile",
+];
 const WINDOWS = ["3M", "6M", "12M"];
 const EASE = [0.16, 1, 0.3, 1];
 
@@ -33,6 +41,8 @@ export default function DemandPage() {
     setSelectedSkill,
     loading,
     error,
+    velocityReady,
+    velocityBasisDays,
   } = ctx;
 
   const visibleSkills = sorted;
@@ -53,8 +63,8 @@ export default function DemandPage() {
           transition={heroH1Trans}
           className="font-space font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight text-white"
         >
-          What developers <span className="text-[#EB0029] italic">actually</span>{" "}
-          get hired for.
+          What developers{" "}
+          <span className="text-[#EB0029] italic">actually</span> get hired for.
         </motion.h1>
         <motion.p
           initial={heroItemInit}
@@ -153,8 +163,15 @@ export default function DemandPage() {
           </div>
 
           <div className="lg:col-span-5 xl:col-span-4">
-            <div className="font-mono text-xs uppercase tracking-widest text-[#5C5C66] mb-6 px-4">
+            <div className="font-mono text-xs uppercase tracking-widest text-[#5C5C66] mb-1 px-4">
               Detailed Ranking
+            </div>
+            <div className="font-mono text-[10px] text-[#5C5C66] mb-4 px-4 min-h-[1em]">
+              {!velocityReady
+                ? "📊 Trend tracking just started — velocity unlocks in a few days."
+                : velocityBasisDays !== null
+                  ? `Velocity vs ~${velocityBasisDays}d ago`
+                  : null}
             </div>
             <RankingList
               skills={visibleSkills}
