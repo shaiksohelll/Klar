@@ -112,7 +112,7 @@ export default function App() {
         setTotalJobs(data.totalJobs);
         setLastUpdated(data.lastUpdated);
         setError(null);
-      } catch (err) {
+      } catch {
         if (!cancelled && !cached)
           setError("Couldn't load demand data. Please try again shortly.");
       } finally {
@@ -147,6 +147,15 @@ export default function App() {
     [sorted],
   );
 
+  // Derive what the UI should display. When the user is signed out (or Clerk
+  // is still resolving), return a stable empty array so child components never
+  // render a previous account's tracked skills. The raw `trackedSkills` state
+  // keeps its value in memory so it is ready the instant the next fetch lands.
+  const effectiveTrackedSkills = useMemo(
+    () => (isSignedIn && user?.id ? trackedSkills : []),
+    [isSignedIn, user?.id, trackedSkills],
+  );
+
   // Load the user's watchlist whenever they sign in, the account changes, or
   // the user manually retries after an error.
   useEffect(() => {
@@ -154,10 +163,9 @@ export default function App() {
     const prevId = prevUserIdRef.current;
 
     if (!isSignedIn || !currentId) {
-      // Signed out or Clerk still resolving. Reset ref and wipe the list.
+      // Signed out or Clerk still resolving — reset the ref and bail.
+      // State is cleared by the dedicated effect above.
       prevUserIdRef.current = null;
-      setTrackedSkills([]);
-      setWatchlistError(null);
       return;
     }
 
@@ -203,7 +211,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn, user?.id, watchlistRetry]);
+  }, [isSignedIn, user?.id, watchlistRetry, getToken]);
 
   const handleTrack = async (id) => {
     if (!isSignedIn) {
@@ -248,7 +256,7 @@ export default function App() {
     setActiveRole,
     activeWindow,
     setActiveWindow,
-    trackedSkills,
+    trackedSkills: effectiveTrackedSkills,
     handleTrack,
     setSelectedSkill,
     loading,
@@ -259,7 +267,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#08080A] text-[#F4F4F6] font-sans selection:bg-[#EB0029]/30 selection:text-white pb-24 overflow-x-hidden">
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#EB0029] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-200 h-100 bg-[#EB0029] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
 
       <nav className="sticky top-0 z-40 bg-[#08080A]/70 backdrop-blur-xl border-b border-[#26262E]">
         <div className="relative max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -325,7 +333,7 @@ export default function App() {
         isOpen={!!selectedSkill}
         onClose={() => setSelectedSkill(null)}
         onTrack={handleTrack}
-        tracked={trackedSkills}
+        tracked={effectiveTrackedSkills}
         months={WINDOW_MONTHS[activeWindow]}
       />
     </div>
