@@ -3,14 +3,24 @@ import SkillSnapshot from "../models/SkillSnapshot.js";
 
 // ── In-memory TTL cache for getAllSkills ────────────────────────────────────
 // Key: months (number). Value: { data, expiresAt }.
-// Safe because the underlying data only changes when the 8h ingest cron runs.
+// TTL is long (6 h) because data only changes when ingestAdzuna() runs, which
+// calls clearTrendingCaches() immediately after each successful write.
 const ALL_SKILLS_CACHE = new Map();
-const ALL_SKILLS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const ALL_SKILLS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // ── In-memory TTL cache for getTrendingSkills ───────────────────────────────
 // Key: `${role||"all"}:${months}:${limit}`. Value: { data, expiresAt }.
 const TRENDING_CACHE = new Map();
-const TRENDING_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const TRENDING_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
+ * Clears both trending caches. Called by ingestAdzuna() right after a
+ * successful bulkWrite so the next request recomputes from fresh data.
+ */
+export function clearTrendingCaches() {
+  ALL_SKILLS_CACHE.clear();
+  TRENDING_CACHE.clear();
+}
 
 /**
  * Returns the full ranked skill list for /api/skills/all.

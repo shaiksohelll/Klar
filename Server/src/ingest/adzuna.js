@@ -1,6 +1,9 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
+import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
+import { clearPairsCache } from "../aggregations/skillPairs.js";
+import { clearDetailCache } from "../routes/skillDetail.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -194,6 +197,15 @@ export async function ingestAdzuna({
   } catch (err) {
     console.warn("snapshot failed:", err.message);
   }
+
+  // ── Invalidate read caches ─────────────────────────────────────────────
+  // The underlying data has changed. Clear every in-memory cache so the next
+  // request recomputes from the freshly-written rows. Safe to call even when
+  // no new jobs were upserted (prune may still have removed stale records).
+  clearTrendingCaches();
+  clearPairsCache();
+  clearDetailCache();
+  console.log("🗑️  Read caches cleared after ingest");
 
   return {
     fetched,

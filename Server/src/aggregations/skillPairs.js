@@ -2,9 +2,18 @@ import Job from "../models/Job.js";
 
 // ── In-memory TTL cache for getSkillPairs ──────────────────────────────────
 // Key: `${normalizedSkill}:${limit}`. Value: { data, expiresAt }.
-// Safe because pair co-occurrence data only changes on the 8h ingest cron.
+// TTL is long (6 h) because pair co-occurrence data only changes when
+// ingestAdzuna() runs, which calls clearPairsCache() after each successful write.
 const PAIRS_CACHE = new Map();
-const PAIRS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const PAIRS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
+ * Clears the pairs cache. Called by ingestAdzuna() right after a successful
+ * bulkWrite so the next drawer open recomputes from fresh data.
+ */
+export function clearPairsCache() {
+  PAIRS_CACHE.clear();
+}
 
 /**
  * For a given skill, find which other skills most often appear in the same

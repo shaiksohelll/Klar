@@ -6,9 +6,18 @@ const router = Router();
 
 // ── In-memory TTL cache for skill detail ───────────────────────────────────
 // Key: `${normalizedName}:${months}`. Value: { data, expiresAt }.
-// Safe because the underlying job data only changes on the 8h ingest cron.
+// TTL is long (6 h) because the underlying data only changes when
+// ingestAdzuna() runs, which calls clearDetailCache() after each successful write.
 const DETAIL_CACHE = new Map();
-const DETAIL_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const DETAIL_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
+ * Clears the skill-detail cache. Called by ingestAdzuna() right after a
+ * successful bulkWrite so re-opening any drawer shows fresh data.
+ */
+export function clearDetailCache() {
+  DETAIL_CACHE.clear();
+}
 
 function sinceDate(months) {
   const d = new Date();

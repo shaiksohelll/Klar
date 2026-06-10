@@ -174,6 +174,30 @@ app.get("/api/skills/all", readLimiter, async (req, res) => {
   }
 });
 
+// ── Cache pre-warm ───────────────────────────────────────────────────────
+// Lightweight unauthenticated endpoint that pre-warms all time-window caches
+// used by the UI (3M / 6M / 12M). Idempotent: a cache hit is a sub-ms no-op.
+// Intended for uptime-monitor pings on Render's free tier to prevent cold
+// starts from hitting users, and for any keep-alive cron outside the app.
+app.get("/api/warm", readLimiter, async (req, res) => {
+  // The three windows the Demand-page segmented control exposes.
+  const UI_WINDOWS = [3, 6, 12];
+  // limit:25 matches the exact params the frontend sends for trending.
+  try {
+    await Promise.all(
+      UI_WINDOWS.flatMap((months) => [
+        getTrendingSkills({ months, limit: 25 }),
+        getAllSkills({ months }),
+      ]),
+    );
+    res.json({ ok: true, warmed: ["trending", "allSkills"], windows: UI_WINDOWS });
+  } catch (err) {
+    // Non-fatal: respond 200 so uptime monitors don't alert on a warm failure.
+    console.warn("Warm error:", err.message);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
 // ── Skill detail ───────────────────────────────────────────────────────────
 app.use("/api/skill", readLimiter, skillDetailRouter);
 
