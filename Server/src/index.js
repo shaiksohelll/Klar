@@ -172,10 +172,10 @@ app.post("/api/admin/backfill-dedupe", async (req, res) => {
   }
   try {
     // Stream all jobs, compute key, build bulk ops.
-    const cursor = Job.find({}).select("companyName title").lean().cursor();
+    const cursor = Job.find({}).select("companyName title location").lean().cursor();
     const ops = [];
     for await (const job of cursor) {
-      const key = makeDedupeKey(job.companyName || "", job.title || "");
+      const key = makeDedupeKey(job.companyName || "", job.title || "", job.location || "");
       ops.push({
         updateOne: {
           filter: { _id: job._id },

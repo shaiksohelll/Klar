@@ -70,7 +70,7 @@ function mapJob(raw, country) {
     location: raw.location?.display_name || "",
     redirectUrl: raw.redirect_url || "",
     postedAt: raw.created ? new Date(raw.created) : new Date(),
-    dedupeKey: makeDedupeKey(companyName, title),
+    dedupeKey: makeDedupeKey(companyName, title, raw.location?.display_name || ""),
   };
 }
 

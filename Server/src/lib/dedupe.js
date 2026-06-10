@@ -4,7 +4,7 @@
 // aggregation. We achieve this NON-DESTRUCTIVELY: both raw documents are kept;
 // deduplication happens at COUNT time via a stable composite key.
 //
-// Key: `${normalizeCompany(companyName)}::${normalizeJobTitle(title)}`
+// Key: `${normalizeCompany(companyName)}::${normalizeJobTitle(title)}::${normalizeLocation(location)}`
 // Blank-company postings cannot be reliably matched across sources and are
 // left standalone (key = null).
 
@@ -47,20 +47,45 @@ export function normalizeJobTitle(title = "") {
 }
 
 /**
+ * Normalise a location string for deduplication matching.
+ * - If blank/null, returns "" (location-unaware postings won't be excluded
+ *   from matching; they'll just share a blank city segment).
+ * - Lowercase, trim, take ONLY the first comma-separated segment (the city).
+ * - Strip punctuation, collapse whitespace.
+ * - Examples: "Pune, Maharashtra, India" → "pune"
+ *             "Bangalore" → "bangalore"
+ *             "" or null  → ""
+ */
+export function normalizeLocation(loc = "") {
+  if (!loc) return "";
+  const city = String(loc).split(",")[0]; // take the city segment
+  return city
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ") // strip punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Build the deduplication composite key.
  *
- * Returns `"${normalizeCompany}::${normalizeJobTitle}"` when company is
- * non-blank, or `null` when company is blank/unknown.  A null key means the
- * document is left standalone in aggregations (not merged with anything).
+ * Returns `"${normalizeCompany}::${normalizeJobTitle}::${normalizeLocation}"`
+ * when company is non-blank, or `null` when company is blank/unknown.
+ * A null key means the document is left standalone in aggregations (not
+ * merged with anything).
+ *
+ * Including location means "Acme Corp Backend Dev Mumbai" and
+ * "Acme Corp Backend Dev Pune" are treated as distinct postings.
  *
  * @param {string} companyName
  * @param {string} title
+ * @param {string} [location]
  * @returns {string|null}
  */
-export function makeDedupeKey(companyName, title) {
+export function makeDedupeKey(companyName, title, location = "") {
   const co = normalizeCompany(companyName);
   if (!co) return null; // blank company → cannot dedupe reliably
-  return `${co}::${normalizeJobTitle(title)}`;
+  return `${co}::${normalizeJobTitle(title)}::${normalizeLocation(location)}`;
 }
 
 // ── Reusable MongoDB pipeline stages for count-time deduplication ──────────

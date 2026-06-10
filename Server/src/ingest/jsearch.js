@@ -91,7 +91,7 @@ function mapJob(item, roleQuery) {
     postedAt: item.job_posted_at_datetime_utc
       ? new Date(item.job_posted_at_datetime_utc)
       : new Date(),
-    dedupeKey: makeDedupeKey(companyName, title),
+    dedupeKey: makeDedupeKey(companyName, title, locationParts.join(", ")),
   };
 }
 
