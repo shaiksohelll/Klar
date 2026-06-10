@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 import { clerkMiddleware } from "@clerk/express";
 import { ingestAdzuna } from "./ingest/adzuna.js";
+import { ingestJSearch } from "./ingest/jsearch.js";
 import cron from "node-cron";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { getSkillGap } from "./aggregations/skillGap.js";
@@ -141,6 +142,25 @@ app.get("/api/ingest/adzuna", async (req, res) => {
   }
 });
 
+// ── JSearch ingest (protected) ──────────────────────────────────────────────
+// Same X-Ingest-Secret guard as /api/ingest/adzuna. POST so it can't be
+// accidentally triggered by a browser navigation or uptime-monitor GET.
+app.post("/api/ingest/jsearch", async (req, res) => {
+  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  try {
+    const country = req.query.country || "in";
+    const pages = Math.min(Math.max(Number.parseInt(req.query.pages, 10) || 1, 1), 3);
+    const datePosted = req.query.date_posted || "month";
+    const result = await ingestJSearch({ country, pages, datePosted });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("JSearch ingest error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── Trending skills ────────────────────────────────────────────────────────
 app.get("/api/skills/trending", readLimiter, async (req, res) => {
   try {
@@ -263,6 +283,17 @@ mongoose
         console.log("🔄 Auto-ingest:", r);
       } catch (e) {
         console.error("Auto-ingest failed:", e.message);
+      }
+    });
+    // JSearch daily top-up: runs once a day at 05:00 server time.
+    // Separate schedule so JSearch failures can never interfere with Adzuna.
+    // ingestJSearch() is a no-op when JSEARCH_API_KEY is unset.
+    cron.schedule("0 5 * * *", async () => {
+      try {
+        const r = await ingestJSearch({ country: "in", pages: 1 });
+        console.log("🔄 JSearch auto-ingest:", r);
+      } catch (e) {
+        console.error("JSearch auto-ingest failed:", e.message);
       }
     });
     app.listen(PORT, () => {
