@@ -12,6 +12,10 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 // Re-opening the same skill’s drawer is instant with zero refetch.
 const DETAIL_CACHE = new Map();
 
+// ── Client-side session cache for salary insights ─────────────────────────────
+// Same pattern as DETAIL_CACHE. Key: `salary:${skillId}:${months}`.
+const SALARY_CACHE = new Map();
+
 // UI spring: stiffness 180, damping 22
 const UI_SPRING = { type: "spring", stiffness: 180, damping: 22 };
 // Snappy spring: stiffness 420, damping 34 (star pop)
@@ -19,6 +23,27 @@ const SNAPPY_SPRING = { type: "spring", stiffness: 420, damping: 34 };
 
 const shareBarStyle = (pct) => ({ width: `${pct}%` });
 const trendBarStyle = (pct) => ({ height: `${pct}%` });
+
+// Map a currency code to its common symbol.
+function currencySymbol(code) {
+  if (code === "INR") return "₹";
+  if (code === "USD") return "$";
+  if (code === "GBP") return "£";
+  if (code === "EUR") return "€";
+  return code ? `${code} ` : "";
+}
+
+// Format a salary number: e.g. 1500000 → "15L", 75000 → "75K"
+function fmtSalary(n, currency) {
+  if (n == null || !isFinite(n)) return "—";
+  // INR: use lakhs
+  if (currency === "INR") {
+    const l = n / 100_000;
+    return l >= 1 ? `${l % 1 === 0 ? l : l.toFixed(1)}L` : `${Math.round(n / 1000)}K`;
+  }
+  // USD / GBP / others: use K
+  return n >= 1000 ? `${Math.round(n / 1000)}K` : String(Math.round(n));
+}
 
 function monthLabel(ym) {
   const parts = String(ym).split("-");
@@ -51,11 +76,22 @@ export function SkillDrawer({
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Salary insights: fetched separately so detail doesn't block salary UI.
+  const [salary, setSalary] = useState(null);
+  const [loadingSalary, setLoadingSalary] = useState(false);
+
   // Reset to the parent-selected skill whenever it changes (new open).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (skill) setActiveSkill(skill);
   }, [skill]);
+
+  // Reset salary state when active skill changes so stale data never shows.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSalary(null);
+    setLoadingSalary(false);
+  }, [activeSkill]);
 
   // Fetch enriched detail for the active skill.
   // Session cache: if the same skill+months combo was fetched before this
@@ -85,6 +121,40 @@ export function SkillDrawer({
       .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoadingDetail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeSkill, months]);
+
+  // Fetch salary insights for the active skill (separate fetch, separate cache).
+  useEffect(() => {
+    if (!isOpen || !activeSkill) return;
+    const cacheKey = `salary:${activeSkill.id}:${months || 12}`;
+    if (SALARY_CACHE.has(cacheKey)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSalary(SALARY_CACHE.get(cacheKey));
+      setLoadingSalary(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSalary(true);
+    setSalary(null);
+    axios
+      .get(`${API}/api/salary`, {
+        params: { skill: activeSkill.id, months: months || 12 },
+      })
+      .then((res) => {
+        if (!cancelled) {
+          SALARY_CACHE.set(cacheKey, res.data);
+          setSalary(res.data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSalary({ ok: false });
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSalary(false);
       });
     return () => {
       cancelled = true;
@@ -276,6 +346,73 @@ export function SkillDrawer({
                     </div>
                   </div>
                 )}
+
+              {/* ── Salary · Disclosed ─────────────────────────────────── */}
+              {/* Skeleton while loading */}
+              {loadingSalary && !salary && (
+                <div
+                  aria-label="Loading salary data"
+                  aria-busy="true"
+                  className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] space-y-3"
+                >
+                  <div className="h-2.5 w-28 rounded bg-[#26262E]" />
+                  <div
+                    className={`h-9 w-32 rounded bg-[#1E1E24] ${
+                      shouldReduceMotion ? "" : "animate-pulse"
+                    }`}
+                  />
+                  <div className="h-2 w-48 rounded bg-[#1A1A20]" />
+                  <div className="h-2 w-40 rounded bg-[#1A1A20]" />
+                </div>
+              )}
+
+              {/* Salary data resolved */}
+              {salary && (
+                <div>
+                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
+                    Salary · Disclosed
+                  </div>
+
+                  {salary.primary && salary.primary.count > 0 ? (
+                    <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] space-y-2">
+                      {/* Median — large prominent number */}
+                      <div className="font-mono text-3xl font-bold text-white">
+                        {currencySymbol(salary.primary.currency)}
+                        {fmtSalary(salary.primary.median, salary.primary.currency)}
+                        <span className="text-sm text-[#9A9AA6] font-normal ml-2">median</span>
+                      </div>
+
+                      {/* p25–p75 range */}
+                      <div className="font-mono text-sm text-[#9A9AA6]">
+                        {currencySymbol(salary.primary.currency)}
+                        {fmtSalary(salary.primary.p25, salary.primary.currency)}
+                        {" – "}
+                        {currencySymbol(salary.primary.currency)}
+                        {fmtSalary(salary.primary.p75, salary.primary.currency)}
+                        <span className="text-[#5C5C66] ml-1">typical range</span>
+                      </div>
+
+                      {/* Disclosure caption */}
+                      <div className="font-mono text-[10px] text-[#5C5C66] leading-relaxed pt-1 border-t border-[#26262E]">
+                        Disclosed by{" "}
+                        <span className="text-[#9A9AA6]">{salary.disclosedCount.toLocaleString()}</span>
+                        {" of "}
+                        <span className="text-[#9A9AA6]">{salary.totalCount.toLocaleString()}</span>
+                        {" postings ("}
+                        {Math.round((salary.disclosureRate ?? 0) * 100)}%
+                        {" disclosure rate). Employer-disclosed only — no estimates."}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Empty state — calm, honest, never shows a zero or broken chart */
+                    <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
+                      <p className="font-mono text-xs text-[#5C5C66] leading-relaxed">
+                        No salaries disclosed yet for this skill.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Pairs Well With */}
               {detail &&

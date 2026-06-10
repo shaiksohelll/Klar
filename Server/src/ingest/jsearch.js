@@ -5,6 +5,7 @@ import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
+import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
 //
@@ -86,6 +87,8 @@ function mapJob(item, roleQuery) {
       min != null || max != null || midpoint != null
         ? { min, max, midpoint, currency }
         : null,
+    // JSearch has no "predicted" flag — any disclosed figure is a real employer value.
+    salaryDisclosed: Boolean(item.job_min_salary || item.job_max_salary),
     location: locationParts.join(", "),
     redirectUrl: item.job_apply_link || "",
     postedAt: item.job_posted_at_datetime_utc
@@ -189,6 +192,7 @@ export async function ingestJSearch({
   clearPairsCache();
   clearDetailCache();
   clearCompaniesCache();
+  clearSalaryCache();
 
   const summary = {
     requested: queries.length,

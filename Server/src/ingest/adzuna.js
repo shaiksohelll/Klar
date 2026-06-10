@@ -6,6 +6,7 @@ import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
+import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -67,6 +68,9 @@ function mapJob(raw, country) {
       midpoint,
       currency: country === "in" ? "INR" : country === "us" ? "USD" : "GBP",
     },
+    // Mark as disclosed only when Adzuna provides a real min figure and
+    // has NOT flagged it as a predicted/estimated value.
+    salaryDisclosed: Boolean(raw.salary_min && raw.salary_is_predicted !== "1"),
     location: raw.location?.display_name || "",
     redirectUrl: raw.redirect_url || "",
     postedAt: raw.created ? new Date(raw.created) : new Date(),
@@ -209,6 +213,7 @@ export async function ingestAdzuna({
   clearPairsCache();
   clearDetailCache();
   clearCompaniesCache();
+  clearSalaryCache();
   console.log("🗑️  Read caches cleared after ingest");
 
   return {

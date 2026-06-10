@@ -17,6 +17,10 @@ const JobSchema = new mongoose.Schema(
         // null when companyName is blank (those docs are never merged).
         // Set by both ingesters via makeDedupeKey() from lib/dedupe.js.
         dedupeKey: { type: String, default: null, index: true },
+        // true only when the salary figures in salaryRange come from a
+        // direct employer disclosure (not Adzuna predictions, not null).
+        // Used by salaryInsights to compute honest stats.
+        salaryDisclosed: { type: Boolean, default: false },
     },
     { timestamps: true },
 )

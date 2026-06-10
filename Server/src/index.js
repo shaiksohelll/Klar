@@ -11,6 +11,7 @@ import cron from "node-cron";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
+import { getSalaryInsights } from "./aggregations/salaryInsights.js";
 import { makeDedupeKey } from "./lib/dedupe.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
@@ -271,6 +272,23 @@ app.get("/api/companies", readLimiter, async (req, res) => {
     res.json({ ok: true, companies });
   } catch (err) {
     console.error("Companies error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Salary Insights ───────────────────────────────────────────────
+// Public, read-only. Descriptive stats derived ONLY from disclosed salaries.
+// Optional ?skill= ?role= ?months= (clamped 1-24, default 12).
+// NOT added to /api/warm — query space is too large to pre-warm meaningfully.
+app.get("/api/salary", readLimiter, async (req, res) => {
+  try {
+    const skill = req.query.skill || undefined;
+    const role = req.query.role || undefined;
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const data = await getSalaryInsights({ skill, role, months });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    console.error("Salary insights error:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
