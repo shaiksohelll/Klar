@@ -7,7 +7,7 @@ import rateLimit from "express-rate-limit";
 import { clerkMiddleware } from "@clerk/express";
 import { ingestAdzuna } from "./ingest/adzuna.js";
 import cron from "node-cron";
-import { getTrendingSkills } from "./aggregations/trendingSkills.js";
+import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
@@ -153,6 +153,20 @@ app.get("/api/skills/trending", readLimiter, async (req, res) => {
     res.json({ ok: true, ...result, lastUpdated: newest?.updatedAt || null });
   } catch (err) {
     console.error("Trending error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── All skills (for client-side search/filter) ─────────────────────────────
+// Returns the full ranked skill list in one response. All searching/filtering
+// is done client-side on this payload; this endpoint is fetched once on load.
+app.get("/api/skills/all", readLimiter, async (req, res) => {
+  try {
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const skills = await getAllSkills({ months });
+    res.json({ ok: true, skills });
+  } catch (err) {
+    console.error("All skills error:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

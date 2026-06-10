@@ -1,6 +1,54 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 
+/**
+ * Returns the full ranked skill list for /api/skills/all.
+ * Reuses the same $facet aggregation as getTrendingSkills but:
+ *  - no limit (returns every skill in the collection)
+ *  - no velocity/snapshot queries (not needed for search/filter UX)
+ *  - adds remoteShare as a 0-1 float so the frontend can sort/filter on it
+ *
+ * Shape: Array<{ skill, demand, remoteCount, remoteShare }>
+ */
+export async function getAllSkills({ months = 12 } = {}) {
+  const since = new Date();
+  since.setMonth(since.getMonth() - Number(months));
+
+  const [facetResult] = await Job.aggregate([
+    { $match: { postedAt: { $gte: since } } },
+    {
+      $facet: {
+        skills: [
+          { $unwind: "$requiredSkills" },
+          {
+            $group: {
+              _id: "$requiredSkills",
+              demand: { $sum: 1 },
+              remoteCount: { $sum: { $cond: ["$isRemote", 1, 0] } },
+            },
+          },
+          { $sort: { demand: -1 } },
+          {
+            $project: {
+              _id: 0,
+              skill: "$_id",
+              demand: 1,
+              remoteCount: 1,
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  const skills = (facetResult?.skills ?? []).map((s) => ({
+    ...s,
+    remoteShare: s.demand > 0 ? s.remoteCount / s.demand : 0,
+  }));
+
+  return skills;
+}
+
 export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
   // Only look at jobs posted within the last N months
   const since = new Date();

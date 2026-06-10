@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { TiltCard } from "../components/TiltCard";
 import { BarChart } from "../components/BarChart";
 import { RankingList } from "../components/RankingList";
+import { SkillSearch } from "../components/SkillSearch";
 import { useCountUp } from "../hooks/useCountUp";
 
 const ROLES = [
@@ -15,6 +16,7 @@ const ROLES = [
   "Mobile",
 ];
 const WINDOWS = ["3M", "6M", "12M"];
+const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const EASE = [0.16, 1, 0.3, 1];
 
 // Sliding pill springs — stiffness 180, damping 22 (UI spring)
@@ -159,40 +161,54 @@ export default function DemandPage() {
           No skills found for this filter.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-          <div className="lg:col-span-7 xl:col-span-8">
-            <TiltCard>
-              {/*
-                key={activeRole + activeWindow} forces BarChart to re-mount
-                (and thus re-run entrance animations) on filter changes.
-              */}
-              <BarChart
-                key={`${activeRole}|${activeWindow}`}
-                skills={visibleSkills.slice(0, 12)}
-                maxCount={maxCount}
-                onSelect={setSelectedSkill}
-              />
-            </TiltCard>
+        <div className="space-y-10">
+          {/* ── Skill search / filter ── */}
+          <div className="border border-[#26262E] rounded-xl p-5 bg-[#0A0A0E]">
+            <div className="font-mono text-xs uppercase tracking-widest text-[#5C5C66] mb-4">
+              Search &amp; Filter Skills
+            </div>
+            <SkillSearch
+              onSelect={setSelectedSkill}
+              months={WINDOW_MONTHS[activeWindow]}
+            />
           </div>
 
-          <div className="lg:col-span-5 xl:col-span-4">
-            <div className="font-mono text-xs uppercase tracking-widest text-[#5C5C66] mb-1 px-4">
-              Detailed Ranking
+          {/* ── Demand chart + ranking list ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+            <div className="lg:col-span-7 xl:col-span-8">
+              <TiltCard>
+                {/*
+                  key={activeRole + activeWindow} forces BarChart to re-mount
+                  (and thus re-run entrance animations) on filter changes.
+                */}
+                <BarChart
+                  key={`${activeRole}|${activeWindow}`}
+                  skills={visibleSkills.slice(0, 12)}
+                  maxCount={maxCount}
+                  onSelect={setSelectedSkill}
+                />
+              </TiltCard>
             </div>
-            <div className="font-mono text-[10px] text-[#5C5C66] mb-4 px-4 min-h-[1em]">
-              {!velocityReady
-                ? "📊 Trend tracking just started — velocity unlocks in a few days."
-                : velocityBasisDays !== null
-                  ? `Velocity vs ~${velocityBasisDays}d ago`
-                  : null}
+
+            <div className="lg:col-span-5 xl:col-span-4">
+              <div className="font-mono text-xs uppercase tracking-widest text-[#5C5C66] mb-1 px-4">
+                Detailed Ranking
+              </div>
+              <div className="font-mono text-[10px] text-[#5C5C66] mb-4 px-4 min-h-[1em]">
+                {!velocityReady
+                  ? "📊 Trend tracking just started — velocity unlocks in a few days."
+                  : velocityBasisDays !== null
+                    ? `Velocity vs ~${velocityBasisDays}d ago`
+                    : null}
+              </div>
+              <RankingList
+                skills={visibleSkills}
+                maxCount={maxCount}
+                onSelect={setSelectedSkill}
+                onTrack={handleTrack}
+                tracked={trackedSkills}
+              />
             </div>
-            <RankingList
-              skills={visibleSkills}
-              maxCount={maxCount}
-              onSelect={setSelectedSkill}
-              onTrack={handleTrack}
-              tracked={trackedSkills}
-            />
           </div>
         </div>
       )}
