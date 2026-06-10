@@ -8,9 +8,12 @@ import { clerkMiddleware } from "@clerk/express";
 import { ingestAdzuna } from "./ingest/adzuna.js";
 import cron from "node-cron";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
+import { getSkillGap } from "./aggregations/skillGap.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
+import Watchlist from "./models/Watchlist.js";
+import { requireAuth } from "@clerk/express";
 
 // ── Startup validation ─────────────────────────────────────────────────────
 const IS_PROD = process.env.NODE_ENV === "production";
@@ -176,6 +179,30 @@ app.use("/api/skill", readLimiter, skillDetailRouter);
 
 // ── Watchlist (auth-gated) ─────────────────────────────────────────────────
 app.use("/api/watchlist", watchlistLimiter, watchlistRouter);
+
+// ── Skill-Gap Advisor (auth-gated) ─────────────────────────────────────────
+// Returns skills that co-occur most often with the user's watchlist but that
+// they don't already track. Auth-gated: userId comes from the Clerk JWT only.
+app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 6, 1), 20);
+
+    const items = await Watchlist.find({ userId }).lean();
+    const watchedSkills = items.map((i) => i.skill);
+
+    if (watchedSkills.length === 0) {
+      return res.json({ ok: true, empty: true, gaps: [] });
+    }
+
+    const gaps = await getSkillGap(watchedSkills, { limit, months });
+    res.json({ ok: true, empty: false, gaps });
+  } catch (err) {
+    console.error("Skill-gap error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // ── DB connect + cron + listen ─────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;

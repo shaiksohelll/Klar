@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { RankingList } from "../components/RankingList";
+import { SkillGap } from "../components/SkillGap";
+
+const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 
 export default function WatchlistPage() {
   const ctx = useOutletContext();
@@ -13,7 +16,11 @@ export default function WatchlistPage() {
     loading,
     watchlistError,
     retryWatchlist,
+    getToken,
+    activeWindow,
   } = ctx;
+
+  const months = WINDOW_MONTHS[activeWindow] ?? 12;
 
   const watched = useMemo(
     () => sorted.filter((s) => trackedSkills.includes(s.id)),
@@ -54,14 +61,27 @@ export default function WatchlistPage() {
           to add it here.
         </div>
       ) : (
-        <RankingList
-          skills={watched}
-          maxCount={maxCount}
-          onSelect={setSelectedSkill}
-          onTrack={handleTrack}
-          tracked={trackedSkills}
-        />
+        <div className="space-y-10">
+          <RankingList
+            skills={watched}
+            maxCount={maxCount}
+            onSelect={setSelectedSkill}
+            onTrack={handleTrack}
+            tracked={trackedSkills}
+          />
+
+          {/* Skill-Gap Advisor — only shown when there's a watchlist to reason from */}
+          {getToken && (
+            <SkillGap
+              getToken={getToken}
+              trackedSkills={trackedSkills}
+              onSelect={setSelectedSkill}
+              months={months}
+            />
+          )}
+        </div>
       )}
     </main>
   );
 }
+

@@ -302,6 +302,7 @@ export default function App() {
     velocityBasisDays,
     watchlistError,
     retryWatchlist: () => setWatchlistRetry((c) => c + 1),
+    getToken,
   };
 
   return (
