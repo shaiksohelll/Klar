@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { StarIcon, XIcon } from "./icons";
+import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -76,7 +77,7 @@ export function SkillDrawer({
   if (!activeSkill && !skill) return null;
 
   const current = activeSkill || skill;
-  const name = current.name || current.id;
+  const name = displayName(current.name || current.id);
   const isTracked = current ? tracked.includes(current.id) : false;
 
   const demandVal = detail ? detail.demand : (current.count ?? null);

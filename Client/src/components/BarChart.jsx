@@ -1,5 +1,6 @@
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useState } from "react";
+import { displayName } from "../lib/displayName";
 
 // ── Springs ──────────────────────────────────────────────────────────────────
 // Bar entrance spring: stiffness 150, damping 18
@@ -12,30 +13,6 @@ const UI_SPRING = { type: "spring", stiffness: 180, damping: 22 };
 const tipInit = { opacity: 0, y: 6, scale: 0.96 };
 const tipShow = { opacity: 1, y: 0, scale: 1 };
 
-// ── Display name formatter ───────────────────────────────────────────────────
-// Capitalizes skill names for DISPLAY ONLY — never mutates the underlying key.
-const KNOWN_NAMES = {
-  html: "HTML",
-  css: "CSS",
-  aws: "AWS",
-  "ci/cd": "CI/CD",
-  sql: "SQL",
-  api: "API",
-  typescript: "TypeScript",
-  javascript: "JavaScript",
-  node: "Node.js",
-  nodejs: "Node.js",
-  "node.js": "Node.js",
-  php: "PHP",
-};
-
-function displayName(raw) {
-  if (!raw) return "";
-  const lower = raw.toLowerCase();
-  if (KNOWN_NAMES[lower]) return KNOWN_NAMES[lower];
-  // Capitalize first letter, leave rest as-is
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
 
 // ── Plot geometry ────────────────────────────────────────────────────────────
 const PLOT_HEIGHT = 320; // px — fixed height for the bar plot area

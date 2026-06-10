@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { StarIcon } from "./icons";
 import { VelocityBadge } from "./VelocityBadge";
+import { displayName } from "../lib/displayName";
 
 // Snappy spring: stiffness 420, damping 34
 const SNAPPY_SPRING = { type: "spring", stiffness: 420, damping: 34 };
@@ -62,7 +63,7 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
               <div className="flex-1 pr-4 relative">
                 <div className="flex items-center gap-2">
                   <span className="font-sans font-medium text-[#F4F4F6] group-hover:text-white transition-colors">
-                    {skill.name}
+                    {displayName(skill.name)}
                   </span>
                   <VelocityBadge
                     velocity={skill.velocity}

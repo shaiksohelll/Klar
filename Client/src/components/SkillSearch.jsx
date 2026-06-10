@@ -1,31 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import { motion, useReducedMotion } from "framer-motion";
+import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// ── Display name formatter (mirrors BarChart's formatter) ───────────────────
-const KNOWN_NAMES = {
-  html: "HTML",
-  css: "CSS",
-  aws: "AWS",
-  "ci/cd": "CI/CD",
-  sql: "SQL",
-  api: "API",
-  typescript: "TypeScript",
-  javascript: "JavaScript",
-  node: "Node.js",
-  nodejs: "Node.js",
-  "node.js": "Node.js",
-  php: "PHP",
-};
-
-function displayName(raw) {
-  if (!raw) return "";
-  const lower = raw.toLowerCase();
-  if (KNOWN_NAMES[lower]) return KNOWN_NAMES[lower];
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
 
 // Sort keys
 const SORT_OPTIONS = [
