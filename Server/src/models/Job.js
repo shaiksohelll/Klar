@@ -13,6 +13,10 @@ const JobSchema = new mongoose.Schema(
         location: String,
         redirectUrl: { type: String }, // direct link to the source job posting
         postedAt: { type: Date, required: true },
+        // Cross-source deduplication key — normalizeCompany::normalizeTitle.
+        // null when companyName is blank (those docs are never merged).
+        // Set by both ingesters via makeDedupeKey() from lib/dedupe.js.
+        dedupeKey: { type: String, default: null, index: true },
     },
     { timestamps: true },
 )

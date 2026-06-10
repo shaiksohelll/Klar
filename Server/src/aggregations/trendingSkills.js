@@ -1,5 +1,6 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
+import { dedupeGroupStages } from "../lib/dedupe.js";
 
 // ── In-memory TTL cache for getAllSkills ────────────────────────────────────
 // Key: months (number). Value: { data, expiresAt }.
@@ -46,6 +47,9 @@ export async function getAllSkills({ months = 12 } = {}) {
 
   const [facetResult] = await Job.aggregate([
     { $match: { postedAt: { $gte: since } } },
+    // Deduplicate cross-source twins before counting.
+    // Postcondition: at most one doc per (company, title) per window.
+    ...dedupeGroupStages(),
     {
       $facet: {
         skills: [
@@ -98,9 +102,11 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
   // together so MongoDB only scans the collection once.
   const [facetResult] = await Job.aggregate([
     { $match: match },
+    // Deduplicate cross-source twins before counting.
+    ...dedupeGroupStages(),
     {
       $facet: {
-        // Branch A: just count the matched documents
+        // Branch A: just count the matched (deduped) documents
         totalJobs: [{ $count: "count" }],
         // Branch B: unwind → group → sort → limit → project
         skills: [

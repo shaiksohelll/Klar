@@ -1,4 +1,5 @@
 import Job from "../models/Job.js";
+import { dedupeGroupStages } from "../lib/dedupe.js";
 
 // ── In-memory TTL cache for getTopCompanies ─────────────────────────────────
 // Key: `${role||"all"}:${skill||"all"}:${months}:${limit}`. Value: { data, expiresAt }.
@@ -58,9 +59,11 @@ export async function getTopCompanies({
   if (role) match.normalizedRole = role.toLowerCase();
   if (skill) match.requiredSkills = skill.toLowerCase().trim();
 
-  // Stage 1 — group by companyName, accumulate counts + all skills seen.
+  // Stage 1 — deduplicate twins, then group by companyName.
   const raw = await Job.aggregate([
     { $match: match },
+    // Collapse cross-source twins before counting openings.
+    ...dedupeGroupStages(),
     {
       $group: {
         _id: "$companyName",

@@ -1,4 +1,5 @@
 import Job from "../models/Job.js";
+import { dedupeGroupStages } from "../lib/dedupe.js";
 
 // ── In-memory TTL cache for getSkillPairs ──────────────────────────────────
 // Key: `${normalizedSkill}:${limit}`. Value: { data, expiresAt }.
@@ -38,8 +39,15 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
     return cached.data;
   }
 
-  // One count to establish the denominator for percentages.
-  const baseCount = await Job.countDocuments({ requiredSkills: normalized });
+  // Deduplicated baseCount: aggregate rather than countDocuments so we can
+  // prepend the dedupe stages. This ensures the denominator matches the counts
+  // computed in the pairs pipeline below.
+  const baseCountResult = await Job.aggregate([
+    { $match: { requiredSkills: normalized } },
+    ...dedupeGroupStages(),
+    { $count: "n" },
+  ]);
+  const baseCount = baseCountResult[0]?.n ?? 0;
 
   if (baseCount === 0) {
     const result = { skill: normalized, baseCount: 0, pairs: [] };
@@ -47,9 +55,10 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
     return result;
   }
 
-  // One aggregation: match → unwind → exclude self → group → sort → limit.
+  // Deduplicated pairs: match → dedupe → unwind → exclude self → group → sort → limit.
   const raw = await Job.aggregate([
     { $match: { requiredSkills: normalized } },
+    ...dedupeGroupStages(),
     { $unwind: "$requiredSkills" },
     { $match: { requiredSkills: { $ne: normalized } } },
     { $group: { _id: "$requiredSkills", count: { $sum: 1 } } },

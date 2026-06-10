@@ -11,6 +11,7 @@ import cron from "node-cron";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
+import { makeDedupeKey } from "./lib/dedupe.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
@@ -157,6 +158,39 @@ app.post("/api/ingest/jsearch", async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error("JSearch ingest error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Backfill dedupeKey (admin) ─────────────────────────────────────────────
+// Stamps dedupeKey onto every existing Job doc that is missing it.
+// Safe to call multiple times (idempotent: bulkWrite with upsert:false).
+// Protected by the same X-Ingest-Secret header as the ingest endpoints.
+app.post("/api/admin/backfill-dedupe", async (req, res) => {
+  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  try {
+    // Stream all jobs, compute key, build bulk ops.
+    const cursor = Job.find({}).select("companyName title").lean().cursor();
+    const ops = [];
+    for await (const job of cursor) {
+      const key = makeDedupeKey(job.companyName || "", job.title || "");
+      ops.push({
+        updateOne: {
+          filter: { _id: job._id },
+          update: { $set: { dedupeKey: key } },
+        },
+      });
+    }
+    let updated = 0;
+    if (ops.length > 0) {
+      const result = await Job.bulkWrite(ops, { ordered: false });
+      updated = result.modifiedCount || 0;
+    }
+    res.json({ ok: true, processed: ops.length, updated });
+  } catch (err) {
+    console.error("Backfill-dedupe error:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

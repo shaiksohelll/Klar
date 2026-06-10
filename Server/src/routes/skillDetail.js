@@ -1,6 +1,7 @@
 import { Router } from "express";
 import Job from "../models/Job.js";
 import { getSkillPairs } from "../aggregations/skillPairs.js";
+import { dedupeGroupStages } from "../lib/dedupe.js";
 
 const router = Router();
 
@@ -25,6 +26,12 @@ function sinceDate(months) {
   return d;
 }
 
+// Helper: run an aggregate pipeline and extract a single integer count.
+async function countAgg(pipeline) {
+  const result = await Job.aggregate([...pipeline, { $count: "n" }]);
+  return result[0]?.n ?? 0;
+}
+
 // GET /api/skill/:name?months=12  → enriched detail for one skill
 router.get("/:name", async (req, res) => {
   try {
@@ -39,6 +46,7 @@ router.get("/:name", async (req, res) => {
 
     const since = sinceDate(months);
     const baseMatch = { requiredSkills: name, postedAt: { $gte: since } };
+    const windowMatch = { postedAt: { $gte: since } };
 
     const [
       demand,
@@ -50,25 +58,37 @@ router.get("/:name", async (req, res) => {
       recent,
       pairsResult,
     ] = await Promise.all([
-      Job.countDocuments(baseMatch),
-      Job.countDocuments({ ...baseMatch, isRemote: true }),
-      Job.countDocuments({ postedAt: { $gte: since } }),
+      // demand: deduplicated count of postings that require this skill
+      countAgg([{ $match: baseMatch }, ...dedupeGroupStages()]),
+      // remoteCount: deduplicated count of remote postings for this skill
+      countAgg([
+        { $match: { ...baseMatch, isRemote: true } },
+        ...dedupeGroupStages(),
+      ]),
+      // totalJobs: deduplicated count of ALL postings in the window
+      countAgg([{ $match: windowMatch }, ...dedupeGroupStages()]),
+      // topCompanies: deduplicated, group by company
       Job.aggregate([
         { $match: baseMatch },
+        ...dedupeGroupStages(),
         { $group: { _id: "$companyName", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 5 },
       ]),
+      // relatedSkills: deduplicated co-occurrence
       Job.aggregate([
         { $match: baseMatch },
+        ...dedupeGroupStages(),
         { $unwind: "$requiredSkills" },
         { $match: { requiredSkills: { $ne: name } } },
         { $group: { _id: "$requiredSkills", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 8 },
       ]),
+      // trend: monthly posting counts (deduplicated)
       Job.aggregate([
         { $match: baseMatch },
+        ...dedupeGroupStages(),
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m", date: "$postedAt" } },
@@ -77,6 +97,8 @@ router.get("/:name", async (req, res) => {
         },
         { $sort: { _id: 1 } },
       ]),
+      // recent: raw individual postings — NOT deduplicated intentionally,
+      // so users see real listings from both sources.
       Job.find(baseMatch)
         .sort({ postedAt: -1 })
         .limit(5)
@@ -125,4 +147,3 @@ router.get("/:name", async (req, res) => {
 });
 
 export default router;
-

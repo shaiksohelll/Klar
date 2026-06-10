@@ -1,5 +1,6 @@
 import Job from "../models/Job.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
+import { makeDedupeKey } from "../lib/dedupe.js";
 import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
@@ -59,6 +60,7 @@ async function fetchPage({ query, page, numPages, datePosted }) {
 function mapJob(item, roleQuery) {
   const title = item.job_title || "";
   const description = item.job_description || "";
+  const companyName = item.employer_name || "";
 
   const min = item.job_min_salary ?? null;
   const max = item.job_max_salary ?? null;
@@ -77,7 +79,7 @@ function mapJob(item, roleQuery) {
     normalizedRole: normalizeRole(title) !== "other"
       ? normalizeRole(title)
       : normalizeRole(roleQuery), // fall back to the query role if title gives "other"
-    companyName: item.employer_name || "",
+    companyName,
     isRemote: !!item.job_is_remote,
     requiredSkills: extractSkills(`${title} ${description}`),
     salaryRange:
@@ -89,6 +91,7 @@ function mapJob(item, roleQuery) {
     postedAt: item.job_posted_at_datetime_utc
       ? new Date(item.job_posted_at_datetime_utc)
       : new Date(),
+    dedupeKey: makeDedupeKey(companyName, title),
   };
 }
 
@@ -126,35 +129,42 @@ export async function ingestJSearch({
     query: `${role} in ${country}`,
   }));
 
+  // ── Sequential fetch with inter-request delay ──────────────────────────
+  // JSearch's free tier enforces a ~1 req/s rate limit. Parallel requests
+  // trip the limiter (5-of-6 return 429). We fire queries one-by-one with a
+  // 1.2s sleep between them. Per-query try/catch keeps error isolation: a
+  // single 429 or timeout does not abort the remaining queries.
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   let fetched = 0;
   let errorCount = 0;
+  let succeeded = 0;
   const docsById = new Map(); // dedupe within this run by externalId
 
-  const responses = await Promise.allSettled(
-    queries.map(({ query }) =>
-      fetchPage({ query, page: 1, numPages: pages, datePosted }),
-    ),
-  );
 
-  for (let i = 0; i < responses.length; i++) {
+  for (let i = 0; i < queries.length; i++) {
     const { role, query } = queries[i];
-    if (responses[i].status === "rejected") {
+    // Delay BEFORE every request except the first.
+    if (i > 0) await sleep(1_200);
+    try {
+      const json = await fetchPage({ query, page: 1, numPages: pages, datePosted });
+      const items = json?.data || [];
+      fetched += items.length;
+      for (const item of items) {
+        if (!item.job_id) continue;
+        const doc = mapJob(item, role);
+        docsById.set(doc.externalId, doc);
+      }
+      succeeded++;
+    } catch (err) {
       errorCount++;
       console.warn(
         `JSearch fetch failed [role="${role}" query="${query}"]:`,
-        responses[i].reason?.message,
+        err.message,
       );
-      continue;
-    }
-
-    const items = responses[i].value?.data || [];
-    fetched += items.length;
-    for (const item of items) {
-      if (!item.job_id) continue; // skip malformed entries
-      const doc = mapJob(item, role);
-      docsById.set(doc.externalId, doc);
     }
   }
+  console.log(`JSearch fetch: ${succeeded}/${queries.length} queries succeeded, ${errorCount} failed`);
+
 
   // bulkWrite — same upsert strategy as Adzuna
   let upserted = 0;

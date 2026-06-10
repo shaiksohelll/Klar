@@ -1,6 +1,7 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
+import { makeDedupeKey } from "../lib/dedupe.js";
 import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
@@ -47,6 +48,7 @@ async function fetchPage({ country, page, what }) {
 function mapJob(raw, country) {
   const title = raw.title || "";
   const description = raw.description || "";
+  const companyName = raw.company?.display_name || "";
   const min = raw.salary_min ?? null;
   const max = raw.salary_max ?? null;
   const midpoint =
@@ -56,7 +58,7 @@ function mapJob(raw, country) {
     source: "adzuna",
     title,
     normalizedRole: normalizeRole(title),
-    companyName: raw.company?.display_name || "",
+    companyName,
     isRemote: /remote/i.test(`${title} ${description}`),
     requiredSkills: extractSkills(`${title} ${description}`),
     salaryRange: {
@@ -68,6 +70,7 @@ function mapJob(raw, country) {
     location: raw.location?.display_name || "",
     redirectUrl: raw.redirect_url || "",
     postedAt: raw.created ? new Date(raw.created) : new Date(),
+    dedupeKey: makeDedupeKey(companyName, title),
   };
 }
 
