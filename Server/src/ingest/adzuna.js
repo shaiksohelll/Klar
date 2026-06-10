@@ -4,6 +4,7 @@ import { extractSkills, normalizeRole } from "../lib/skills.js";
 import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
+import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -200,11 +201,11 @@ export async function ingestAdzuna({
 
   // ── Invalidate read caches ─────────────────────────────────────────────
   // The underlying data has changed. Clear every in-memory cache so the next
-  // request recomputes from the freshly-written rows. Safe to call even when
-  // no new jobs were upserted (prune may still have removed stale records).
+  // request recomputes from the freshly-written rows.
   clearTrendingCaches();
   clearPairsCache();
   clearDetailCache();
+  clearCompaniesCache();
   console.log("🗑️  Read caches cleared after ingest");
 
   return {

@@ -9,6 +9,7 @@ import { ingestAdzuna } from "./ingest/adzuna.js";
 import cron from "node-cron";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { getSkillGap } from "./aggregations/skillGap.js";
+import { getTopCompanies } from "./aggregations/topCompanies.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
@@ -184,13 +185,16 @@ app.get("/api/warm", readLimiter, async (req, res) => {
   const UI_WINDOWS = [3, 6, 12];
   // limit:25 matches the exact params the frontend sends for trending.
   try {
-    await Promise.all(
-      UI_WINDOWS.flatMap((months) => [
+    await Promise.all([
+      ...UI_WINDOWS.flatMap((months) => [
         getTrendingSkills({ months, limit: 25 }),
         getAllSkills({ months }),
       ]),
-    );
-    res.json({ ok: true, warmed: ["trending", "allSkills"], windows: UI_WINDOWS });
+      // Companies default window only (the page has its own role/skill filters
+      // that the user drives, so we just warm the unfiltered baseline).
+      getTopCompanies({ months: 12 }),
+    ]);
+    res.json({ ok: true, warmed: ["trending", "allSkills", "companies"], windows: UI_WINDOWS });
   } catch (err) {
     // Non-fatal: respond 200 so uptime monitors don't alert on a warm failure.
     console.warn("Warm error:", err.message);
@@ -198,8 +202,24 @@ app.get("/api/warm", readLimiter, async (req, res) => {
   }
 });
 
-// ── Skill detail ───────────────────────────────────────────────────────────
+// ── Skill detail ───────────────────────────────────────────────────────
 app.use("/api/skill", readLimiter, skillDetailRouter);
+
+// ── Top companies (Who's Hiring) ───────────────────────────────────────
+// Public, read-only. Optional ?role=, ?skill=, ?months= filters.
+app.get("/api/companies", readLimiter, async (req, res) => {
+  try {
+    const role = req.query.role || undefined;
+    const skill = req.query.skill || undefined;
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const companies = await getTopCompanies({ role, skill, months, limit });
+    res.json({ ok: true, companies });
+  } catch (err) {
+    console.error("Companies error:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // ── Watchlist (auth-gated) ─────────────────────────────────────────────────
 app.use("/api/watchlist", watchlistLimiter, watchlistRouter);
