@@ -11,6 +11,7 @@ const KNOWN_NAMES = {
   html: "HTML",
   css: "CSS",
   aws: "AWS",
+  gcp: "GCP",
   "ci/cd": "CI/CD",
   sql: "SQL",
   api: "API",

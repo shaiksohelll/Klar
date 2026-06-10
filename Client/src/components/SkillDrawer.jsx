@@ -281,7 +281,7 @@ export function SkillDrawer({
                               onClick={() => goToSkill(p.skill)}
                               className="font-mono text-xs text-[#F4F4F6] hover:text-white transition-colors cursor-pointer text-left"
                             >
-                              {p.skill}
+                              {displayName(p.skill)}
                             </button>
                             <span className="font-mono text-xs text-[#9A9AA6] shrink-0 ml-3">
                               {p.percentage}%
