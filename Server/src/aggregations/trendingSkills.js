@@ -1,6 +1,17 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 
+// ── In-memory TTL cache for getAllSkills ────────────────────────────────────
+// Key: months (number). Value: { data, expiresAt }.
+// Safe because the underlying data only changes when the 8h ingest cron runs.
+const ALL_SKILLS_CACHE = new Map();
+const ALL_SKILLS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// ── In-memory TTL cache for getTrendingSkills ───────────────────────────────
+// Key: `${role||"all"}:${months}:${limit}`. Value: { data, expiresAt }.
+const TRENDING_CACHE = new Map();
+const TRENDING_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 /**
  * Returns the full ranked skill list for /api/skills/all.
  * Reuses the same $facet aggregation as getTrendingSkills but:
@@ -8,11 +19,20 @@ import SkillSnapshot from "../models/SkillSnapshot.js";
  *  - no velocity/snapshot queries (not needed for search/filter UX)
  *  - adds remoteShare as a 0-1 float so the frontend can sort/filter on it
  *
+ * Results are cached in-process for 10 minutes (TTL). The cache invalidates
+ * naturally — no manual busting required.
+ *
  * Shape: Array<{ skill, demand, remoteCount, remoteShare }>
  */
 export async function getAllSkills({ months = 12 } = {}) {
+  const key = Number(months);
+  const cached = ALL_SKILLS_CACHE.get(key);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   const since = new Date();
-  since.setMonth(since.getMonth() - Number(months));
+  since.setMonth(since.getMonth() - key);
 
   const [facetResult] = await Job.aggregate([
     { $match: { postedAt: { $gte: since } } },
@@ -46,10 +66,17 @@ export async function getAllSkills({ months = 12 } = {}) {
     remoteShare: s.demand > 0 ? s.remoteCount / s.demand : 0,
   }));
 
+  ALL_SKILLS_CACHE.set(key, { data: skills, expiresAt: Date.now() + ALL_SKILLS_TTL_MS });
   return skills;
 }
 
 export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
+  const cacheKey = `${role || "all"}:${months}:${limit}`;
+  const cached = TRENDING_CACHE.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   // Only look at jobs posted within the last N months
   const since = new Date();
   since.setMonth(since.getMonth() - Number(months));
@@ -112,7 +139,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
 
   if (!latestSnap) {
     // No snapshot history recorded yet.
-    return {
+    const result = {
       totalJobs,
       role: role || "all",
       months: Number(months),
@@ -120,6 +147,8 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
       velocityReady: false,
       velocityBasisDays: null,
     };
+    TRENDING_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TRENDING_TTL_MS });
+    return result;
   }
 
   const latestCapturedAt = latestSnap.capturedAt;
@@ -146,7 +175,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
 
   if (gapDays < 2) {
     // Batches are too close together — not enough elapsed time for a meaningful signal.
-    return {
+    const result = {
       totalJobs,
       role: role || "all",
       months: Number(months),
@@ -154,6 +183,8 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
       velocityReady: false,
       velocityBasisDays: null,
     };
+    TRENDING_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TRENDING_TTL_MS });
+    return result;
   }
 
   // Step 3 — load count30 for both batches in parallel (no per-skill DB calls).
@@ -198,7 +229,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
     return { ...s, velocity: v.velocity, trend: v.trend };
   });
 
-  return {
+  const result = {
     totalJobs,
     role: role || "all",
     months: Number(months),
@@ -206,4 +237,6 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
     velocityReady: true,
     velocityBasisDays: gapDays,
   };
+  TRENDING_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TRENDING_TTL_MS });
+  return result;
 }

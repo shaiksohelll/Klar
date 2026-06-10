@@ -84,13 +84,36 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
 
       {/* ── Body ── */}
       <div className="px-5 pb-5 pt-4">
-        {/* Loading */}
+        {/* Loading — skeleton rows matching real result height */}
         {state === "loading" && (
           <div
-            className="py-8 text-center font-mono text-xs uppercase tracking-widest text-[#5C5C66] animate-pulse"
-            aria-live="polite"
+            className="space-y-0.5"
+            aria-label="Loading recommendations"
+            aria-busy="true"
           >
-            Calculating…
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg ${
+                  shouldReduceMotion ? "" : "animate-pulse"
+                }`}
+                style={shouldReduceMotion ? {} : { animationDelay: `${i * 60}ms` }}
+              >
+                {/* Top row: rank + name bar + demand pill + remote pill */}
+                <div className="flex items-center gap-3">
+                  {/* Rank */}
+                  <div className="w-5 h-3 rounded bg-[#26262E] shrink-0" />
+                  {/* Name — wider */}
+                  <div className="flex-1 h-3.5 rounded bg-[#1E1E24]" />
+                  {/* Demand */}
+                  <div className="w-14 h-3 rounded bg-[#26262E] shrink-0" />
+                  {/* Remote */}
+                  <div className="w-12 h-3 rounded bg-[#26262E] shrink-0" />
+                </div>
+                {/* Reason line — narrower */}
+                <div className="pl-8 h-2.5 w-2/5 rounded bg-[#1A1A20]" />
+              </div>
+            ))}
           </div>
         )}
 

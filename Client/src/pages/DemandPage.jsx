@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
+import { useReducedMotion } from "framer-motion";
 import { TiltCard } from "../components/TiltCard";
 import { BarChart } from "../components/BarChart";
 import { RankingList } from "../components/RankingList";
@@ -49,6 +50,8 @@ export default function DemandPage() {
     velocityReady,
     velocityBasisDays,
   } = ctx;
+
+  const shouldReduceMotion = useReducedMotion();
 
   // Count-up for the hero stat — re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);
@@ -153,8 +156,37 @@ export default function DemandPage() {
           {error}
         </div>
       ) : loading ? (
-        <div className="text-center py-20 font-mono text-sm text-[#5C5C66] uppercase tracking-widest animate-pulse">
-          Loading demand data…
+        // Skeleton — mirrors the chart+ranking 2-column layout
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+          {/* Chart skeleton */}
+          <div className="lg:col-span-7 xl:col-span-8">
+            <div
+              className={`rounded-2xl bg-[#0A0A0E] border border-[#26262E] h-[420px] ${
+                shouldReduceMotion ? "" : "animate-pulse"
+              }`}
+            />
+          </div>
+          {/* Ranking skeleton */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-1">
+            <div className="h-3 w-28 rounded bg-[#26262E] mb-4 ml-4" />
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg ${
+                  shouldReduceMotion ? "" : "animate-pulse"
+                }`}
+                style={shouldReduceMotion ? {} : { animationDelay: `${i * 50}ms` }}
+              >
+                <div className="w-8 h-3 rounded bg-[#26262E] shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 rounded bg-[#1E1E24] w-3/4" />
+                  <div className="h-1.5 rounded bg-[#1A1A20] w-full" />
+                </div>
+                <div className="w-12 h-3 rounded bg-[#26262E] shrink-0" />
+                <div className="w-6 h-6 rounded-full bg-[#26262E] shrink-0" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : visibleSkills.length === 0 ? (
         <div className="text-center py-20 font-mono text-sm text-[#5C5C66]">

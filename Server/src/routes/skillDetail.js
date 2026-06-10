@@ -4,6 +4,12 @@ import { getSkillPairs } from "../aggregations/skillPairs.js";
 
 const router = Router();
 
+// ── In-memory TTL cache for skill detail ───────────────────────────────────
+// Key: `${normalizedName}:${months}`. Value: { data, expiresAt }.
+// Safe because the underlying job data only changes on the 8h ingest cron.
+const DETAIL_CACHE = new Map();
+const DETAIL_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 function sinceDate(months) {
   const d = new Date();
   d.setMonth(d.getMonth() - (Number(months) || 12));
@@ -14,7 +20,15 @@ function sinceDate(months) {
 router.get("/:name", async (req, res) => {
   try {
     const name = req.params.name;
-    const since = sinceDate(req.query.months);
+    const months = Number(req.query.months) || 12;
+    const cacheKey = `${name}:${months}`;
+
+    const cached = DETAIL_CACHE.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json(cached.data);
+    }
+
+    const since = sinceDate(months);
     const baseMatch = { requiredSkills: name, postedAt: { $gte: since } };
 
     const [
@@ -64,7 +78,7 @@ router.get("/:name", async (req, res) => {
       getSkillPairs(name),
     ]);
 
-    res.json({
+    const data = {
       ok: true,
       skill: name,
       demand,
@@ -91,7 +105,10 @@ router.get("/:name", async (req, res) => {
         currency: j.salaryRange?.currency || null,
         url: j.redirectUrl || null,
       })),
-    });
+    };
+
+    DETAIL_CACHE.set(cacheKey, { data, expiresAt: Date.now() + DETAIL_TTL_MS });
+    res.json(data);
   } catch (err) {
     console.error("GET /api/skill/:name", err);
     res.status(500).json({ ok: false, error: err.message });
@@ -99,3 +116,4 @@ router.get("/:name", async (req, res) => {
 });
 
 export default router;
+

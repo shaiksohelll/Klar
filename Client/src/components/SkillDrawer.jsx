@@ -6,6 +6,12 @@ import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+// ── Client-side session cache for skill detail ────────────────────────────────
+// Module-level (not React state) so it persists for the browser session.
+// Key: `${skillId}:${months}`. No TTL — stale data is fine for a session.
+// Re-opening the same skill’s drawer is instant with zero refetch.
+const DETAIL_CACHE = new Map();
+
 // UI spring: stiffness 180, damping 22
 const UI_SPRING = { type: "spring", stiffness: 180, damping: 22 };
 // Snappy spring: stiffness 420, damping 34 (star pop)
@@ -52,10 +58,18 @@ export function SkillDrawer({
   }, [skill]);
 
   // Fetch enriched detail for the active skill.
+  // Session cache: if the same skill+months combo was fetched before this
+  // session, serve from memory without hitting the network.
   useEffect(() => {
     if (!isOpen || !activeSkill) return;
+    const cacheKey = `${activeSkill.id}:${months || 12}`;
+    if (DETAIL_CACHE.has(cacheKey)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDetail(DETAIL_CACHE.get(cacheKey));
+      setLoadingDetail(false);
+      return;
+    }
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingDetail(true);
     setDetail(null);
     axios
@@ -63,7 +77,10 @@ export function SkillDrawer({
         params: { months: months || 12 },
       })
       .then((res) => {
-        if (!cancelled) setDetail(res.data);
+        if (!cancelled) {
+          DETAIL_CACHE.set(cacheKey, res.data);
+          setDetail(res.data);
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -355,10 +372,49 @@ export function SkillDrawer({
                 </div>
               )}
 
-              {/* Loading */}
+              {/* Loading skeleton — shown while detail is in-flight */}
               {loadingDetail && !detail && (
-                <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-widest animate-pulse">
-                  Loading skill detail…
+                <div
+                  aria-label="Loading skill detail"
+                  aria-busy="true"
+                  className="space-y-6"
+                >
+                  {/* Stat-card skeletons — 2-col then full-width */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {[0, 1].map((i) => (
+                      <div
+                        key={i}
+                        className={`p-4 rounded-xl bg-[#08080A] border border-[#26262E] ${
+                          shouldReduceMotion ? "" : "animate-pulse"
+                        }`}
+                        style={shouldReduceMotion ? {} : { animationDelay: `${i * 80}ms` }}
+                      >
+                        <div className="h-2.5 w-12 rounded bg-[#26262E] mb-3" />
+                        <div className="h-7 w-20 rounded bg-[#1E1E24]" />
+                      </div>
+                    ))}
+                    <div
+                      className={`p-4 rounded-xl bg-[#08080A] border border-[#26262E] col-span-2 ${
+                        shouldReduceMotion ? "" : "animate-pulse"
+                      }`}
+                      style={shouldReduceMotion ? {} : { animationDelay: "160ms" }}
+                    >
+                      <div className="h-2.5 w-20 rounded bg-[#26262E] mb-3" />
+                      <div className="h-2 w-full rounded bg-[#1A1A20]" />
+                    </div>
+                  </div>
+                  {/* Section skeletons — chart + list rows */}
+                  {[120, 90, 70].map((w, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="h-2.5 w-24 rounded bg-[#26262E]" />
+                      <div
+                        className={`h-${w === 120 ? "20" : "10"} rounded bg-[#0E0E12] ${
+                          shouldReduceMotion ? "" : "animate-pulse"
+                        }`}
+                        style={shouldReduceMotion ? {} : { animationDelay: `${(i + 2) * 80}ms` }}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
 
