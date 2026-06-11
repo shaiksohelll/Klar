@@ -61,3 +61,17 @@ describe("POST /api/ingest", () => {
     });
   });
 });
+
+describe("POST /api/resume-gap", () => {
+  it("returns 400 when body is not JSON (non-JSON Content-Type)", async () => {
+    // When Content-Type is not application/json, express.json() leaves
+    // req.body undefined. The req.body || {} guard must catch this and
+    // return 400 (text is required), not 500.
+    const res = await request(app)
+      .post("/api/resume-gap")
+      .type("text")
+      .send("hi");
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ ok: false, error: "text is required" });
+  });
+});
