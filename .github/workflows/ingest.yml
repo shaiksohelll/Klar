@@ -21,7 +21,7 @@ jobs:
         run: |
           curl -fsS -X POST "$KLAR_API_URL/api/ingest" \
             -H "x-ingest-secret: $INGEST_SECRET" \
-            --max-time 120 --retry 2 --retry-delay 30 --retry-connrefused --retry-all-errors
+            --max-time 90 --retry 1 --retry-delay 30 --retry-connrefused
         env:
           KLAR_API_URL: ${{ secrets.KLAR_API_URL }}
           INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
