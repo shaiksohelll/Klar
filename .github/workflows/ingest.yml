@@ -1,0 +1,27 @@
+name: Scheduled Ingestion
+
+on:
+  schedule:
+    - cron: "0 5 * * *"   # daily 05:00 UTC (10:30 IST)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger ingestion
+        run: |
+          curl -fsS -X POST "$KLAR_API_URL/api/ingest" \
+            -H "x-ingest-secret: $INGEST_SECRET" \
+            --max-time 90 --retry 1 --retry-delay 30 --retry-connrefused
+        env:
+          KLAR_API_URL: ${{ secrets.KLAR_API_URL }}
+          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
