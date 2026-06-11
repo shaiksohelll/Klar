@@ -29,6 +29,7 @@ app.use(helmet());
 
 // ── CORS ───────────────────────────────────────────────────────────────────
 // Only allow our own frontend (prod) + any localhost port (dev).
+const isDev = process.env.NODE_ENV !== "production";
 const allowedOrigins = [process.env.CLIENT_ORIGIN].filter(Boolean);
 app.use(
   cors({
@@ -36,7 +37,7 @@ app.use(
       // No origin = server-to-server / curl / health checks → allow.
       if (
         !origin ||
-        /^http:\/\/localhost:\d+$/.test(origin) ||
+        (isDev && /^http:\/\/localhost:\d+$/.test(origin)) ||
         allowedOrigins.includes(origin)
       ) {
         return cb(null, true);
@@ -125,10 +126,16 @@ app.post("/api/ingest/jsearch", async (req, res, next) => {
 // POST /api/ingest — responds 202 immediately, then runs both Adzuna and
 // JSearch ingestion in a background IIFE. Designed for GitHub Actions cron or
 // any external scheduler that only needs to know the request was accepted.
+// In-memory flag prevents overlapping runs on the single Render instance.
+let ingestionInProgress = false;
 app.post("/api/ingest", (req, res) => {
   if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
+  if (ingestionInProgress) {
+    return res.status(200).json({ ok: true, message: "Ingestion already in progress" });
+  }
+  ingestionInProgress = true;
   res.status(202).json({ ok: true, message: "Ingestion started" });
   (async () => {
     const results = await Promise.allSettled([
@@ -140,7 +147,7 @@ app.post("/api/ingest", (req, res) => {
     else console.log("Adzuna ingestion complete", adzuna.value);
     if (jsearch.status === "rejected") console.error("JSearch ingestion failed", jsearch.reason);
     else console.log("JSearch ingestion complete", jsearch.value);
-  })();
+  })().finally(() => { ingestionInProgress = false; });
 });
 
 // ── Backfill dedupeKey (admin) ─────────────────────────────────────────────
