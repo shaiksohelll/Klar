@@ -81,7 +81,9 @@ app.use(
       ) {
         return cb(null, true);
       }
-      return cb(new Error(`Blocked by CORS: ${origin}`));
+      const corsErr = new Error(`Blocked by CORS: ${origin}`);
+      corsErr.status = 403;
+      return cb(corsErr);
     },
     credentials: true,
   }),
