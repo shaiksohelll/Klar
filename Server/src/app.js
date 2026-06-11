@@ -10,6 +10,7 @@ import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
 import { makeDedupeKey } from "./lib/dedupe.js";
+import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
@@ -296,6 +297,34 @@ app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res, next) => 
 
     const gaps = await getSkillGap(watchedSkills, { limit, months });
     res.json({ ok: true, empty: false, gaps });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Résumé Gap Analyser (public) ───────────────────────────────────────────
+// POST /api/resume-gap — accepts { text } (the raw résumé text), returns the
+// gap between skills found in the résumé and the current top-40 demand list.
+// Public (no Clerk) so unauthenticated users can try the feature before sign-up.
+// Protected only by the same readLimiter as all other data endpoints.
+app.post("/api/resume-gap", readLimiter, async (req, res, next) => {
+  try {
+    const raw = req.body.text;
+    if (typeof raw !== "string" || raw.trim().length === 0) {
+      return res.status(400).json({ ok: false, error: "text is required" });
+    }
+    const text = raw.trim();
+    if (text.length > 50_000) {
+      return res.status(400).json({ ok: false, error: "Résumé text too long" });
+    }
+
+    // Reuse the cached all-skills aggregation (same source as trending/skill-gap).
+    // Slice to top 40 by demand (getAllSkills already returns demand-desc order).
+    const allSkills = await getAllSkills({ months: 12 });
+    const demand = allSkills.slice(0, 40).map(({ skill, demand: count }) => ({ skill, count }));
+
+    const result = computeResumeGap({ resumeText: text, demand });
+    res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
   }
