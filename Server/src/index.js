@@ -42,6 +42,14 @@ if (!process.env.INGEST_SECRET) {
   }
 }
 
+// CORS localhost is dev-only — in production every browser request must
+// come from CLIENT_ORIGIN. Without it the CORS origin check would block
+// all browser traffic, so treat it as a hard requirement in prod.
+if (IS_PROD && !process.env.CLIENT_ORIGIN) {
+  console.error("❌ CLIENT_ORIGIN is required in production");
+  process.exit(1);
+}
+
 // ── DB connect + listen ────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 mongoose
