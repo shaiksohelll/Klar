@@ -23,7 +23,6 @@ router.get("/", async (req, res, next) => {
     const userId = req.auth.userId;
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
-    console.error("GET /api/watchlist", err);
     next(err);
   }
 });
@@ -41,7 +40,6 @@ router.post("/", async (req, res, next) => {
     );
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
-    console.error("POST /api/watchlist", err);
     next(err);
   }
 });
@@ -55,7 +53,6 @@ router.delete("/", async (req, res, next) => {
     await Watchlist.deleteOne({ userId, skill });
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
-    console.error("DELETE /api/watchlist", err);
     next(err);
   }
 });

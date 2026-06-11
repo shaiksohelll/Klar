@@ -141,7 +141,6 @@ router.get("/:name", async (req, res, next) => {
     DETAIL_CACHE.set(cacheKey, { data, expiresAt: Date.now() + DETAIL_TTL_MS });
     res.json(data);
   } catch (err) {
-    console.error("GET /api/skill/:name", err);
     next(err);
   }
 });

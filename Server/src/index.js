@@ -121,7 +121,7 @@ app.get("/health", (req, res) => {
 // shared secret passed in the X-Ingest-Secret header.
 // The in-process cron (below) calls ingestAdzuna() directly, so it is
 // never blocked by this check.
-app.get("/api/ingest/adzuna", async (req, res) => {
+app.get("/api/ingest/adzuna", async (req, res, next) => {
   // Fail-closed: reject if the secret is unset OR the header doesn't match.
   // This ensures the route never falls through to run ingestion without a key.
   if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
@@ -139,15 +139,14 @@ app.get("/api/ingest/adzuna", async (req, res) => {
     const result = await ingestAdzuna({ what, country, pages });
     res.json({ ok: true, ...result });
   } catch (err) {
-    console.error("Ingestion error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
 // ── JSearch ingest (protected) ──────────────────────────────────────────────
 // Same X-Ingest-Secret guard as /api/ingest/adzuna. POST so it can't be
 // accidentally triggered by a browser navigation or uptime-monitor GET.
-app.post("/api/ingest/jsearch", async (req, res) => {
+app.post("/api/ingest/jsearch", async (req, res, next) => {
   if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
@@ -158,8 +157,7 @@ app.post("/api/ingest/jsearch", async (req, res) => {
     const result = await ingestJSearch({ country, pages, datePosted });
     res.json({ ok: true, ...result });
   } catch (err) {
-    console.error("JSearch ingest error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -167,7 +165,7 @@ app.post("/api/ingest/jsearch", async (req, res) => {
 // Stamps dedupeKey onto every existing Job doc that is missing it.
 // Safe to call multiple times (idempotent: bulkWrite with upsert:false).
 // Protected by the same X-Ingest-Secret header as the ingest endpoints.
-app.post("/api/admin/backfill-dedupe", async (req, res) => {
+app.post("/api/admin/backfill-dedupe", async (req, res, next) => {
   if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
@@ -191,13 +189,12 @@ app.post("/api/admin/backfill-dedupe", async (req, res) => {
     }
     res.json({ ok: true, processed: ops.length, updated });
   } catch (err) {
-    console.error("Backfill-dedupe error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
 // ── Trending skills ────────────────────────────────────────────────────────
-app.get("/api/skills/trending", readLimiter, async (req, res) => {
+app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
   try {
     const { role } = req.query;
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
@@ -211,22 +208,20 @@ app.get("/api/skills/trending", readLimiter, async (req, res) => {
       .lean();
     res.json({ ok: true, ...result, lastUpdated: newest?.updatedAt || null });
   } catch (err) {
-    console.error("Trending error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
 // ── All skills (for client-side search/filter) ─────────────────────────────
 // Returns the full ranked skill list in one response. All searching/filtering
 // is done client-side on this payload; this endpoint is fetched once on load.
-app.get("/api/skills/all", readLimiter, async (req, res) => {
+app.get("/api/skills/all", readLimiter, async (req, res, next) => {
   try {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const skills = await getAllSkills({ months });
     res.json({ ok: true, skills });
   } catch (err) {
-    console.error("All skills error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -235,7 +230,7 @@ app.get("/api/skills/all", readLimiter, async (req, res) => {
 // used by the UI (3M / 6M / 12M). Idempotent: a cache hit is a sub-ms no-op.
 // Intended for uptime-monitor pings on Render's free tier to prevent cold
 // starts from hitting users, and for any keep-alive cron outside the app.
-app.get("/api/warm", readLimiter, async (req, res) => {
+app.get("/api/warm", readLimiter, async (req, res, next) => {
   // The three windows the Demand-page segmented control exposes.
   const UI_WINDOWS = [3, 6, 12];
   // limit:25 matches the exact params the frontend sends for trending.
@@ -251,9 +246,7 @@ app.get("/api/warm", readLimiter, async (req, res) => {
     ]);
     res.json({ ok: true, warmed: ["trending", "allSkills", "companies"], windows: UI_WINDOWS });
   } catch (err) {
-    // Non-fatal: respond 200 so uptime monitors don't alert on a warm failure.
-    console.warn("Warm error:", err.message);
-    res.json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -262,7 +255,7 @@ app.use("/api/skill", readLimiter, skillDetailRouter);
 
 // ── Top companies (Who's Hiring) ───────────────────────────────────────
 // Public, read-only. Optional ?role=, ?skill=, ?months= filters.
-app.get("/api/companies", readLimiter, async (req, res) => {
+app.get("/api/companies", readLimiter, async (req, res, next) => {
   try {
     const role = req.query.role || undefined;
     const skill = req.query.skill || undefined;
@@ -271,8 +264,7 @@ app.get("/api/companies", readLimiter, async (req, res) => {
     const companies = await getTopCompanies({ role, skill, months, limit });
     res.json({ ok: true, companies });
   } catch (err) {
-    console.error("Companies error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -280,7 +272,7 @@ app.get("/api/companies", readLimiter, async (req, res) => {
 // Public, read-only. Descriptive stats derived ONLY from disclosed salaries.
 // Optional ?skill= ?role= ?months= (clamped 1-24, default 12).
 // NOT added to /api/warm — query space is too large to pre-warm meaningfully.
-app.get("/api/salary", readLimiter, async (req, res) => {
+app.get("/api/salary", readLimiter, async (req, res, next) => {
   try {
     const skill = req.query.skill || undefined;
     const role = req.query.role || undefined;
@@ -288,8 +280,7 @@ app.get("/api/salary", readLimiter, async (req, res) => {
     const data = await getSalaryInsights({ skill, role, months });
     res.json({ ok: true, ...data });
   } catch (err) {
-    console.error("Salary insights error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -299,7 +290,7 @@ app.use("/api/watchlist", watchlistLimiter, watchlistRouter);
 // ── Skill-Gap Advisor (auth-gated) ─────────────────────────────────────────
 // Returns skills that co-occur most often with the user's watchlist but that
 // they don't already track. Auth-gated: userId comes from the Clerk JWT only.
-app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res) => {
+app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res, next) => {
   try {
     const userId = req.auth.userId;
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
@@ -315,19 +306,20 @@ app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res) => {
     const gaps = await getSkillGap(watchedSkills, { limit, months });
     res.json({ ok: true, empty: false, gaps });
   } catch (err) {
-    console.error("Skill-gap error:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
 // ── Central error handler ──────────────────────────────────────────────────
 // Must be registered AFTER all routes. Routes signal errors via next(err).
-// 500s return a generic message so internal details never reach the client.
+// headersSent guard prevents double-response if a previous handler already
+// flushed headers. Contextual log includes method + URL for easy grepping.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error(err);
+  if (res.headersSent) return next(err);
+  console.error(`${req.method} ${req.originalUrl}`, err);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ error: status === 500 ? "Internal server error" : err.message });
+  res.status(status).json({ ok: false, error: status === 500 ? "Internal server error" : err.message });
 });
 
 // ── DB connect + cron + listen ─────────────────────────────────────────────
