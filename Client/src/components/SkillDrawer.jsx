@@ -85,8 +85,8 @@ export function SkillDrawer({
   // Also clear any stale error immediately so it never flashes on the new
   // skill before the fetch effect runs.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (skill) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSkill(skill);
       setDetailError(false);
     }
@@ -570,7 +570,7 @@ export function SkillDrawer({
 
               {/* Detail fetch error — shown when the /api/skill request fails */}
               {detailError && !loadingDetail && (
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
+                <div role="status" className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
                   <p className="font-mono text-xs text-[#9A9AA6]">
                     Couldn&#39;t load details. Try closing and reopening the drawer.
                   </p>
