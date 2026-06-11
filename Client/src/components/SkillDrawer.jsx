@@ -82,13 +82,15 @@ export function SkillDrawer({
   const [loadingSalary, setLoadingSalary] = useState(false);
 
   // Reset to the parent-selected skill whenever it changes (new open).
-  // Also clear any stale error immediately so it never flashes on the new
-  // skill before the fetch effect runs.
+  // Clear detailError unconditionally — including when skill becomes null on
+  // close — so stale error state never survives across open/close cycles.
+  // setActiveSkill stays inside the guard so content isn't blanked during
+  // the close animation (activeSkill holds the last skill until re-open).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDetailError(false);
     if (skill) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSkill(skill);
-      setDetailError(false);
     }
   }, [skill]);
 
