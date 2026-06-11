@@ -309,7 +309,7 @@ app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res, next) => 
 // Protected only by the same readLimiter as all other data endpoints.
 app.post("/api/resume-gap", readLimiter, async (req, res, next) => {
   try {
-    const raw = req.body.text;
+    const { text: raw } = req.body || {};
     if (typeof raw !== "string" || raw.trim().length === 0) {
       return res.status(400).json({ ok: false, error: "text is required" });
     }
