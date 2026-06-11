@@ -59,22 +59,25 @@ function escapeRegex(str) {
  * regardless of whether the skill contains special characters.
  *
  * Strategy:
- *   - If the skill starts with a word char and ends with a word char → use \b
- *     on both sides.
+ *   - If the skill starts AND ends with a word char → \b on both sides.
  *   - If it starts with a word char but ends with a special char (e.g. "c++")
- *     → \b on the left, lookahead on the right.
- *   - If it starts with a special char (e.g. ".net") → lookbehind on left,
- *     \b or lookahead on right as appropriate.
- *   - In all cases the lookaround checks that the adjacent char is NOT
- *     [a-z0-9] (and NOT the same special char that could extend the token).
+ *     → \b on the left, negative lookahead on the right.
+ *   - If it starts with a special char (e.g. ".net") → EMPTY left boundary.
+ *     The literal leading special char (the dot) is its own natural delimiter:
+ *     "dotnet" won't match because there is no literal dot, and "asp.net" WILL
+ *     match because the dot is present. A negative lookbehind was previously
+ *     used here but it wrongly blocked "asp.net"/"vb.net" etc.
+ *     Right side: negative lookahead to stop ".network" matching ".net".
  */
 function buildPattern(skill) {
 	const escaped = escapeRegex(skill)
 	const startsWord = WORD_BOUNDARY_CHARS.test(skill[0])
 	const endsWord   = WORD_BOUNDARY_CHARS.test(skill[skill.length - 1])
 
-	const left  = startsWord ? "\\b"              : "(?<![a-z0-9])"
-	const right = endsWord   ? "\\b"              : "(?![a-z0-9])"
+	// Skills starting with a special char carry their own left boundary (the
+	// special char itself); no extra assertion is needed.
+	const left  = startsWord ? "\\b" : ""
+	const right = endsWord   ? "\\b" : "(?![a-z0-9])"
 
 	return new RegExp(`${left}${escaped}${right}`, "i")
 }

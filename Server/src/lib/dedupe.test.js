@@ -89,9 +89,10 @@ describe("makeDedupeKey", () => {
 	it("same posting from two sources produces the same key", () => {
 		const keyA = makeDedupeKey("Acme Corp", "React Developer", "Hyderabad")
 		const keyB = makeDedupeKey("Acme Corp.", "React Developer", "Hyderabad, Telangana")
-		// normalizeCompany handles trailing period via suffix logic (corp stripped, period in word boundary)
-		// normalizeLocation takes only first segment → "hyderabad" for both
-		// Both should converge to the same key
+		// normalizeCompany strips "Corp" via COMPANY_SUFFIX_RE, which includes \.?$
+		// so the trailing period in "Corp." is absorbed by the same regex pass.
+		// normalizeLocation takes only the first comma-separated segment →
+		// "hyderabad" for both inputs. Both keys must converge.
 		expect(keyA).toBe(keyB)
 	})
 

@@ -129,9 +129,10 @@ describe("extractSkills special-char skills", () => {
 		expect(extractSkills("experience with ci/cd pipelines")).toContain("ci/cd")
 	})
 
-	it("ci/cd does NOT produce false positives on unrelated text", () => {
-		const skills = extractSkills("category: backend roles")
-		expect(skills).not.toContain("ci/cd")
+	it("ci/cd does NOT produce false positives on slash-containing text", () => {
+		// Adversarial: these share the "/" but must NOT match
+		expect(extractSkills("pricing/discount rules")).not.toContain("ci/cd")
+		expect(extractSkills("acid/base chemistry")).not.toContain("ci/cd")
 	})
 
 	it(".net extracts correctly", () => {
@@ -143,6 +144,15 @@ describe("extractSkills special-char skills", () => {
 		// literal '.') must NOT match it.
 		const skills = extractSkills("dotnet core developer")
 		expect(skills).not.toContain(".net")
+	})
+
+	it(".net extracts from compound tokens like 'asp.net'", () => {
+		// The leading dot IS its own left boundary; asp.net must yield .net.
+		expect(extractSkills("asp.net developer")).toContain(".net")
+	})
+
+	it(".network does NOT match .net (right lookahead blocks extension)", () => {
+		expect(extractSkills(".network engineer role")).not.toContain(".net")
 	})
 })
 
