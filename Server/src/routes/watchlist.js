@@ -18,17 +18,18 @@ async function getSkills(userId) {
 
 // GET /api/watchlist  → { skills: ["react", "node.js"] }
 // userId comes from the verified Clerk token, NOT the request.
-router.get("/", async (req, res, next) => {
+router.get("/", async (req, res) => {
   try {
     const userId = req.auth.userId;
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
-    next(err);
+    console.error("GET /api/watchlist", err);
+    res.status(500).json({ error: "Failed to load watchlist" });
   }
 });
 
 // POST /api/watchlist  body: { skill }  → adds, returns updated list
-router.post("/", async (req, res, next) => {
+router.post("/", async (req, res) => {
   try {
     const userId = req.auth.userId;
     const { skill } = req.body || {};
@@ -40,12 +41,13 @@ router.post("/", async (req, res, next) => {
     );
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
-    next(err);
+    console.error("POST /api/watchlist", err);
+    res.status(500).json({ error: "Failed to add to watchlist" });
   }
 });
 
 // DELETE /api/watchlist  body: { skill }  → removes, returns updated list
-router.delete("/", async (req, res, next) => {
+router.delete("/", async (req, res) => {
   try {
     const userId = req.auth.userId;
     const { skill } = req.body || {};
@@ -53,7 +55,8 @@ router.delete("/", async (req, res, next) => {
     await Watchlist.deleteOne({ userId, skill });
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
-    next(err);
+    console.error("DELETE /api/watchlist", err);
+    res.status(500).json({ error: "Failed to remove from watchlist" });
   }
 });
 

@@ -27,6 +27,5 @@ const JobSchema = new mongoose.Schema(
 
 JobSchema.index({ source: 1, externalId: 1 }, { unique: true })
 JobSchema.index({ normalizedRole: 1, postedAt: -1 })
-JobSchema.index({ postedAt: -1 })
 
 export default mongoose.model("Job", JobSchema)

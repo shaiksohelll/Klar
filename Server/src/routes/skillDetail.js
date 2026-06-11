@@ -33,7 +33,7 @@ async function countAgg(pipeline) {
 }
 
 // GET /api/skill/:name?months=12  → enriched detail for one skill
-router.get("/:name", async (req, res, next) => {
+router.get("/:name", async (req, res) => {
   try {
     const name = req.params.name;
     const months = Number(req.query.months) || 12;
@@ -141,7 +141,8 @@ router.get("/:name", async (req, res, next) => {
     DETAIL_CACHE.set(cacheKey, { data, expiresAt: Date.now() + DETAIL_TTL_MS });
     res.json(data);
   } catch (err) {
-    next(err);
+    console.error("GET /api/skill/:name", err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

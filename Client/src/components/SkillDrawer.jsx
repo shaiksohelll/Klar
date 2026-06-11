@@ -75,23 +75,15 @@ export function SkillDrawer({
   const [activeSkill, setActiveSkill] = useState(skill);
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [detailError, setDetailError] = useState(false);
 
   // Salary insights: fetched separately so detail doesn't block salary UI.
   const [salary, setSalary] = useState(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
   // Reset to the parent-selected skill whenever it changes (new open).
-  // Clear detailError unconditionally — including when skill becomes null on
-  // close — so stale error state never survives across open/close cycles.
-  // setActiveSkill stays inside the guard so content isn't blanked during
-  // the close animation (activeSkill holds the last skill until re-open).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDetailError(false);
-    if (skill) {
-      setActiveSkill(skill);
-    }
+    if (skill) setActiveSkill(skill);
   }, [skill]);
 
   // Reset salary state when active skill changes so stale data never shows.
@@ -110,14 +102,12 @@ export function SkillDrawer({
     if (DETAIL_CACHE.has(cacheKey)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetail(DETAIL_CACHE.get(cacheKey));
-      setDetailError(false);
       setLoadingDetail(false);
       return;
     }
     let cancelled = false;
     setLoadingDetail(true);
     setDetail(null);
-    setDetailError(false);
     axios
       .get(`${API}/api/skill/${encodeURIComponent(activeSkill.id)}`, {
         params: { months: months || 12 },
@@ -128,9 +118,7 @@ export function SkillDrawer({
           setDetail(res.data);
         }
       })
-      .catch(() => {
-        if (!cancelled) setDetailError(true);
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoadingDetail(false);
       });
@@ -199,9 +187,6 @@ export function SkillDrawer({
       : 1;
 
   const goToSkill = (skillName) => {
-    // Clear any previous error immediately so the stale banner never shows
-    // while the new skill's fetch is in-flight.
-    setDetailError(false);
     setActiveSkill({ id: skillName, name: skillName, role: current.role });
   };
 
@@ -567,15 +552,6 @@ export function SkillDrawer({
                       />
                     </div>
                   ))}
-                </div>
-              )}
-
-              {/* Detail fetch error — shown when the /api/skill request fails */}
-              {detailError && !loadingDetail && (
-                <div role="status" className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                  <p className="font-mono text-xs text-[#9A9AA6]">
-                    Couldn&#39;t load details. Try closing and reopening the drawer.
-                  </p>
                 </div>
               )}
 
