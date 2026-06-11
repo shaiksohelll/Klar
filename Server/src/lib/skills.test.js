@@ -39,16 +39,26 @@ describe("alias resolution via extractSkills", () => {
 		expect(extractSkills("postgres database experience")).toContain("postgresql")
 	})
 
-	it("gcp → google cloud", () => {
-		expect(extractSkills("deploy on gcp")).toContain("google cloud")
+	it("gcp → gcp (canonical)", () => {
+		expect(extractSkills("deploy on gcp")).toContain("gcp")
 	})
 
-	it("next → next.js", () => {
-		expect(extractSkills("built with next framework")).toContain("next.js")
+	it("google cloud → gcp (alias)", () => {
+		expect(extractSkills("experience with google cloud platform")).toContain("gcp")
 	})
 
 	it("nextjs → next.js", () => {
 		expect(extractSkills("nextjs app router")).toContain("next.js")
+	})
+
+	it("next.js (literal) → next.js", () => {
+		expect(extractSkills("built with next.js framework")).toContain("next.js")
+	})
+
+	it("bare 'next' does NOT resolve to next.js", () => {
+		// "next" is too ambiguous — must not be treated as next.js
+		const skills = extractSkills("your next opportunity awaits")
+		expect(skills).not.toContain("next.js")
 	})
 })
 
@@ -129,11 +139,10 @@ describe("extractSkills special-char skills", () => {
 	})
 
 	it(".net does NOT trigger on 'dotnet' (no leading dot)", () => {
-		// "dotnet" should NOT match ".net" pattern since .net requires a leading dot
+		// "dotnet" has no leading dot, so the .net pattern (which requires a
+		// literal '.') must NOT match it.
 		const skills = extractSkills("dotnet core developer")
-		// dotnet doesn't contain a leading dot so .net pattern won't match
-		// The canonical ".net" requires the literal dot
-		expect(skills).not.toContain("javascript") // sanity: unrelated skill absent
+		expect(skills).not.toContain(".net")
 	})
 })
 

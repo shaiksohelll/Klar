@@ -4,7 +4,7 @@ export const SKILL_TAXONOMY = [
 	"express", "mongodb", "postgresql", "mysql", "redis", "graphql", "rest",
 	"python", "django", "flask", "java", "spring", "go", "rust", "php", "laravel",
 	"c#", ".net", "ruby", "rails", "html", "css", "tailwind", "sass",
-	"docker", "kubernetes", "aws", "azure", "google cloud", "terraform", "ci/cd",
+	"docker", "kubernetes", "aws", "azure", "gcp", "terraform", "ci/cd",
 	"git", "jest", "cypress", "playwright", "kafka", "rabbitmq", "elasticsearch",
 	"c++",
 ]
@@ -23,10 +23,9 @@ export const SKILL_ALIASES = {
 	"k8s":        "kubernetes",
 	// postgresql
 	"postgres":   "postgresql",
-	// google cloud
-	"gcp":        "google cloud",
-	// next.js
-	"next":       "next.js",
+	// gcp — canonical key matches historical ingests and displayName.js
+	"google cloud": "gcp",
+	// next.js  (bare "next" removed — too ambiguous)
 	"nextjs":     "next.js",
 }
 
@@ -42,7 +41,7 @@ for (const [alias, canonical] of Object.entries(SKILL_ALIASES)) {
 // ── Pattern building ──────────────────────────────────────────────────────────
 //
 // For "plain" skills (letters/digits only) we rely on \b word boundaries.
-// For special-char skills (c++, c#, .net, ci/cd, next.js, node.js, google cloud)
+// For special-char skills (c++, c#, .net, ci/cd, next.js, node.js)
 // we use a custom lookaround: assert non-alnum on each side.
 // The character class [a-z0-9] is intentionally ASCII-only to match the corpus.
 
