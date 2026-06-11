@@ -7,6 +7,7 @@ import DemandPage from "./pages/DemandPage";
 import WatchlistPage from "./pages/WatchlistPage";
 import AboutPage from "./pages/AboutPage";
 import HiringPage from "./pages/HiringPage";
+import ResumePage from "./pages/ResumePage";
 import "./index.css";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route index element={<DemandPage />} />
             <Route path="hiring" element={<HiringPage />} />
             <Route path="watchlist" element={<WatchlistPage />} />
+            <Route path="resume" element={<ResumePage />} />
             <Route path="about" element={<AboutPage />} />
           </Route>
         </Routes>

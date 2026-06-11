@@ -328,6 +328,9 @@ export default function App() {
             <NavLink to="/watchlist" className={navClass}>
               Watchlist
             </NavLink>
+            <NavLink to="/resume" className={navClass}>
+              Résumé Gap
+            </NavLink>
             <NavLink to="/about" className={navClass}>
               About
             </NavLink>
