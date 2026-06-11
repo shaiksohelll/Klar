@@ -320,6 +320,16 @@ app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res) => {
   }
 });
 
+// ── Central error handler ──────────────────────────────────────────────────
+// Must be registered AFTER all routes. Routes signal errors via next(err).
+// 500s return a generic message so internal details never reach the client.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: status === 500 ? "Internal server error" : err.message });
+});
+
 // ── DB connect + cron + listen ─────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 mongoose
