@@ -77,12 +77,15 @@ export default function ResumePage() {
   const [result, setResult] = useState(null);
 
   const fileInputRef = useRef(null);
+  const reqIdRef = useRef(0);
 
   // ── File handling ──────────────────────────────────────────────────────────
 
   const processFile = useCallback(async (file) => {
     setParseError(null);
     setFileName(file.name);
+    setResult(null);
+    setApiError(null);
     try {
       const extracted = await extractTextFromFile(file);
       setText(extracted);
@@ -114,17 +117,19 @@ export default function ResumePage() {
       setApiError("Paste your résumé text or upload a file first.");
       return;
     }
+    const payload = trimmed.slice(0, MAX_CHARS);
     setLoading(true);
     setApiError(null);
     setResult(null);
+    const myReqId = ++reqIdRef.current;
     try {
-      const res = await axios.post(`${API}/api/resume-gap`, { text: trimmed });
-      setResult(res.data);
+      const res = await axios.post(`${API}/api/resume-gap`, { text: payload });
+      if (myReqId === reqIdRef.current) setResult(res.data);
     } catch (err) {
       const msg = err.response?.data?.error || "Analysis failed. Please try again.";
-      setApiError(msg);
+      if (myReqId === reqIdRef.current) setApiError(msg);
     } finally {
-      setLoading(false);
+      if (myReqId === reqIdRef.current) setLoading(false);
     }
   };
 
@@ -253,6 +258,12 @@ export default function ResumePage() {
           </div>
         </div>
 
+        {text.trim().length > MAX_CHARS && (
+          <p className="font-mono text-[10px] text-[#5C5C66]">
+            Only the first 50,000 characters were analyzed.
+          </p>
+        )}
+
         {/* Action buttons */}
         <div className="flex items-center gap-3">
           <button
@@ -310,10 +321,10 @@ export default function ResumePage() {
               <div className="flex flex-col sm:flex-row items-center gap-8">
                 {/* Score dial */}
                 <div className="relative shrink-0 flex items-center justify-center">
-                  <ScoreDial score={result.matchScore} />
+                  <ScoreDial score={result?.matchScore ?? 0} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="font-space font-bold text-3xl text-white leading-none">
-                      {result.matchScore}
+                      {result?.matchScore ?? 0}
                     </span>
                     <span className="font-mono text-[10px] text-[#5C5C66] uppercase tracking-widest mt-0.5">
                       %
@@ -328,22 +339,22 @@ export default function ResumePage() {
                   </div>
                   <p className="text-xl md:text-2xl font-space font-bold text-white leading-snug">
                     You cover{" "}
-                    <span className="text-[#EB0029]">{result.matched.length}</span>{" "}
+                    <span className="text-[#EB0029]">{(result?.matched ?? []).length}</span>{" "}
                     of the top{" "}
-                    <span className="text-[#EB0029]">{result.totalConsidered}</span>{" "}
+                    <span className="text-[#EB0029]">{result?.totalConsidered ?? 0}</span>{" "}
                     in-demand skills.
                   </p>
                   <p className="text-sm text-[#9A9AA6]">
-                    {result.missing.length === 0
+                    {(result?.missing ?? []).length === 0
                       ? "You've got every skill in the top 40 — impressive."
-                      : `${result.missing.length} skill${result.missing.length > 1 ? "s" : ""} from the market's top ${result.totalConsidered} are missing from your résumé.`}
+                      : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your résumé.`}
                   </p>
                 </div>
               </div>
             </motion.div>
 
             {/* Matched skills */}
-            {result.matched.length > 0 && (
+            {(result?.matched ?? []).length > 0 && (
               <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center gap-3">
                   <span className="text-lg" aria-hidden="true">✅</span>
@@ -352,12 +363,12 @@ export default function ResumePage() {
                       Skills you have that the market wants
                     </div>
                     <div className="font-mono text-[10px] text-[#5C5C66] mt-0.5">
-                      {result.matched.length} skill{result.matched.length !== 1 ? "s" : ""} matched
+                      {(result?.matched ?? []).length} skill{(result?.matched ?? []).length !== 1 ? "s" : ""} matched
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {result.matched.map(({ skill, count }) => (
+                  {(result?.matched ?? []).map(({ skill, count }) => (
                     <motion.span
                       key={skill}
                       layout
@@ -373,7 +384,7 @@ export default function ResumePage() {
             )}
 
             {/* Missing skills */}
-            {result.missing.length > 0 && (
+            {(result?.missing ?? []).length > 0 && (
               <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center gap-3">
                   <span className="text-lg" aria-hidden="true">🔴</span>
@@ -387,7 +398,7 @@ export default function ResumePage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {result.missing.map(({ skill, count }) => (
+                  {(result?.missing ?? []).map(({ skill, count }) => (
                     <motion.button
                       key={skill}
                       layout
@@ -404,7 +415,7 @@ export default function ResumePage() {
             )}
 
             {/* Résumé skills detected (secondary context) */}
-            {result.resumeSkills.length > 0 && (
+            {(result?.resumeSkills ?? []).length > 0 && (
               <motion.div
                 variants={itemVariants}
                 className="rounded-xl border border-[#26262E] bg-[#0A0A0E] p-5 space-y-3"
@@ -413,7 +424,7 @@ export default function ResumePage() {
                   All skills detected in your résumé
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {result.resumeSkills.map((skill) => (
+                  {(result?.resumeSkills ?? []).map((skill) => (
                     <span
                       key={skill}
                       className="inline-flex items-center px-2.5 py-1 rounded-full border border-[#26262E] bg-[#121216] text-[#9A9AA6] font-mono text-[11px]"
@@ -424,7 +435,7 @@ export default function ResumePage() {
                 </div>
                 <p className="font-mono text-[10px] text-[#5C5C66] leading-relaxed">
                   Only skills from our market taxonomy are detected. The comparison is
-                  against the top {result.totalConsidered} by current job-posting demand.
+                  against the top {result?.totalConsidered ?? 0} by current job-posting demand.
                 </p>
               </motion.div>
             )}

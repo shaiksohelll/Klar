@@ -4,6 +4,8 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 // Configure the worker the Vite way — done once at module load.
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 /**
  * Extract plain text from a File object.
  * Supports: .pdf (pdfjs-dist), .docx (mammoth), .txt / plain text.
@@ -12,18 +14,31 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
  * @returns {Promise<string>}
  */
 export async function extractTextFromFile(file) {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`"${file.name}" is too large (max 10 MB). Please upload a smaller file.`);
+  }
+
   const name = file.name.toLowerCase();
 
   if (name.endsWith(".pdf")) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const pages = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      pages.push(content.items.map((item) => item.str).join(" "));
+    try {
+      const pages = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        pages.push(
+          content.items
+            .filter((item) => item && typeof item.str === "string")
+            .map((item) => item.str)
+            .join(" ")
+        );
+      }
+      return pages.join("\n");
+    } finally {
+      await pdf.destroy();
     }
-    return pages.join("\n");
   }
 
   if (name.endsWith(".docx")) {
