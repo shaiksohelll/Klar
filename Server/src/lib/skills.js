@@ -59,15 +59,20 @@ function escapeRegex(str) {
  * regardless of whether the skill contains special characters.
  *
  * Strategy:
- *   - If the skill starts AND ends with a word char → \b on both sides.
- *   - If it starts with a word char but ends with a special char (e.g. "c++")
- *     → \b on the left, negative lookahead on the right.
- *   - If it starts with a special char (e.g. ".net") → EMPTY left boundary.
- *     The literal leading special char (the dot) is its own natural delimiter:
- *     "dotnet" won't match because there is no literal dot, and "asp.net" WILL
- *     match because the dot is present. A negative lookbehind was previously
- *     used here but it wrongly blocked "asp.net"/"vb.net" etc.
- *     Right side: negative lookahead to stop ".network" matching ".net".
+ *   - Plain skills (start AND end with a word char) → \b on both sides.
+ *   - Skills starting with a word char but ending with a special char (e.g.
+ *     "c++", "c#") → \b left, (?![a-z]) right.
+ *   - Skills starting with a special char (e.g. ".net") → empty left boundary
+ *     (the literal leading char is its own delimiter), (?![a-z]) right.
+ *
+ * Right boundary for any skill that does NOT end with a word char:
+ *   (?![a-z]) — blocks a trailing LETTER (.network ≠ .net) but allows a
+ *   trailing DIGIT (c++17, c#8, .net8 all qualify the skill).
+ *
+ * For skills starting with a special char but ending with a word char (e.g.
+ * ".net" ends with 't'), \b would wrongly block ".net8" because \b sees no
+ * boundary between 't' and '8' (both are \w). We use (?![a-z]) here too,
+ * so the version digit is allowed while ".network" is still blocked.
  */
 function buildPattern(skill) {
 	const escaped = escapeRegex(skill)
@@ -76,8 +81,14 @@ function buildPattern(skill) {
 
 	// Skills starting with a special char carry their own left boundary (the
 	// special char itself); no extra assertion is needed.
-	const left  = startsWord ? "\\b" : ""
-	const right = endsWord   ? "\\b" : "(?![a-z0-9])"
+	const left = startsWord ? "\\b" : ""
+
+	// Right boundary:
+	//   • Plain word-ending skills whose LEFT is also a word char → \b is safe.
+	//   • Everything else → block only trailing letters, not digits.
+	//     This covers "c++" (ends special), "c#" (ends special), AND ".net"
+	//     (starts special, ends word — \b would fail before a version digit).
+	const right = (startsWord && endsWord) ? "\\b" : "(?![a-z])"
 
 	return new RegExp(`${left}${escaped}${right}`, "i")
 }

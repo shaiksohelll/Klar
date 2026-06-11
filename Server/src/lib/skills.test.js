@@ -156,6 +156,38 @@ describe("extractSkills special-char skills", () => {
 	})
 })
 
+// ── Versioned-suffix matching (trailing digit allowed, trailing letter blocked) ─
+
+describe("extractSkills versioned-suffix matching", () => {
+	it("c++17 extracts c++", () => {
+		expect(extractSkills("c++17 experience required")).toContain("c++")
+	})
+
+	it("c++20 extracts c++", () => {
+		expect(extractSkills("modern c++20 standard")).toContain("c++")
+	})
+
+	it("c#8 extracts c#", () => {
+		expect(extractSkills("c#8 features and async streams")).toContain("c#")
+	})
+
+	it(".net8 extracts .net", () => {
+		expect(extractSkills(".net8 runtime experience")).toContain(".net")
+	})
+
+	it(".network does NOT extract .net (letter after .net is blocked)", () => {
+		expect(extractSkills(".network engineer")).not.toContain(".net")
+	})
+
+	it("asp.net still extracts .net after the fix", () => {
+		expect(extractSkills("asp.net developer")).toContain(".net")
+	})
+
+	it("dotnet still does NOT extract .net (no literal dot)", () => {
+		expect(extractSkills("dotnet core developer")).not.toContain(".net")
+	})
+})
+
 // ── No false positives on edge cases ─────────────────────────────────────────
 
 describe("extractSkills no false positives", () => {
