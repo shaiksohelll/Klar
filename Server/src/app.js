@@ -131,13 +131,15 @@ app.post("/api/ingest", (req, res) => {
   }
   res.status(202).json({ ok: true, message: "Ingestion started" });
   (async () => {
-    try {
-      const adzuna = await ingestAdzuna({ country: "in", pages: 3 });
-      const jsearch = await ingestJSearch({ country: "in", pages: 1 });
-      console.log("Scheduled ingestion complete", { adzuna, jsearch });
-    } catch (err) {
-      console.error("Scheduled ingestion failed", err);
-    }
+    const results = await Promise.allSettled([
+      ingestAdzuna({ country: "in", pages: 3 }),
+      ingestJSearch({ country: "in", pages: 1 }),
+    ]);
+    const [adzuna, jsearch] = results;
+    if (adzuna.status === "rejected") console.error("Adzuna ingestion failed", adzuna.reason);
+    else console.log("Adzuna ingestion complete", adzuna.value);
+    if (jsearch.status === "rejected") console.error("JSearch ingestion failed", jsearch.reason);
+    else console.log("JSearch ingestion complete", jsearch.value);
   })();
 });
 
