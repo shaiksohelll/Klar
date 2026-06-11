@@ -11,7 +11,8 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "dependencies": {
     "@clerk/express": "^2.1.23",
