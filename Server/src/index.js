@@ -230,7 +230,7 @@ app.get("/api/skills/all", readLimiter, async (req, res, next) => {
 // used by the UI (3M / 6M / 12M). Idempotent: a cache hit is a sub-ms no-op.
 // Intended for uptime-monitor pings on Render's free tier to prevent cold
 // starts from hitting users, and for any keep-alive cron outside the app.
-app.get("/api/warm", readLimiter, async (req, res, next) => {
+app.get("/api/warm", readLimiter, async (req, res) => {
   // The three windows the Demand-page segmented control exposes.
   const UI_WINDOWS = [3, 6, 12];
   // limit:25 matches the exact params the frontend sends for trending.
@@ -246,7 +246,9 @@ app.get("/api/warm", readLimiter, async (req, res, next) => {
     ]);
     res.json({ ok: true, warmed: ["trending", "allSkills", "companies"], windows: UI_WINDOWS });
   } catch (err) {
-    next(err);
+    // Non-fatal: respond 200 so uptime monitors don't alert on a warm failure.
+    console.warn(`Warm error: ${err.message}`);
+    res.json({ ok: false, error: "warm failed" });
   }
 });
 
@@ -319,7 +321,7 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   console.error(`${req.method} ${req.originalUrl}`, err);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ ok: false, error: status === 500 ? "Internal server error" : err.message });
+  res.status(status).json({ ok: false, error: status >= 500 ? "Internal server error" : err.message });
 });
 
 // ── DB connect + cron + listen ─────────────────────────────────────────────

@@ -82,9 +82,14 @@ export function SkillDrawer({
   const [loadingSalary, setLoadingSalary] = useState(false);
 
   // Reset to the parent-selected skill whenever it changes (new open).
+  // Also clear any stale error immediately so it never flashes on the new
+  // skill before the fetch effect runs.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (skill) setActiveSkill(skill);
+    if (skill) {
+      setActiveSkill(skill);
+      setDetailError(false);
+    }
   }, [skill]);
 
   // Reset salary state when active skill changes so stale data never shows.
@@ -192,6 +197,9 @@ export function SkillDrawer({
       : 1;
 
   const goToSkill = (skillName) => {
+    // Clear any previous error immediately so the stale banner never shows
+    // while the new skill's fetch is in-flight.
+    setDetailError(false);
     setActiveSkill({ id: skillName, name: skillName, role: current.role });
   };
 
