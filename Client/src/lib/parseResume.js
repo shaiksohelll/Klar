@@ -51,9 +51,14 @@ export async function extractTextFromFile(file) {
 
   if (name.endsWith(".docx")) {
     // Dynamic import keeps mammoth out of the initial bundle.
-    const mammoth = await import("mammoth");
+    const mammothModule = await import("mammoth");
+    const mammoth = mammothModule.default ?? mammothModule;
     const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.extractRawText({ arrayBuffer });
+    const extractRawText = mammoth.extractRawText ?? mammothModule.extractRawText;
+    if (typeof extractRawText !== "function") {
+      throw new Error("Failed to load DOCX parser.");
+    }
+    const result = await extractRawText({ arrayBuffer });
     const text = result.value;
     return text.length > MAX_EXTRACTED_CHARS 
       ? text.substring(0, MAX_EXTRACTED_CHARS)
