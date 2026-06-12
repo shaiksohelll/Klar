@@ -26,6 +26,12 @@ const NEGATIVE_PATTERNS = [
   /\bhybrid\b/,
   // "occasionally remote", "partially remote", "sometimes remote"
   /\b(?:occasionally|partially|partly|sometimes|some)\s+remote\b/,
+  // Negated/refused WFH signals — the positive wfh / work-from-home
+  // patterns below must not fire when the posting explicitly rules them
+  // out: "no work from home", "we do not offer work from home", "never wfh".
+  /\b(?:not|no|never|non|isn['\u2019]?t|don['\u2019]?t|doesn['\u2019]?t)\s+(?:offer(?:ing|ed)?\s+)?(?:work\s+from\s+home|wfh)\b/,
+  // "wfh not available", "work from home is not an option"
+  /\b(?:work\s+from\s+home|wfh)\s+(?:is\s+)?not\b/,
 ];
 
 // Clear positive signals, checked only after negatives are ruled out.

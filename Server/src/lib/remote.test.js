@@ -23,6 +23,9 @@ describe("detectRemote", () => {
     "Hybrid \u2014 occasionally remote",
     "Hybrid working model",
     "Remote work is not available",
+    "WFH not available",
+    "We do not offer work from home",
+    "No work from home",
     "Backend developer position in Pune",
     "",
   ])("returns false for negated/qualified/absent: %s", (text) => {
