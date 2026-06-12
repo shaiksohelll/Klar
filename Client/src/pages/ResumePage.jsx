@@ -86,6 +86,7 @@ export default function ResumePage() {
   const processFile = useCallback(async (file) => {
     const myParseId = ++parseIdRef.current;
     reqIdRef.current++;            // invalidate any in-flight analysis
+    setLoading(false);
     setParsing(true);
     setParseError(null);
     setFileName(file.name);
@@ -270,6 +271,8 @@ export default function ResumePage() {
             onChange={(e) => {
               parseIdRef.current++;
               reqIdRef.current++;
+              setParsing(false);
+              setLoading(false);
               setText(e.target.value);
               setFileName(null);
               setParseError(null);
