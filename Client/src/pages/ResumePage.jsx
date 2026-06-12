@@ -78,18 +78,22 @@ export default function ResumePage() {
 
   const fileInputRef = useRef(null);
   const reqIdRef = useRef(0);
+  const parseIdRef = useRef(0);
 
   // ── File handling ──────────────────────────────────────────────────────────
 
   const processFile = useCallback(async (file) => {
+    const myParseId = ++parseIdRef.current;
     setParseError(null);
     setFileName(file.name);
     setResult(null);
     setApiError(null);
     try {
       const extracted = await extractTextFromFile(file);
+      if (myParseId !== parseIdRef.current) return; // superseded — drop it
       setText(extracted);
     } catch (err) {
+      if (myParseId !== parseIdRef.current) return;
       setParseError(err.message);
       setFileName(null);
     }
@@ -114,6 +118,7 @@ export default function ResumePage() {
   const handleAnalyze = async () => {
     const trimmed = text.trim();
     if (!trimmed) {
+      setResult(null);
       setApiError("Paste your résumé text or upload a file first.");
       return;
     }
@@ -135,6 +140,7 @@ export default function ResumePage() {
 
   const handleClear = () => {
     reqIdRef.current++;
+    parseIdRef.current++;
     setText("");
     setFileName(null);
     setParseError(null);
@@ -255,9 +261,12 @@ export default function ResumePage() {
             id="resume-textarea"
             value={text}
             onChange={(e) => {
+              parseIdRef.current++;
               setText(e.target.value);
               setFileName(null);
               setParseError(null);
+              setResult(null);
+              setApiError(null);
             }}
             rows={10}
             maxLength={MAX_CHARS}
