@@ -140,6 +140,7 @@ export default function ResumePage() {
     setParseError(null);
     setResult(null);
     setApiError(null);
+    setLoading(false);
   };
 
   // ── Chip click → SkillDrawer ───────────────────────────────────────────────
