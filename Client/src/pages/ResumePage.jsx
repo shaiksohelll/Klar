@@ -158,8 +158,8 @@ export default function ResumePage() {
   };
 
   // ── Chip click → SkillDrawer ───────────────────────────────────────────────
-  const openSkill = (skill, count) => {
-    setSelectedSkill({ id: skill, name: skill, count, role: "General" });
+  const openSkill = (skill) => {
+    setSelectedSkill({ id: skill, name: skill, role: "General" });
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -444,7 +444,7 @@ export default function ResumePage() {
                       key={skill}
                       layout
                       transition={UI_SPRING}
-                      onClick={() => openSkill(skill, count)}
+                      onClick={() => openSkill(skill)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#26262E] bg-[#0A0A0E] text-[#9A9AA6] hover:text-white hover:border-[#EB0029] hover:bg-[#1A0508] font-mono text-xs transition-colors cursor-pointer"
                     >
                       {displayName(skill)}
