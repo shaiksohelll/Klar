@@ -27,6 +27,10 @@ export const SKILL_ALIASES = {
 	"google cloud": "gcp",
 	// next.js  (bare "next" removed — too ambiguous)
 	"nextjs":     "next.js",
+	// html
+	"html5":      "html",
+	"html 5":     "html",
+	"xhtml":      "html",
 }
 
 // Validate at startup that every alias target exists in SKILL_TAXONOMY.
