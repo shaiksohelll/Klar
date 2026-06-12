@@ -75,6 +75,7 @@ export default function ResumePage() {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [result, setResult] = useState(null);
+  const [parsing, setParsing] = useState(false);
 
   const fileInputRef = useRef(null);
   const reqIdRef = useRef(0);
@@ -84,6 +85,8 @@ export default function ResumePage() {
 
   const processFile = useCallback(async (file) => {
     const myParseId = ++parseIdRef.current;
+    reqIdRef.current++;            // invalidate any in-flight analysis
+    setParsing(true);
     setParseError(null);
     setFileName(file.name);
     setResult(null);
@@ -96,6 +99,8 @@ export default function ResumePage() {
       if (myParseId !== parseIdRef.current) return;
       setParseError(err.message);
       setFileName(null);
+    } finally {
+      if (myParseId === parseIdRef.current) setParsing(false);
     }
   }, []);
 
@@ -116,6 +121,7 @@ export default function ResumePage() {
   // ── Analysis ───────────────────────────────────────────────────────────────
 
   const handleAnalyze = async () => {
+    if (parsing) return;
     const trimmed = text.trim();
     if (!trimmed) {
       setResult(null);
@@ -147,6 +153,7 @@ export default function ResumePage() {
     setResult(null);
     setApiError(null);
     setLoading(false);
+    setParsing(false);
   };
 
   // ── Chip click → SkillDrawer ───────────────────────────────────────────────
@@ -262,6 +269,7 @@ export default function ResumePage() {
             value={text}
             onChange={(e) => {
               parseIdRef.current++;
+              reqIdRef.current++;
               setText(e.target.value);
               setFileName(null);
               setParseError(null);
@@ -289,11 +297,20 @@ export default function ResumePage() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleAnalyze}
-            disabled={loading}
+            disabled={loading || parsing}
             className="flex-1 py-4 rounded-xl bg-[#EB0029] hover:bg-[#FF2740] disabled:opacity-50 disabled:cursor-not-allowed text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
-            aria-busy={loading}
+            aria-busy={loading || parsing}
           >
-            {loading ? (
+            {parsing ? (
+              <span className="flex items-center justify-center gap-2">
+                <motion.span
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                />
+                Parsing…
+              </span>
+            ) : loading ? (
               <span className="flex items-center justify-center gap-2">
                 <motion.span
                   animate={{ rotate: 360 }}
