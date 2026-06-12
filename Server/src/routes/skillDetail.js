@@ -132,8 +132,10 @@ router.get("/:name", async (req, res, next) => {
         location: j.location,
         isRemote: j.isRemote,
         postedAt: j.postedAt,
-        salary: j.salaryRange?.midpoint || null,
-        currency: j.salaryRange?.currency || null,
+        // Disclosed-only: predicted/estimated salaries are never shown
+        // per-listing — null hides the salary chip in the drawer.
+        salary: j.salaryDisclosed ? j.salaryRange?.midpoint || null : null,
+        currency: j.salaryDisclosed ? j.salaryRange?.currency || null : null,
         url: j.redirectUrl || null,
       })),
     };
