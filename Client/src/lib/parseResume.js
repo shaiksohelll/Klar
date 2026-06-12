@@ -5,6 +5,7 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_EXTRACTED_CHARS = 100000; // Limit extracted text to prevent memory issues
 
 /**
  * Extract plain text from a File object.
@@ -25,15 +26,22 @@ export async function extractTextFromFile(file) {
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     try {
       const pages = [];
+      let totalChars = 0;
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        pages.push(
-          content.items
-            .filter((item) => item && typeof item.str === "string")
-            .map((item) => item.str)
-            .join(" ")
-        );
+        const pageText = content.items
+          .filter((item) => item && typeof item.str === "string")
+          .map((item) => item.str)
+          .join(" ");
+        
+        if (totalChars + pageText.length > MAX_EXTRACTED_CHARS) {
+          pages.push(pageText.substring(0, MAX_EXTRACTED_CHARS - totalChars));
+          break;
+        }
+        
+        pages.push(pageText);
+        totalChars += pageText.length;
       }
       return pages.join("\n");
     } finally {
@@ -46,11 +54,17 @@ export async function extractTextFromFile(file) {
     const mammoth = await import("mammoth");
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+    const text = result.value;
+    return text.length > MAX_EXTRACTED_CHARS 
+      ? text.substring(0, MAX_EXTRACTED_CHARS)
+      : text;
   }
 
   if (name.endsWith(".txt") || file.type === "text/plain") {
-    return file.text();
+    const text = await file.text();
+    return text.length > MAX_EXTRACTED_CHARS 
+      ? text.substring(0, MAX_EXTRACTED_CHARS)
+      : text;
   }
 
   throw new Error(

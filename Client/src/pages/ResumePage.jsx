@@ -424,7 +424,7 @@ export default function ResumePage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#26262E] bg-[#0E1A12] text-[#22c55e] font-mono text-xs"
                     >
                       {displayName(skill)}
-                      <span className="text-[#166534] text-[10px]">{count}</span>
+                      <span className="text-[#22c55e] opacity-60 text-[10px]">{count}</span>
                     </motion.span>
                   ))}
                 </div>
