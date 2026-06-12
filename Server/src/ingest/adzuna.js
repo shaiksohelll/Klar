@@ -1,6 +1,7 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
+import { detectRemote } from "../lib/remote.js";
 import { makeDedupeKey } from "../lib/dedupe.js";
 import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
@@ -60,7 +61,7 @@ function mapJob(raw, country) {
     title,
     normalizedRole: normalizeRole(title),
     companyName,
-    isRemote: /remote/i.test(`${title} ${description}`),
+    isRemote: detectRemote(`${title} ${description}`),
     requiredSkills: extractSkills(`${title} ${description}`),
     salaryRange: {
       min,

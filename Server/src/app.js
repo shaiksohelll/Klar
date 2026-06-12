@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -18,6 +19,24 @@ import Watchlist from "./models/Watchlist.js";
 
 // ── Ingest secret (read at module load) ────────────────────────────────────
 const INGEST_SECRET = process.env.INGEST_SECRET;
+
+/**
+ * Constant-time ingest-secret check (fail-closed).
+ *
+ * Returns true only when INGEST_SECRET is configured (non-empty) AND the
+ * X-Ingest-Secret header matches. Both sides are hashed with SHA-256 first so
+ * crypto.timingSafeEqual always receives equal-length buffers — a plain `!==`
+ * string compare short-circuits on the first differing byte and leaks timing
+ * information an attacker could use to recover the secret byte by byte.
+ */
+function isValidIngestSecret(req) {
+  if (!INGEST_SECRET) return false; // fail-closed: unset/empty secret → locked
+  const provided = req.headers["x-ingest-secret"];
+  if (typeof provided !== "string" || provided.length === 0) return false;
+  const a = crypto.createHash("sha256").update(provided).digest();
+  const b = crypto.createHash("sha256").update(INGEST_SECRET).digest();
+  return crypto.timingSafeEqual(a, b);
+}
 
 const IS_PROD = process.env.NODE_ENV === "production";
 
@@ -86,7 +105,7 @@ app.get("/health", (req, res) => {
 app.get("/api/ingest/adzuna", async (req, res, next) => {
   // Fail-closed: reject if the secret is unset OR the header doesn't match.
   // This ensures the route never falls through to run ingestion without a key.
-  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+  if (!isValidIngestSecret(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   try {
@@ -109,7 +128,7 @@ app.get("/api/ingest/adzuna", async (req, res, next) => {
 // Same X-Ingest-Secret guard as /api/ingest/adzuna. POST so it can't be
 // accidentally triggered by a browser navigation or uptime-monitor GET.
 app.post("/api/ingest/jsearch", async (req, res, next) => {
-  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+  if (!isValidIngestSecret(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   try {
@@ -130,7 +149,7 @@ app.post("/api/ingest/jsearch", async (req, res, next) => {
 // In-memory flag prevents overlapping runs on the single Render instance.
 let ingestionInProgress = false;
 app.post("/api/ingest", (req, res) => {
-  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+  if (!isValidIngestSecret(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   if (ingestionInProgress) {
@@ -156,7 +175,7 @@ app.post("/api/ingest", (req, res) => {
 // Safe to call multiple times (idempotent: bulkWrite with upsert:false).
 // Protected by the same X-Ingest-Secret header as the ingest endpoints.
 app.post("/api/admin/backfill-dedupe", async (req, res, next) => {
-  if (!INGEST_SECRET || req.headers["x-ingest-secret"] !== INGEST_SECRET) {
+  if (!isValidIngestSecret(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
   try {
@@ -242,10 +261,10 @@ app.get("/api/warm", readLimiter, async (req, res) => {
   }
 });
 
-// ── Skill detail ───────────────────────────────────────────────────────
+// ── Skill detail ─────────────────────────────────────────────────────────
 app.use("/api/skill", readLimiter, skillDetailRouter);
 
-// ── Top companies (Who's Hiring) ───────────────────────────────────────
+// ── Top companies (Who's Hiring) ──────────────────────────────────────────
 // Public, read-only. Optional ?role=, ?skill=, ?months= filters.
 app.get("/api/companies", readLimiter, async (req, res, next) => {
   try {
@@ -260,7 +279,7 @@ app.get("/api/companies", readLimiter, async (req, res, next) => {
   }
 });
 
-// ── Salary Insights ───────────────────────────────────────────────
+// ── Salary Insights ──────────────────────────────────────────────────
 // Public, read-only. Descriptive stats derived ONLY from disclosed salaries.
 // Optional ?skill= ?role= ?months= (clamped 1-24, default 12).
 // NOT added to /api/warm — query space is too large to pre-warm meaningfully.

@@ -56,9 +56,41 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("✅ Mongo connected");
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`✅ API running on http://localhost:${PORT}`);
     });
+
+    // ── Graceful shutdown ────────────────────────────────────────────────
+    // Render sends SIGTERM on every deploy/restart. Stop accepting new
+    // connections, let in-flight requests drain, close the Mongo connection,
+    // then exit 0. A 10s fallback force-exits if draining hangs (e.g. a
+    // stuck keep-alive socket) so the platform never has to SIGKILL us.
+    let shuttingDown = false;
+    function shutdown(signal) {
+      if (shuttingDown) return; // ignore repeated signals during drain
+      shuttingDown = true;
+      console.log(`${signal} received — shutting down gracefully`);
+
+      const forceExit = setTimeout(() => {
+        console.error("Shutdown timed out after 10s — forcing exit");
+        process.exit(1);
+      }, 10_000);
+      // Never keep the process alive just for this safety timer.
+      forceExit.unref();
+
+      server.close(async () => {
+        try {
+          await mongoose.disconnect();
+          console.log("✅ Mongo disconnected — shutdown complete");
+          process.exit(0);
+        } catch (err) {
+          console.error("Error during shutdown:", err.message);
+          process.exit(1);
+        }
+      });
+    }
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   })
   .catch((err) => {
     console.error("❌ Mongo connection failed:", err.message);
