@@ -134,6 +134,7 @@ export default function ResumePage() {
   };
 
   const handleClear = () => {
+    reqIdRef.current++;
     setText("");
     setFileName(null);
     setParseError(null);
@@ -188,12 +189,21 @@ export default function ResumePage() {
       >
         {/* Drag-and-drop zone */}
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload résumé file"
           onDragEnter={() => setIsDragging(true)}
           onDragLeave={() => setIsDragging(false)}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors ${
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors focus:outline-none focus-visible:border-[#EB0029] focus-visible:ring-2 focus-visible:ring-[#EB0029] ${
             isDragging
               ? "border-[#EB0029] bg-[#EB0029]/5"
               : "border-[#26262E] hover:border-[#5C5C66]"
