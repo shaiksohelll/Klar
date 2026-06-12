@@ -61,7 +61,7 @@ function mapJob(raw, country) {
     title,
     normalizedRole: normalizeRole(title),
     companyName,
-    isRemote: /remote/i.test(`${title} ${description}`),
+    isRemote: detectRemote(`${title} ${description}`),
     requiredSkills: extractSkills(`${title} ${description}`),
     salaryRange: {
       min,
