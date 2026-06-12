@@ -386,9 +386,16 @@ export default function ResumePage() {
                     in-demand skills.
                   </p>
                   <p className="text-sm text-[#9A9AA6]">
-                    {(result?.missing ?? []).length === 0
-                      ? "You've got every skill in the top 40 — impressive."
-                      : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your résumé.`}
+                    {(() => {
+                      const considered = result?.totalConsidered
+                        ?? ((result?.matched?.length ?? 0) + (result?.missing?.length ?? 0));
+                      if (considered === 0) {
+                        return "Not enough market data yet — try again once more jobs have been ingested.";
+                      }
+                      return (result?.missing ?? []).length === 0
+                        ? "You've got every skill in the top 40 — impressive."
+                        : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your résumé.`;
+                    })()}
                   </p>
                 </div>
               </div>
