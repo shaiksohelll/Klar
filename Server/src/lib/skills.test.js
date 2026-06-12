@@ -60,6 +60,14 @@ describe("alias resolution via extractSkills", () => {
 		const skills = extractSkills("your next opportunity awaits")
 		expect(skills).not.toContain("next.js")
 	})
+
+	it("html5 → html", () => {
+		expect(extractSkills("proficient in HTML5 and CSS3")).toContain("html")
+	})
+
+	it("html 5 → html", () => {
+		expect(extractSkills("experience with HTML 5 and modern browsers")).toContain("html")
+	})
 })
 
 // ── Word-boundary guard: java vs javascript ───────────────────────────────────
