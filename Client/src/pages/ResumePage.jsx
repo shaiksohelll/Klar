@@ -257,6 +257,7 @@ export default function ResumePage() {
             onChange={(e) => {
               setText(e.target.value);
               setFileName(null);
+              setParseError(null);
             }}
             rows={10}
             maxLength={MAX_CHARS}
