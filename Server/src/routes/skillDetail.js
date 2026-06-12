@@ -103,7 +103,7 @@ router.get("/:name", async (req, res, next) => {
         .sort({ postedAt: -1 })
         .limit(5)
         .select(
-          "title companyName location isRemote postedAt salaryRange redirectUrl",
+          "title companyName location isRemote postedAt salaryRange salaryDisclosed redirectUrl",
         )
         .lean(),
       getSkillPairs(name),
