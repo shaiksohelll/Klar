@@ -123,6 +123,7 @@ export function dedupeGroupStages() {
         isRemote:       { $first: "$isRemote" },
         requiredSkills: { $first: "$requiredSkills" },
         salaryRange:    { $first: "$salaryRange" },
+        salaryDisclosed: { $first: "$salaryDisclosed" },
         location:       { $first: "$location" },
         postedAt:       { $first: "$postedAt" },
         title:          { $first: "$title" },
