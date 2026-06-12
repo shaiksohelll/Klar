@@ -24,6 +24,7 @@ export async function extractTextFromFile(file) {
   if (name.endsWith(".pdf")) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let extractedText;
     try {
       const pages = [];
       let totalChars = 0;
@@ -43,10 +44,18 @@ export async function extractTextFromFile(file) {
         pages.push(pageText);
         totalChars += pageText.length;
       }
-      return pages.join("\n");
+      extractedText = pages.join("\n");
     } finally {
-      await pdf.destroy();
+      // Defensive cleanup: never let destroy() abort a successful extraction
+      try {
+        if (pdf && typeof pdf.destroy === "function") {
+          await pdf.destroy();
+        }
+      } catch {
+        // Ignore cleanup errors — we already have the text
+      }
     }
+    return extractedText;
   }
 
   if (name.endsWith(".docx")) {
