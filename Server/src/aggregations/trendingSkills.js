@@ -115,7 +115,17 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
             $group: {
               _id: "$requiredSkills",
               demand: { $sum: 1 },
-              avgSalary: { $avg: "$salaryRange.midpoint" },
+              // Disclosed-only average: $avg ignores nulls, so postings
+              // without an employer-disclosed salary never drag the figure.
+              avgSalary: {
+                $avg: {
+                  $cond: [
+                    { $eq: ["$salaryDisclosed", true] },
+                    "$salaryRange.midpoint",
+                    null,
+                  ],
+                },
+              },
               remoteCount: { $sum: { $cond: ["$isRemote", 1, 0] } },
             },
           },
