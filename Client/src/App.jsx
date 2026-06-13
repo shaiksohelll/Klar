@@ -12,6 +12,7 @@ import {
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import Brand from "./components/Brand";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
 const PageLoader = () => (
@@ -341,7 +342,7 @@ export default function App() {
               Watchlist
             </NavLink>
             <NavLink to="/resume" className={navClass}>
-              Résumé Gap
+              Resume Gap
             </NavLink>
             <NavLink to="/about" className={navClass}>
               About
@@ -383,7 +384,7 @@ export default function App() {
 
       <footer className="max-w-6xl mx-auto px-6 mt-32 pt-8 border-t border-[#26262E] flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="font-space font-bold text-xl tracking-tight text-white flex items-baseline opacity-50">
-          Klar<span className="text-[#EB0029]">.</span>
+          <Brand />
         </div>
         <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider text-center md:text-right">
           A snapshot of current demand, not a prediction.
