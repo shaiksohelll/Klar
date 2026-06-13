@@ -110,6 +110,24 @@ function exportSlug(selected) {
   return selected.join("-") || "skills";
 }
 
+// PDF-safe currency label. jsPDF's Helvetica has no ₹ glyph, so the on-screen
+// symbols from currencySymbol() can't be reused in the PDF export. Map each
+// currency code to an ASCII-safe label instead.
+function pdfCurrencyLabel(code) {
+  switch (code) {
+    case "INR":
+      return "Rs ";
+    case "USD":
+      return "$";
+    case "GBP":
+      return "GBP ";
+    case "EUR":
+      return "EUR ";
+    default:
+      return code ? `${code} ` : "";
+  }
+}
+
 // ── Chart geometry ────────────────────────────────────────────────────────────
 const CHART_W = 720; // viewBox width — SVG scales to its container via width=100%
 const CHART_H = 220; // viewBox height
@@ -686,7 +704,7 @@ export default function ComparePage() {
         const medianText =
           r.median == null
             ? "\u2014"
-            : `${currencySymbol(r.currency)}${fmtSalary(r.median, r.currency)}`;
+            : `${pdfCurrencyLabel(r.currency)}${fmtSalary(r.median, r.currency)}`;
         doc.text(String(r.name), cols[0].x, y);
         doc.text(r.demand.toLocaleString(), cols[1].x, y);
         doc.text(`${r.share}%`, cols[2].x, y);
