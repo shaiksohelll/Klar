@@ -482,11 +482,11 @@ export default function ComparePage() {
   // (selected hasn't updated yet in that commit — avoids wiping ?skills=).
   const skipNextSyncRef = useRef(false);
 
-  // Fetch the valid skill list on mount.
+  // Fetch the valid skill list, refetching whenever the window changes.
   useEffect(() => {
     let cancelled = false;
     axios
-      .get(`${API}/api/skills/all`, { params: { months: MONTHS } })
+      .get(`${API}/api/skills/all`, { params: { months: windowMonths } })
       .then((res) => {
         if (cancelled) return;
         setAllSkills(res.data.skills || []);
@@ -498,7 +498,7 @@ export default function ComparePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [windowMonths]);
 
   // Hydrate selection from ?skills=react,node.js once the valid list is known.
   // Validate against the list and drop unknown keys.
