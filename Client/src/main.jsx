@@ -1,14 +1,17 @@
-import React from "react";
+/* eslint-disable react-refresh/only-export-components */
+import React, { lazy } from "react";
 import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App";
-import DemandPage from "./pages/DemandPage";
-import WatchlistPage from "./pages/WatchlistPage";
-import AboutPage from "./pages/AboutPage";
-import HiringPage from "./pages/HiringPage";
-import ResumePage from "./pages/ResumePage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
+
+const DemandPage = lazy(() => import("./pages/DemandPage"));
+const HiringPage = lazy(() => import("./pages/HiringPage"));
+const WatchlistPage = lazy(() => import("./pages/WatchlistPage"));
+const ResumePage = lazy(() => import("./pages/ResumePage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -35,22 +38,24 @@ const clerkAppearance = {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ClerkProvider
-      publishableKey={PUBLISHABLE_KEY}
-      appearance={clerkAppearance}
-      afterSignOutUrl="/"
-    >
-      <BrowserRouter>
-        <Routes>
-          <Route element={<App />}>
-            <Route index element={<DemandPage />} />
-            <Route path="hiring" element={<HiringPage />} />
-            <Route path="watchlist" element={<WatchlistPage />} />
-            <Route path="resume" element={<ResumePage />} />
-            <Route path="about" element={<AboutPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </ClerkProvider>
+    <ErrorBoundary>
+      <ClerkProvider
+        publishableKey={PUBLISHABLE_KEY}
+        appearance={clerkAppearance}
+        afterSignOutUrl="/"
+      >
+        <BrowserRouter>
+          <Routes>
+            <Route element={<App />}>
+              <Route index element={<DemandPage />} />
+              <Route path="hiring" element={<HiringPage />} />
+              <Route path="watchlist" element={<WatchlistPage />} />
+              <Route path="resume" element={<ResumePage />} />
+              <Route path="about" element={<AboutPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ClerkProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

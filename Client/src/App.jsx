@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import axios from "axios";
 import {
   SignedIn,
@@ -9,8 +9,16 @@ import {
   useAuth,
   useClerk,
 } from "@clerk/clerk-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SkillDrawer } from "./components/SkillDrawer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+// Lightweight fallback shown while a lazily-loaded route page is fetched.
+const PageLoader = () => (
+  <div className="min-h-[60vh] flex items-center justify-center">
+    <div className="w-6 h-6 rounded-full border-2 border-[#26262E] border-t-[#EB0029] animate-spin" />
+  </div>
+);
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
@@ -92,6 +100,7 @@ export default function App() {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const { openSignIn, signOut } = useClerk();
+  const location = useLocation();
 
   // Build an axios config with a fresh Clerk JWT in the Authorization header.
   // Throws if the token is unavailable so callers never send "Bearer null".
@@ -363,7 +372,11 @@ export default function App() {
         </div>
       </nav>
 
-      <Outlet context={outletContext} />
+      <ErrorBoundary key={location.pathname}>
+        <Suspense fallback={<PageLoader />}>
+          <Outlet context={outletContext} />
+        </Suspense>
+      </ErrorBoundary>
 
       <footer className="max-w-6xl mx-auto px-6 mt-32 pt-8 border-t border-[#26262E] flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="font-space font-bold text-xl tracking-tight text-white flex items-baseline opacity-50">
