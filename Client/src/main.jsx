@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { lazy } from "react";
 import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/clerk-react";
