@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { extractTextFromFile } from "../lib/parseResume";
 import { displayName } from "../lib/displayName";
+import Brand from "../components/Brand";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const MAX_CHARS = 50_000;
@@ -173,7 +174,7 @@ export default function ResumePage() {
           animate={{ opacity: 1 }}
           className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold"
         >
-          Résumé Gap Analysis
+          <Brand /> RÉSUMÉ Gap Analysis
         </motion.div>
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
