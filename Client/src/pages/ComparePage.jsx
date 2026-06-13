@@ -827,7 +827,32 @@ export default function ComparePage() {
       ) : (
         <>
           {/* Share + export toolbar */}
-          <section className="flex justify-end gap-2">
+          <section className="flex flex-wrap items-center justify-end gap-2">
+            {/* Month window toggle — mono pills matching the app's window switch */}
+            <div
+              className="flex bg-[#121216] border border-[#26262E] rounded-lg p-0.5 mr-auto"
+              role="group"
+              aria-label="Time window"
+            >
+              {ALLOWED_WINDOWS.map((m) => {
+                const active = windowMonths === m;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setWindowMonths(m)}
+                    aria-label={`Last ${m} months`}
+                    aria-pressed={active}
+                    className={`relative px-3 py-2 rounded-md font-mono text-xs uppercase tracking-wider transition-colors ${
+                      active
+                        ? "bg-[#EB0029] text-white"
+                        : "text-[#5C5C66] hover:text-[#9A9AA6]"
+                    }`}
+                  >
+                    {m}M
+                  </button>
+                );
+              })}
+            </div>
             <button
               onClick={handleCopyLink}
               aria-label="Copy shareable link to this comparison"
