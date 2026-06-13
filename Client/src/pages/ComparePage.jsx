@@ -505,6 +505,18 @@ export default function ComparePage() {
   useEffect(() => {
     if (!allLoaded || hydratedRef.current) return;
     hydratedRef.current = true;
+
+    // Window: validate ?w= against the allowed set, fall back to 12.
+    const rawWindow = searchParams.get("w");
+    if (rawWindow !== null) {
+      const win = normalizeWindow(rawWindow);
+      if (win !== windowMonths) {
+        skipNextSyncRef.current = true;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setWindowMonths(win);
+      }
+    }
+
     const raw = searchParams.get("skills");
     if (!raw) return;
     const valid = new Set(allSkills.map((s) => s.skill));
@@ -520,7 +532,7 @@ export default function ComparePage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(keys);
     }
-  }, [allLoaded, allSkills, searchParams]);
+  }, [allLoaded, allSkills, searchParams, windowMonths]);
 
   // Keep the ?skills= query param in sync with the selection so every
   // comparison is a shareable URL. Skip writing during the very first render
