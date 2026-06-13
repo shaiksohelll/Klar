@@ -1,3 +1,5 @@
+import Brand from "../components/Brand";
+
 const STEPS = [
   {
     n: "01",
@@ -20,8 +22,6 @@ const STEPS = [
     d: "The dataset refreshes automatically every few hours and stale postings are pruned, so what you see reflects the current market — not last year's.",
   },
 ];
-
-import Brand from "../components/Brand";
 
 export default function AboutPage() {
   return (
