@@ -531,7 +531,7 @@ export default function ComparePage() {
           Skills, side by side.
         </h1>
         <p className="text-base md:text-lg text-[#9A9AA6] font-medium">
-          Pick 2\u20133 skills to compare demand, salary and how postings have
+          Pick 2–3 skills to compare demand, salary and how postings have
           trended over the last 12 months.
         </p>
       </section>
@@ -566,7 +566,7 @@ export default function ComparePage() {
                     aria-label={`Remove ${name}`}
                     className="w-5 h-5 flex items-center justify-center rounded-full text-[#9A9AA6] hover:text-white hover:bg-[#26262E] transition-colors"
                   >
-                    \u00D7
+                    ×
                   </button>
                 </span>
               );
