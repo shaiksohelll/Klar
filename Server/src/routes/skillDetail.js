@@ -2,6 +2,7 @@ import { Router } from "express";
 import Job from "../models/Job.js";
 import { getSkillPairs } from "../aggregations/skillPairs.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
+import { createTtlCache } from "../lib/ttlCache.js";
 
 const router = Router();
 
@@ -9,8 +10,8 @@ const router = Router();
 // Key: `${normalizedName}:${months}`. Value: { data, expiresAt }.
 // TTL is long (6 h) because the underlying data only changes when
 // ingestAdzuna() runs, which calls clearDetailCache() after each successful write.
-const DETAIL_CACHE = new Map();
 const DETAIL_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const DETAIL_CACHE = createTtlCache({ ttlMs: DETAIL_TTL_MS, maxEntries: 500 });
 
 /**
  * Clears the skill-detail cache. Called by ingestAdzuna() right after a
@@ -36,12 +37,15 @@ async function countAgg(pipeline) {
 router.get("/:name", async (req, res, next) => {
   try {
     const name = req.params.name;
-    const months = Number(req.query.months) || 12;
+    // Clamp to [1, 24] like every other route so an attacker can't request an
+    // arbitrarily large window (and to bound the cache key space). sinceDate
+    // below receives this clamped value.
+    const months = Math.min(24, Math.max(1, Number(req.query.months) || 12));
     const cacheKey = `${name}:${months}`;
 
-    const cached = DETAIL_CACHE.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return res.json(cached.data);
+    const hit = DETAIL_CACHE.get(cacheKey);
+    if (hit) {
+      return res.json(hit);
     }
 
     const since = sinceDate(months);
@@ -140,7 +144,7 @@ router.get("/:name", async (req, res, next) => {
       })),
     };
 
-    DETAIL_CACHE.set(cacheKey, { data, expiresAt: Date.now() + DETAIL_TTL_MS });
+    DETAIL_CACHE.set(cacheKey, data);
     res.json(data);
   } catch (err) {
     next(err);
