@@ -339,7 +339,7 @@ function SkillColumn({ skillKey, color, state }) {
       {/* Salary */}
       <div>
         <div className="font-mono text-[10px] text-[#5C5C66] uppercase tracking-widest mb-1">
-          Salary \u00B7 Disclosed
+          Salary · Disclosed
         </div>
         {hasSalary ? (
           <>
