@@ -200,3 +200,5 @@ Klar doesn't carry an open-source license yet — for now, **all rights reserved
 *Built with sheer determination, one commit at a time.*
 
 </div>
+
+<!-- CI smoke test: GitLab pipeline + mirror verified 2026-06-13 -->
