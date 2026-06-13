@@ -3,6 +3,7 @@ import Job from "../models/Job.js";
 import { getSkillPairs } from "../aggregations/skillPairs.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
+import { resolveSkill } from "../lib/validate.js";
 
 const router = Router();
 
@@ -36,7 +37,10 @@ async function countAgg(pipeline) {
 // GET /api/skill/:name?months=12  → enriched detail for one skill
 router.get("/:name", async (req, res, next) => {
   try {
-    const name = req.params.name;
+    const name = resolveSkill(req.params.name);
+    if (!name) {
+      return res.status(400).json({ ok: false, error: "Unknown skill" });
+    }
     // Clamp to [1, 24] like every other route so an attacker can't request an
     // arbitrarily large window (and to bound the cache key space). sinceDate
     // below receives this clamped value.
