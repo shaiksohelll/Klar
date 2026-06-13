@@ -223,6 +223,7 @@ function SkillPicker({ allSkills, selected, onAdd, disabled }) {
         disabled={disabled}
         onChange={handleQueryChange}
         onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={
           disabled ? `Maximum ${MAX_SKILLS} skills` : "Add a skill to compare\u2026"
