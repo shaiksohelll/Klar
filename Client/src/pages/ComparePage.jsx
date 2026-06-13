@@ -464,12 +464,12 @@ export default function ComparePage() {
       const cacheKey = `${key}:${MONTHS}`;
       const cached = cacheRef.current.get(cacheKey);
       if (cached) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         setData((d) => (d[key] === cached ? d : { ...d, [key]: cached }));
         continue;
       }
       // Skip if already in-flight or resolved for this key this pass.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setData((d) => (d[key] ? d : { ...d, [key]: { loading: true } }));
 
       Promise.all([
