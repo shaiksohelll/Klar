@@ -101,8 +101,10 @@ app.get("/health", (req, res) => {
 
 // ── Ingest (protected) ─────────────────────────────────────────────────────
 // Calling this endpoint costs real Adzuna API quota. We protect it with a
-// shared secret passed in the X-Ingest-Secret header.
-app.get("/api/ingest/adzuna", async (req, res, next) => {
+// shared secret passed in the X-Ingest-Secret header. POST (not GET) so it
+// can't be accidentally triggered by a browser navigation or uptime-monitor
+// GET, and to match its JSearch twin and HTTP semantics for a mutating call.
+app.post("/api/ingest/adzuna", async (req, res, next) => {
   // Fail-closed: reject if the secret is unset OR the header doesn't match.
   // This ensures the route never falls through to run ingestion without a key.
   if (!isValidIngestSecret(req)) {

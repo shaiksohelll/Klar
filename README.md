@@ -147,6 +147,7 @@ Trigger one ingest to seed data (use your own secret), then open `http://localho
 
     curl -X POST http://localhost:5000/api/ingest/adzuna -H "X-Ingest-Secret: your_secret"
 
+
 > ⚠️ Never commit your `.env` files or real keys — keep `.env` in `.gitignore`.
 
 </details>

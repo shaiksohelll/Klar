@@ -62,6 +62,31 @@ describe("POST /api/ingest", () => {
   });
 });
 
+describe("POST /api/ingest/adzuna", () => {
+  it("rejects with 401 when no secret header is provided", async () => {
+    const res = await request(app).post("/api/ingest/adzuna");
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ ok: false, error: "Unauthorized" });
+  });
+
+  it("runs Adzuna ingestion with a valid secret", async () => {
+    vi.clearAllMocks();
+    const res = await request(app)
+      .post("/api/ingest/adzuna")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, fetched: 0, upserted: 0 });
+    expect(ingestAdzuna).toHaveBeenCalled();
+  });
+
+  it("returns 404 for the old GET route (method flipped to POST)", async () => {
+    const res = await request(app)
+      .get("/api/ingest/adzuna")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("POST /api/resume-gap", () => {
   it("returns 400 when body is not JSON (non-JSON Content-Type)", async () => {
     // When Content-Type is not application/json, express.json() leaves
