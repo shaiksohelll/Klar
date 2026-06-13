@@ -374,7 +374,6 @@ function SkillColumn({ skillKey, color, state }) {
 }
 
 export default function ComparePage() {
-  const shouldReduceMotion = useReducedMotion();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Valid skill universe (powers the picker + URL validation).
@@ -626,11 +625,6 @@ export default function ComparePage() {
           </section>
         </>
       )}
-
-      {/* Keep the reduced-motion hook referenced even when no animation runs. */}
-      <span className="sr-only" aria-hidden="true">
-        {shouldReduceMotion ? "" : ""}
-      </span>
     </main>
   );
 }
