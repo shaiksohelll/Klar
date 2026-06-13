@@ -468,6 +468,9 @@ export default function ComparePage() {
   // Selected raw skill keys (order matters — drives palette assignment).
   const [selected, setSelected] = useState([]);
 
+  // Active month window (3 | 6 | 12). Persisted in the URL as ?w=.
+  const [windowMonths, setWindowMonths] = useState(DEFAULT_WINDOW);
+
   // Per-skill { loading, error, detail, salary }, keyed by raw skill key.
   const [data, setData] = useState({});
 
