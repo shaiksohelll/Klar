@@ -6,9 +6,16 @@ import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// Window for every fetch on this page. Kept constant so the cache key
-// (`${skill}:12`) and the API params stay in sync.
-const MONTHS = 12;
+// Allowed month windows for this page's data. The active window drives every
+// fetch and the per-skill cache key, and is persisted in the URL as ?w=.
+const ALLOWED_WINDOWS = [3, 6, 12];
+const DEFAULT_WINDOW = 12;
+
+// Normalize an arbitrary value to a valid window, falling back to 12.
+function normalizeWindow(value) {
+  const n = Number(value);
+  return ALLOWED_WINDOWS.includes(n) ? n : DEFAULT_WINDOW;
+}
 
 // Maximum number of skills that can be compared at once. Minimum to render
 // the comparison is 2.
