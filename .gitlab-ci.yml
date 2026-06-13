@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GitLab CI — pre-merge validation gate
+#
+# Mirrors .github/workflows/ci.yml. The two pipelines COEXIST by design:
+#   • GitLab CI       → runs pre-merge, so MRs get a validation gate in GitLab
+#                        (previously MRs showed "no pipelines").
+#   • GitHub Actions  → keeps running post-mirror on GitHub. NOT touched here.
+#
+# Why node:24 (Debian) and NOT node:24-alpine:
+#   Server/src/aggregations/salaryInsights.test.js uses mongodb-memory-server,
+#   which downloads a real `mongod` binary at test time. That binary is built
+#   against glibc; Alpine ships musl, so the mongod would fail to start. The
+#   Debian-based node:24 image provides glibc, so the binary runs cleanly.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default image for all jobs (Debian-based — see rationale above).
+image: node:24
+
+stages:
+  - test
+
+# Run on merge request events and on pushes to the default branch, mirroring
+# GitHub's `push: [main]` + `pull_request: [main]`. Without this, branch pushes
+# would also spawn pipelines and double up with the MR pipeline.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ── Server: Vitest suite ─────────────────────────────────────────────────────
+# Includes salaryInsights.test.js (mongodb-memory-server) and ttlCache.test.js.
+server-tests:
+  stage: test
+  interruptible: true
+  variables:
+    # Download the mongod binary into a path we can cache, so the first run
+    # fetches it once and later runs reuse it (fast, no repeated download).
+    MONGOMS_DOWNLOAD_DIR: "$CI_PROJECT_DIR/.cache/mongodb-binaries"
+  cache:
+    # Key on the lockfile so the cache busts only when dependencies change.
+    key:
+      files:
+        - Server/package-lock.json
+    paths:
+      - Server/.npm/
+      - .cache/mongodb-binaries/
+  script:
+    - cd Server
+    - npm ci --cache .npm --prefer-offline
+    - npm test
+
+# ── Client: ESLint ───────────────────────────────────────────────────────────
+client-lint:
+  stage: test
+  interruptible: true
+  cache:
+    key:
+      files:
+        - Client/package-lock.json
+    paths:
+      - Client/.npm/
+  script:
+    - cd Client
+    - npm ci --cache .npm --prefer-offline
+    - npm run lint
