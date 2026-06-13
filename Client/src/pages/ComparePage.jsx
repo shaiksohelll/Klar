@@ -558,28 +558,32 @@ export default function ComparePage() {
   }, [selected, windowMonths, setSearchParams]);
 
   // Fetch detail + salary for each selected skill independently, caching by
-  // `${skill}:12`. Each skill's loading/error state is isolated.
+  // `${skill}:${windowMonths}`. Each skill's loading/error state is isolated.
+  // Changing the window changes the cache key, so any selected skill not yet
+  // cached at the new window is refetched.
   useEffect(() => {
     let cancelled = false;
 
     for (const key of selected) {
-      const cacheKey = `${key}:${MONTHS}`;
+      const cacheKey = `${key}:${windowMonths}`;
       const cached = cacheRef.current.get(cacheKey);
       if (cached) {
-         
         setData((d) => (d[key] === cached ? d : { ...d, [key]: cached }));
         continue;
       }
-      // Skip if already in-flight or resolved for this key this pass.
-       
-      setData((d) => (d[key] ? d : { ...d, [key]: { loading: true } }));
+      // Show a loading state for this skill at the new window. Unlike the
+      // previous guard we always reset to loading here because a window change
+      // can leave stale (other-window) data in `data[key]`.
+      setData((d) =>
+        d[key] && d[key].loading ? d : { ...d, [key]: { loading: true } },
+      );
 
       Promise.all([
         axios.get(`${API}/api/skill/${encodeURIComponent(key)}`, {
-          params: { months: MONTHS },
+          params: { months: windowMonths },
         }),
         axios.get(`${API}/api/salary`, {
-          params: { skill: key, months: MONTHS },
+          params: { skill: key, months: windowMonths },
         }),
       ])
         .then(([detailRes, salaryRes]) => {
@@ -601,7 +605,7 @@ export default function ComparePage() {
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [selected, windowMonths]);
 
   const addSkill = useCallback((key) => {
     setSelected((prev) => {
