@@ -702,7 +702,7 @@ export default function ComparePage() {
       doc.setFontSize(10);
       doc.setTextColor(120);
       doc.text(
-        `Exported ${new Date().toLocaleDateString()} \u00B7 Last 12 months`,
+        `Exported ${new Date().toLocaleDateString()} \u00B7 Last ${windowMonths} months`,
         marginX,
         y,
       );
@@ -745,7 +745,7 @@ export default function ComparePage() {
     } catch {
       // PDF generation failed (dependency missing / runtime error) — no-op.
     }
-  }, [selected, data]);
+  }, [selected, data, windowMonths]);
 
   // Build the multi-series trend chart input: shared sorted month axis +
   // one series per skill that has trend.length > 1.
