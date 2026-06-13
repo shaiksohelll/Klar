@@ -548,11 +548,14 @@ export default function ComparePage() {
         const next = new URLSearchParams(prev);
         if (selected.length) next.set("skills", selected.join(","));
         else next.delete("skills");
+        // Only persist a non-default window so default URLs stay clean.
+        if (windowMonths !== DEFAULT_WINDOW) next.set("w", String(windowMonths));
+        else next.delete("w");
         return next;
       },
       { replace: true },
     );
-  }, [selected, setSearchParams]);
+  }, [selected, windowMonths, setSearchParams]);
 
   // Fetch detail + salary for each selected skill independently, caching by
   // `${skill}:12`. Each skill's loading/error state is isolated.
