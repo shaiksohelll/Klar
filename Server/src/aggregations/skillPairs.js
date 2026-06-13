@@ -1,12 +1,13 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
+import { createTtlCache } from "../lib/ttlCache.js";
 
 // ── In-memory TTL cache for getSkillPairs ──────────────────────────────────
 // Key: `${normalizedSkill}:${limit}`. Value: { data, expiresAt }.
 // TTL is long (6 h) because pair co-occurrence data only changes when
 // ingestAdzuna() runs, which calls clearPairsCache() after each successful write.
-const PAIRS_CACHE = new Map();
 const PAIRS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const PAIRS_CACHE = createTtlCache({ ttlMs: PAIRS_TTL_MS, maxEntries: 500 });
 
 /**
  * Clears the pairs cache. Called by ingestAdzuna() right after a successful
@@ -23,7 +24,7 @@ export function clearPairsCache() {
  * Window-independent: counts across ALL jobs so the percentages are stable
  * and comparable regardless of the time window selected in the UI.
  *
- * Results are cached in-process for 10 minutes (TTL). The cache invalidates
+ * Results are cached in-process for 6 hours (TTL). The cache invalidates
  * naturally — no manual busting required.
  *
  * @param {string} skill  - the skill to look up (casing is normalised internally)
@@ -34,10 +35,8 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
   const normalized = skill.toLowerCase().trim();
   const cacheKey = `${normalized}:${limit}`;
 
-  const cached = PAIRS_CACHE.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
+  const hit = PAIRS_CACHE.get(cacheKey);
+  if (hit) return hit;
 
   // Deduplicated baseCount: aggregate rather than countDocuments so we can
   // prepend the dedupe stages. This ensures the denominator matches the counts
@@ -51,7 +50,7 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
 
   if (baseCount === 0) {
     const result = { skill: normalized, baseCount: 0, pairs: [] };
-    PAIRS_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + PAIRS_TTL_MS });
+    PAIRS_CACHE.set(cacheKey, result);
     return result;
   }
 
@@ -73,6 +72,6 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
   }));
 
   const result = { skill: normalized, baseCount, pairs };
-  PAIRS_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + PAIRS_TTL_MS });
+  PAIRS_CACHE.set(cacheKey, result);
   return result;
 }
