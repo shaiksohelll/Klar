@@ -1,12 +1,13 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
+import { createTtlCache } from "../lib/ttlCache.js";
 
 // ── In-memory TTL cache for getTopCompanies ─────────────────────────────────
 // Key: `${role||"all"}:${skill||"all"}:${months}:${limit}`. Value: { data, expiresAt }.
 // TTL is long (6 h) because data only changes when ingestAdzuna() runs, which
 // calls clearCompaniesCache() immediately after each successful write.
-const COMPANIES_CACHE = new Map();
 const COMPANIES_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const COMPANIES_CACHE = createTtlCache({ ttlMs: COMPANIES_TTL_MS, maxEntries: 500 });
 
 /**
  * Clears the companies cache. Called by ingestAdzuna() right after a
@@ -46,10 +47,8 @@ export async function getTopCompanies({
   limit = 20,
 } = {}) {
   const cacheKey = `${role || "all"}:${skill || "all"}:${months}:${limit}`;
-  const cached = COMPANIES_CACHE.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
+  const hit = COMPANIES_CACHE.get(cacheKey);
+  if (hit) return hit;
 
   // Build the match stage.
   const since = new Date();
@@ -103,9 +102,6 @@ export async function getTopCompanies({
     };
   });
 
-  COMPANIES_CACHE.set(cacheKey, {
-    data: companies,
-    expiresAt: Date.now() + COMPANIES_TTL_MS,
-  });
+  COMPANIES_CACHE.set(cacheKey, companies);
   return companies;
 }
