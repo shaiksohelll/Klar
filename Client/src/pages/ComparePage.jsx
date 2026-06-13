@@ -390,6 +390,9 @@ export default function ComparePage() {
   const cacheRef = useRef(new Map());
   // Guards URL hydration so it only runs once, after the skill list loads.
   const hydratedRef = useRef(false);
+  // Set true by hydration so the very next URL-sync pass is skipped
+  // (selected hasn't updated yet in that commit — avoids wiping ?skills=).
+  const skipNextSyncRef = useRef(false);
 
   // Fetch the valid skill list on mount.
   useEffect(() => {
@@ -425,6 +428,7 @@ export default function ComparePage() {
       }
     }
     if (keys.length) {
+      skipNextSyncRef.current = true;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(keys);
     }
@@ -435,6 +439,10 @@ export default function ComparePage() {
   // pass before hydration has had a chance to run.
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false;
+      return;
+    }
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -455,10 +463,12 @@ export default function ComparePage() {
       const cacheKey = `${key}:${MONTHS}`;
       const cached = cacheRef.current.get(cacheKey);
       if (cached) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setData((d) => (d[key] === cached ? d : { ...d, [key]: cached }));
         continue;
       }
       // Skip if already in-flight or resolved for this key this pass.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setData((d) => (d[key] ? d : { ...d, [key]: { loading: true } }));
 
       Promise.all([
