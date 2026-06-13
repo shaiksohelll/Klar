@@ -1,12 +1,13 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
+import { createTtlCache } from "../lib/ttlCache.js";
 
 // ── In-memory TTL cache for getSalaryInsights ────────────────────────────────
 // Key: `${skill||"all"}:${role||"all"}:${months}`. Value: { data, expiresAt }.
 // 6h TTL — data only changes when an ingest cron runs, which calls
 // clearSalaryCache() immediately afterwards.
-const SALARY_CACHE = new Map();
 const SALARY_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const SALARY_CACHE = createTtlCache({ ttlMs: SALARY_TTL_MS, maxEntries: 500 });
 
 /**
  * Clears the salary cache. Called by ingestAdzuna() and ingestJSearch()
@@ -58,10 +59,8 @@ function median(sorted) {
  */
 export async function getSalaryInsights({ skill, role, months = 12 } = {}) {
   const cacheKey = `${skill || "all"}:${role || "all"}:${months}`;
-  const cached = SALARY_CACHE.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
+  const hit = SALARY_CACHE.get(cacheKey);
+  if (hit) return hit;
 
   const since = new Date();
   since.setMonth(since.getMonth() - Number(months));
@@ -143,6 +142,6 @@ export async function getSalaryInsights({ skill, role, months = 12 } = {}) {
     primary: byCurrency[0] ?? null,
   };
 
-  SALARY_CACHE.set(cacheKey, { data, expiresAt: Date.now() + SALARY_TTL_MS });
+  SALARY_CACHE.set(cacheKey, data);
   return data;
 }

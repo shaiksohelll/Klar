@@ -1,18 +1,19 @@
 import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
+import { createTtlCache } from "../lib/ttlCache.js";
 
 // ── In-memory TTL cache for getAllSkills ────────────────────────────────────
 // Key: months (number). Value: { data, expiresAt }.
 // TTL is long (6 h) because data only changes when ingestAdzuna() runs, which
 // calls clearTrendingCaches() immediately after each successful write.
-const ALL_SKILLS_CACHE = new Map();
 const ALL_SKILLS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const ALL_SKILLS_CACHE = createTtlCache({ ttlMs: ALL_SKILLS_TTL_MS, maxEntries: 500 });
 
 // ── In-memory TTL cache for getTrendingSkills ───────────────────────────────
 // Key: `${role||"all"}:${months}:${limit}`. Value: { data, expiresAt }.
-const TRENDING_CACHE = new Map();
 const TRENDING_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const TRENDING_CACHE = createTtlCache({ ttlMs: TRENDING_TTL_MS, maxEntries: 500 });
 
 /**
  * Clears both trending caches. Called by ingestAdzuna() right after a
@@ -30,17 +31,15 @@ export function clearTrendingCaches() {
  *  - no velocity/snapshot queries (not needed for search/filter UX)
  *  - adds remoteShare as a 0-1 float so the frontend can sort/filter on it
  *
- * Results are cached in-process for 10 minutes (TTL). The cache invalidates
+ * Results are cached in-process for 6 hours (TTL). The cache invalidates
  * naturally — no manual busting required.
  *
  * Shape: Array<{ skill, demand, remoteCount, remoteShare }>
  */
 export async function getAllSkills({ months = 12 } = {}) {
   const key = Number(months);
-  const cached = ALL_SKILLS_CACHE.get(key);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
+  const hit = ALL_SKILLS_CACHE.get(key);
+  if (hit) return hit;
 
   const since = new Date();
   since.setMonth(since.getMonth() - key);
@@ -80,16 +79,14 @@ export async function getAllSkills({ months = 12 } = {}) {
     remoteShare: s.demand > 0 ? s.remoteCount / s.demand : 0,
   }));
 
-  ALL_SKILLS_CACHE.set(key, { data: skills, expiresAt: Date.now() + ALL_SKILLS_TTL_MS });
+  ALL_SKILLS_CACHE.set(key, skills);
   return skills;
 }
 
 export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
   const cacheKey = `${role || "all"}:${months}:${limit}`;
-  const cached = TRENDING_CACHE.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
+  const hit = TRENDING_CACHE.get(cacheKey);
+  if (hit) return hit;
 
   // Only look at jobs posted within the last N months
   const since = new Date();
@@ -173,7 +170,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
       velocityReady: false,
       velocityBasisDays: null,
     };
-    TRENDING_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TRENDING_TTL_MS });
+    TRENDING_CACHE.set(cacheKey, result);
     return result;
   }
 
@@ -209,7 +206,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
       velocityReady: false,
       velocityBasisDays: null,
     };
-    TRENDING_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TRENDING_TTL_MS });
+    TRENDING_CACHE.set(cacheKey, result);
     return result;
   }
 
@@ -263,6 +260,6 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
     velocityReady: true,
     velocityBasisDays: gapDays,
   };
-  TRENDING_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TRENDING_TTL_MS });
+  TRENDING_CACHE.set(cacheKey, result);
   return result;
 }
