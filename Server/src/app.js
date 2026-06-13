@@ -10,6 +10,7 @@ import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.j
 import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
+import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
 import { makeDedupeKey } from "./lib/dedupe.js";
 import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
@@ -207,7 +208,13 @@ app.post("/api/admin/backfill-dedupe", async (req, res, next) => {
 // ── Trending skills ────────────────────────────────────────────────────────
 app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
   try {
-    const { role } = req.query;
+    let role;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
@@ -270,8 +277,19 @@ app.use("/api/skill", readLimiter, skillDetailRouter);
 // Public, read-only. Optional ?role=, ?skill=, ?months= filters.
 app.get("/api/companies", readLimiter, async (req, res, next) => {
   try {
-    const role = req.query.role || undefined;
-    const skill = req.query.skill || undefined;
+    let role, skill;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+    if (req.query.skill != null && String(req.query.skill).trim() !== "") {
+      skill = resolveSkill(req.query.skill);
+      if (!skill) {
+        return res.status(400).json({ ok: false, error: "Unknown skill — see /api/skills/all for valid values." });
+      }
+    }
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
     const companies = await getTopCompanies({ role, skill, months, limit });
@@ -287,8 +305,19 @@ app.get("/api/companies", readLimiter, async (req, res, next) => {
 // NOT added to /api/warm — query space is too large to pre-warm meaningfully.
 app.get("/api/salary", readLimiter, async (req, res, next) => {
   try {
-    const skill = req.query.skill || undefined;
-    const role = req.query.role || undefined;
+    let role, skill;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+    if (req.query.skill != null && String(req.query.skill).trim() !== "") {
+      skill = resolveSkill(req.query.skill);
+      if (!skill) {
+        return res.status(400).json({ ok: false, error: "Unknown skill — see /api/skills/all for valid values." });
+      }
+    }
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const data = await getSalaryInsights({ skill, role, months });
     res.json({ ok: true, ...data });
