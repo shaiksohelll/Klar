@@ -1,1 +1,23 @@
-{}
+{
+  "name": "klar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Klar — real-time job-market skill & salary analytics (MERN).",
+  "license": "MIT",
+  "author": "Shaik Sohel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shaiksohelll/Klar.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "npm --prefix Server test",
+    "lint": "npm --prefix Client run lint",
+    "build": "npm --prefix Client run build",
+    "dev:server": "npm --prefix Server run dev",
+    "dev:client": "npm --prefix Client run dev",
+    "install:all": "npm --prefix Server install && npm --prefix Client install"
+  }
+}

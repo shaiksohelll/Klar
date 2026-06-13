@@ -8,3 +8,15 @@ client/dist/
 *.log
 .DS_Store
 .vite/
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# CI caches (GitLab pipeline: Server/.npm, .cache/mongodb-binaries)
+.npm/
+.cache/
+
+# Misc
+*.local
+coverage/
