@@ -223,6 +223,7 @@ function SkillPicker({ allSkills, selected, onAdd, disabled }) {
         disabled={disabled}
         onChange={handleQueryChange}
         onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={
           disabled ? `Maximum ${MAX_SKILLS} skills` : "Add a skill to compare\u2026"
@@ -463,12 +464,12 @@ export default function ComparePage() {
       const cacheKey = `${key}:${MONTHS}`;
       const cached = cacheRef.current.get(cacheKey);
       if (cached) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         setData((d) => (d[key] === cached ? d : { ...d, [key]: cached }));
         continue;
       }
       // Skip if already in-flight or resolved for this key this pass.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setData((d) => (d[key] ? d : { ...d, [key]: { loading: true } }));
 
       Promise.all([
