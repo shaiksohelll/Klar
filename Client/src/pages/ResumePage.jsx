@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { extractTextFromFile } from "../lib/parseResume";
 import { displayName } from "../lib/displayName";
+import Brand from "../components/Brand";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const MAX_CHARS = 50_000;
@@ -126,7 +127,7 @@ export default function ResumePage() {
     const trimmed = text.trim();
     if (!trimmed) {
       setResult(null);
-      setApiError("Paste your résumé text or upload a file first.");
+      setApiError("Paste your resume text or upload a file first.");
       return;
     }
     const payload = trimmed.slice(0, MAX_CHARS);
@@ -173,7 +174,7 @@ export default function ResumePage() {
           animate={{ opacity: 1 }}
           className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold"
         >
-          Résumé Gap Analysis
+          <Brand /> RESUME Gap Analysis
         </motion.div>
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
@@ -190,7 +191,7 @@ export default function ResumePage() {
           transition={{ delay: 0.2, duration: 0.6, ease: EASE }}
           className="text-lg text-[#9A9AA6] font-medium"
         >
-          Paste your résumé or upload a file. We compare it against the current top-40
+          Paste your resume or upload a file. We compare it against the current top-40
           in-demand skills from live job postings — no AI, no estimates.
         </motion.p>
       </section>
@@ -206,7 +207,7 @@ export default function ResumePage() {
         <div
           role="button"
           tabIndex={0}
-          aria-label="Upload résumé file"
+          aria-label="Upload resume file"
           onDragEnter={() => setIsDragging(true)}
           onDragLeave={() => setIsDragging(false)}
           onDragOver={(e) => e.preventDefault()}
@@ -231,7 +232,7 @@ export default function ResumePage() {
             className="sr-only"
             onChange={handleFileChange}
             id="resume-file-input"
-            aria-label="Upload résumé file"
+            aria-label="Upload resume file"
           />
           <div className="text-3xl select-none">📄</div>
           <div className="text-center">
@@ -281,9 +282,9 @@ export default function ResumePage() {
             }}
             rows={10}
             maxLength={MAX_CHARS}
-            placeholder="Paste your résumé here…"
+            placeholder="Paste your resume here…"
             className="w-full rounded-xl bg-[#08080A] border border-[#26262E] focus:border-[#EB0029] focus:outline-none text-[#F4F4F6] placeholder-[#5C5C66] text-sm p-4 resize-y transition-colors font-mono leading-relaxed"
-            aria-label="Résumé text"
+            aria-label="Resume text"
           />
           <div className="absolute bottom-3 right-3 font-mono text-[10px] text-[#5C5C66]">
             {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
@@ -323,7 +324,7 @@ export default function ResumePage() {
                 Analyzing…
               </span>
             ) : (
-              "Analyze Résumé"
+              "Analyze Resume"
             )}
           </button>
           {(text || result) && (
@@ -394,7 +395,7 @@ export default function ResumePage() {
                       }
                       return (result?.missing ?? []).length === 0
                         ? "You've got every skill in the top 40 — impressive."
-                        : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your résumé.`;
+                        : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your resume.`;
                     })()}
                   </p>
                 </div>
@@ -462,14 +463,14 @@ export default function ResumePage() {
               </motion.div>
             )}
 
-            {/* Résumé skills detected (secondary context) */}
+            {/* Resume skills detected (secondary context) */}
             {(result?.resumeSkills ?? []).length > 0 && (
               <motion.div
                 variants={itemVariants}
                 className="rounded-xl border border-[#26262E] bg-[#0A0A0E] p-5 space-y-3"
               >
                 <div className="font-mono text-xs uppercase tracking-widest text-[#5C5C66]">
-                  All skills detected in your résumé
+                  All skills detected in your resume
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(result?.resumeSkills ?? []).map((skill) => (

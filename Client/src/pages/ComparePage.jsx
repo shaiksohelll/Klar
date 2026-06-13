@@ -6,9 +6,16 @@ import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// Window for every fetch on this page. Kept constant so the cache key
-// (`${skill}:12`) and the API params stay in sync.
-const MONTHS = 12;
+// Allowed month windows for this page's data. The active window drives every
+// fetch and the per-skill cache key, and is persisted in the URL as ?w=.
+const ALLOWED_WINDOWS = [3, 6, 12];
+const DEFAULT_WINDOW = 12;
+
+// Normalize an arbitrary value to a valid window, falling back to 12.
+function normalizeWindow(value) {
+  const n = Number(value);
+  return ALLOWED_WINDOWS.includes(n) ? n : DEFAULT_WINDOW;
+}
 
 // Maximum number of skills that can be compared at once. Minimum to render
 // the comparison is 2.
@@ -108,6 +115,24 @@ function downloadBlob(filename, content, mime) {
 // Build the dash-joined skill-key slug used in export filenames.
 function exportSlug(selected) {
   return selected.join("-") || "skills";
+}
+
+// PDF-safe currency label. jsPDF's Helvetica has no ₹ glyph, so the on-screen
+// symbols from currencySymbol() can't be reused in the PDF export. Map each
+// currency code to an ASCII-safe label instead.
+function pdfCurrencyLabel(code) {
+  switch (code) {
+    case "INR":
+      return "Rs ";
+    case "USD":
+      return "$";
+    case "GBP":
+      return "GBP ";
+    case "EUR":
+      return "EUR ";
+    default:
+      return code ? `${code} ` : "";
+  }
 }
 
 // ── Chart geometry ────────────────────────────────────────────────────────────
@@ -443,6 +468,9 @@ export default function ComparePage() {
   // Selected raw skill keys (order matters — drives palette assignment).
   const [selected, setSelected] = useState([]);
 
+  // Active month window (3 | 6 | 12). Persisted in the URL as ?w=.
+  const [windowMonths, setWindowMonths] = useState(DEFAULT_WINDOW);
+
   // Per-skill { loading, error, detail, salary }, keyed by raw skill key.
   const [data, setData] = useState({});
 
@@ -454,11 +482,11 @@ export default function ComparePage() {
   // (selected hasn't updated yet in that commit — avoids wiping ?skills=).
   const skipNextSyncRef = useRef(false);
 
-  // Fetch the valid skill list on mount.
+  // Fetch the valid skill list, refetching whenever the window changes.
   useEffect(() => {
     let cancelled = false;
     axios
-      .get(`${API}/api/skills/all`, { params: { months: MONTHS } })
+      .get(`${API}/api/skills/all`, { params: { months: windowMonths } })
       .then((res) => {
         if (cancelled) return;
         setAllSkills(res.data.skills || []);
@@ -470,13 +498,25 @@ export default function ComparePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [windowMonths]);
 
   // Hydrate selection from ?skills=react,node.js once the valid list is known.
   // Validate against the list and drop unknown keys.
   useEffect(() => {
     if (!allLoaded || hydratedRef.current) return;
     hydratedRef.current = true;
+
+    // Window: validate ?w= against the allowed set, fall back to 12.
+    const rawWindow = searchParams.get("w");
+    if (rawWindow !== null) {
+      const win = normalizeWindow(rawWindow);
+      if (win !== windowMonths) {
+        skipNextSyncRef.current = true;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setWindowMonths(win);
+      }
+    }
+
     const raw = searchParams.get("skills");
     if (!raw) return;
     const valid = new Set(allSkills.map((s) => s.skill));
@@ -492,7 +532,7 @@ export default function ComparePage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(keys);
     }
-  }, [allLoaded, allSkills, searchParams]);
+  }, [allLoaded, allSkills, searchParams, windowMonths]);
 
   // Keep the ?skills= query param in sync with the selection so every
   // comparison is a shareable URL. Skip writing during the very first render
@@ -508,35 +548,42 @@ export default function ComparePage() {
         const next = new URLSearchParams(prev);
         if (selected.length) next.set("skills", selected.join(","));
         else next.delete("skills");
+        // Only persist a non-default window so default URLs stay clean.
+        if (windowMonths !== DEFAULT_WINDOW) next.set("w", String(windowMonths));
+        else next.delete("w");
         return next;
       },
       { replace: true },
     );
-  }, [selected, setSearchParams]);
+  }, [selected, windowMonths, setSearchParams]);
 
   // Fetch detail + salary for each selected skill independently, caching by
-  // `${skill}:12`. Each skill's loading/error state is isolated.
+  // `${skill}:${windowMonths}`. Each skill's loading/error state is isolated.
+  // Changing the window changes the cache key, so any selected skill not yet
+  // cached at the new window is refetched.
   useEffect(() => {
     let cancelled = false;
 
     for (const key of selected) {
-      const cacheKey = `${key}:${MONTHS}`;
+      const cacheKey = `${key}:${windowMonths}`;
       const cached = cacheRef.current.get(cacheKey);
       if (cached) {
-         
         setData((d) => (d[key] === cached ? d : { ...d, [key]: cached }));
         continue;
       }
-      // Skip if already in-flight or resolved for this key this pass.
-       
-      setData((d) => (d[key] ? d : { ...d, [key]: { loading: true } }));
+      // Show a loading state for this skill at the new window. Unlike the
+      // previous guard we always reset to loading here because a window change
+      // can leave stale (other-window) data in `data[key]`.
+      setData((d) =>
+        d[key] && d[key].loading ? d : { ...d, [key]: { loading: true } },
+      );
 
       Promise.all([
         axios.get(`${API}/api/skill/${encodeURIComponent(key)}`, {
-          params: { months: MONTHS },
+          params: { months: windowMonths },
         }),
         axios.get(`${API}/api/salary`, {
-          params: { skill: key, months: MONTHS },
+          params: { skill: key, months: windowMonths },
         }),
       ])
         .then(([detailRes, salaryRes]) => {
@@ -558,7 +605,7 @@ export default function ComparePage() {
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [selected, windowMonths]);
 
   const addSkill = useCallback((key) => {
     setSelected((prev) => {
@@ -655,7 +702,7 @@ export default function ComparePage() {
       doc.setFontSize(10);
       doc.setTextColor(120);
       doc.text(
-        `Exported ${new Date().toLocaleDateString()} \u00B7 Last 12 months`,
+        `Exported ${new Date().toLocaleDateString()} \u00B7 Last ${windowMonths} months`,
         marginX,
         y,
       );
@@ -686,7 +733,7 @@ export default function ComparePage() {
         const medianText =
           r.median == null
             ? "\u2014"
-            : `${currencySymbol(r.currency)}${fmtSalary(r.median, r.currency)}`;
+            : `${pdfCurrencyLabel(r.currency)}${fmtSalary(r.median, r.currency)}`;
         doc.text(String(r.name), cols[0].x, y);
         doc.text(r.demand.toLocaleString(), cols[1].x, y);
         doc.text(`${r.share}%`, cols[2].x, y);
@@ -698,7 +745,7 @@ export default function ComparePage() {
     } catch {
       // PDF generation failed (dependency missing / runtime error) — no-op.
     }
-  }, [selected, data]);
+  }, [selected, data, windowMonths]);
 
   // Build the multi-series trend chart input: shared sorted month axis +
   // one series per skill that has trend.length > 1.
@@ -780,7 +827,32 @@ export default function ComparePage() {
       ) : (
         <>
           {/* Share + export toolbar */}
-          <section className="flex justify-end gap-2">
+          <section className="flex flex-wrap items-center justify-end gap-2">
+            {/* Month window toggle — mono pills matching the app's window switch */}
+            <div
+              className="flex bg-[#121216] border border-[#26262E] rounded-lg p-0.5"
+              role="group"
+              aria-label="Time window"
+            >
+              {ALLOWED_WINDOWS.map((m) => {
+                const active = windowMonths === m;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setWindowMonths(m)}
+                    aria-label={`Last ${m} months`}
+                    aria-pressed={active}
+                    className={`relative px-3 py-2 rounded-md font-mono text-xs uppercase tracking-wider transition-colors ${
+                      active
+                        ? "bg-[#EB0029] text-white"
+                        : "text-[#5C5C66] hover:text-[#9A9AA6]"
+                    }`}
+                  >
+                    {m}M
+                  </button>
+                );
+              })}
+            </div>
             <button
               onClick={handleCopyLink}
               aria-label="Copy shareable link to this comparison"

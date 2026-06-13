@@ -1,3 +1,5 @@
+import Brand from "../components/Brand";
+
 const STEPS = [
   {
     n: "01",
@@ -29,10 +31,10 @@ export default function AboutPage() {
           The Method
         </div>
         <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-white">
-          How Klar reads the market.
+          How <Brand /> reads the market
         </h1>
         <p className="text-lg text-[#9A9AA6] font-medium">
-          Klar is descriptive, not predictive. We don't guess where the market
+          <Brand /> is descriptive, not predictive. We don't guess where the market
           is going — we show you what employers are hiring for right now.
         </p>
       </section>
