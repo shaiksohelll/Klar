@@ -51,6 +51,65 @@ function ratePct(rate) {
   return Math.round((rate ?? 0) * 100);
 }
 
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+// Map selected skill keys to flat row objects pulled from `data`, with safe
+// defaults for skills that are still loading, errored or missing. Shared by
+// both the CSV and PDF exporters so the two stay in sync.
+function buildExportRows(selected, data) {
+  return selected.map((key) => {
+    const state = data[key] || {};
+    const detail = state.detail || {};
+    const salary = state.salary || {};
+    const primary = salary.primary || {};
+    return {
+      key,
+      name: displayName(key),
+      demand: typeof detail.demand === "number" ? detail.demand : 0,
+      share: typeof detail.share === "number" ? detail.share : 0,
+      remoteShare: typeof detail.remoteShare === "number" ? detail.remoteShare : 0,
+      currency: primary.currency || "",
+      median: typeof primary.median === "number" ? primary.median : null,
+      p25: typeof primary.p25 === "number" ? primary.p25 : null,
+      p75: typeof primary.p75 === "number" ? primary.p75 : null,
+      disclosedCount:
+        typeof salary.disclosedCount === "number" ? salary.disclosedCount : 0,
+      totalCount: typeof salary.totalCount === "number" ? salary.totalCount : 0,
+      disclosureRate:
+        typeof salary.disclosureRate === "number" ? salary.disclosureRate : 0,
+    };
+  });
+}
+
+// Escape a single CSV field per RFC 4180: wrap in quotes and double any inner
+// quotes when the value contains a comma, quote or newline.
+function csvEscape(value) {
+  const s = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+// Trigger a client-side file download from a string payload via a temporary
+// anchor + object URL.
+function downloadBlob(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Build the dash-joined skill-key slug used in export filenames.
+function exportSlug(selected) {
+  return selected.join("-") || "skills";
+}
+
 // ── Chart geometry ────────────────────────────────────────────────────────────
 const CHART_W = 720; // viewBox width — SVG scales to its container via width=100%
 const CHART_H = 220; // viewBox height
@@ -512,6 +571,135 @@ export default function ComparePage() {
     setSelected((prev) => prev.filter((k) => k !== key));
   }, []);
 
+  // ── Share + export ──────────────────────────────────────────────────────────
+
+  // "Copied!" feedback flag + its reset timer (cleared on unmount).
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
+
+  // Every selected skill resolved (not loading)? Gates the CSV/PDF buttons.
+  const allReady = useMemo(
+    () => selected.length > 0 && selected.every((k) => data[k] && !data[k].loading),
+    [selected, data],
+  );
+
+  const handleCopyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (insecure context / denied) — fail silently.
+    }
+  }, []);
+
+  const handleExportCsv = useCallback(() => {
+    const rows = buildExportRows(selected, data);
+    const header = [
+      "Skill",
+      "Demand",
+      "% of all jobs",
+      "Remote %",
+      "Salary currency",
+      "Salary median",
+      "Salary P25",
+      "Salary P75",
+      "Disclosed postings",
+      "Total postings",
+      "Disclosure %",
+    ];
+    const lines = [header.map(csvEscape).join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          r.name,
+          r.demand,
+          r.share,
+          r.remoteShare,
+          r.currency,
+          r.median ?? "",
+          r.p25 ?? "",
+          r.p75 ?? "",
+          r.disclosedCount,
+          r.totalCount,
+          ratePct(r.disclosureRate),
+        ]
+          .map(csvEscape)
+          .join(","),
+      );
+    }
+    downloadBlob(
+      `klar-skill-comparison-${exportSlug(selected)}.csv`,
+      lines.join("\r\n"),
+      "text/csv;charset=utf-8",
+    );
+  }, [selected, data]);
+
+  const handleExportPdf = useCallback(async () => {
+    try {
+      const { jsPDF } = await import("jspdf");
+      const rows = buildExportRows(selected, data);
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+      const marginX = 48;
+      let y = 64;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text("Skill Comparison \u2014 Klar", marginX, y);
+
+      y += 22;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(120);
+      doc.text(
+        `Exported ${new Date().toLocaleDateString()} \u00B7 Last 12 months`,
+        marginX,
+        y,
+      );
+      doc.setTextColor(0);
+
+      // Table header.
+      y += 32;
+      const cols = [
+        { label: "Skill", x: marginX },
+        { label: "Demand", x: marginX + 150 },
+        { label: "% jobs", x: marginX + 220 },
+        { label: "Remote %", x: marginX + 280 },
+        { label: "Median salary", x: marginX + 360 },
+      ];
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      for (const c of cols) doc.text(c.label, c.x, y);
+
+      y += 6;
+      doc.setDrawColor(180);
+      doc.line(marginX, y, marginX + 470, y);
+
+      // Table rows.
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      for (const r of rows) {
+        y += 22;
+        const medianText =
+          r.median == null
+            ? "\u2014"
+            : `${currencySymbol(r.currency)}${fmtSalary(r.median, r.currency)}`;
+        doc.text(String(r.name), cols[0].x, y);
+        doc.text(r.demand.toLocaleString(), cols[1].x, y);
+        doc.text(`${r.share}%`, cols[2].x, y);
+        doc.text(`${r.remoteShare}%`, cols[3].x, y);
+        doc.text(medianText, cols[4].x, y);
+      }
+
+      doc.save(`klar-skill-comparison-${exportSlug(selected)}.pdf`);
+    } catch {
+      // PDF generation failed (dependency missing / runtime error) — no-op.
+    }
+  }, [selected, data]);
+
   // Build the multi-series trend chart input: shared sorted month axis +
   // one series per skill that has trend.length > 1.
   const chart = useMemo(() => {
@@ -591,6 +779,33 @@ export default function ComparePage() {
         </div>
       ) : (
         <>
+          {/* Share + export toolbar */}
+          <section className="flex justify-end gap-2">
+            <button
+              onClick={handleCopyLink}
+              aria-label="Copy shareable link to this comparison"
+              className="font-mono text-xs bg-[#121216] border border-[#26262E] rounded-lg px-3 py-2 text-[#9A9AA6] hover:border-[#EB0029] hover:text-white transition-colors"
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+            <button
+              onClick={handleExportCsv}
+              disabled={!allReady}
+              aria-label="Export comparison as CSV"
+              className="font-mono text-xs bg-[#121216] border border-[#26262E] rounded-lg px-3 py-2 text-[#9A9AA6] hover:border-[#EB0029] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={!allReady}
+              aria-label="Export comparison as PDF"
+              className="font-mono text-xs bg-[#121216] border border-[#26262E] rounded-lg px-3 py-2 text-[#9A9AA6] hover:border-[#EB0029] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Export PDF
+            </button>
+          </section>
+
           {/* Columns */}
           <section className="flex flex-col md:flex-row gap-4">
             {selected.map((key, i) => (
