@@ -12,6 +12,7 @@ const HiringPage = lazy(() => import("./pages/HiringPage"));
 const WatchlistPage = lazy(() => import("./pages/WatchlistPage"));
 const ResumePage = lazy(() => import("./pages/ResumePage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ComparePage = lazy(() => import("./pages/ComparePage"));
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -48,6 +49,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Routes>
             <Route element={<App />}>
               <Route index element={<DemandPage />} />
+              <Route path="compare" element={<ComparePage />} />
               <Route path="hiring" element={<HiringPage />} />
               <Route path="watchlist" element={<WatchlistPage />} />
               <Route path="resume" element={<ResumePage />} />
