@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "@clerk/express";
 import Watchlist from "../models/Watchlist.js";
+import { resolveSkill } from "../lib/validate.js";
 
 const router = Router();
 
@@ -27,15 +28,23 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// POST /api/watchlist  body: { skill }  → adds, returns updated list
+// POST /api/watchlist  body: { skill }  → adds (canonicalized), returns updated list
 router.post("/", async (req, res, next) => {
   try {
     const userId = req.auth.userId;
     const { skill } = req.body || {};
     if (!skill) return res.status(400).json({ error: "skill is required" });
+    // Validate against the canonical taxonomy and store the canonical name so
+    // aliases (e.g. "reactjs") dedupe to one entry ("react").
+    const canonical = resolveSkill(skill);
+    if (!canonical) {
+      return res.status(400).json({
+        error: "Unknown skill — see /api/skills/all for valid values.",
+      });
+    }
     await Watchlist.updateOne(
-      { userId, skill },
-      { $setOnInsert: { userId, skill } },
+      { userId, skill: canonical },
+      { $setOnInsert: { userId, skill: canonical } },
       { upsert: true },
     );
     res.json({ skills: await getSkills(userId) });
@@ -50,7 +59,11 @@ router.delete("/", async (req, res, next) => {
     const userId = req.auth.userId;
     const { skill } = req.body || {};
     if (!skill) return res.status(400).json({ error: "skill is required" });
-    await Watchlist.deleteOne({ userId, skill });
+    // Resolve to canonical so deleting an alias ("reactjs") removes the stored
+    // "react". Fall back to the raw value so users can still remove any legacy
+    // entries saved before validation existed.
+    const target = resolveSkill(skill) || skill;
+    await Watchlist.deleteOne({ userId, skill: target });
     res.json({ skills: await getSkills(userId) });
   } catch (err) {
     next(err);
