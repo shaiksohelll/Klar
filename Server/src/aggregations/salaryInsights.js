@@ -95,11 +95,15 @@ export async function getSalaryInsights({ skill, role, months = 12 } = {}) {
             $match: {
               salaryDisclosed: true,
               "salaryRange.midpoint": { $gt: 0 },
+              // Exclude null/absent currency so midpoints from different real
+              // currencies can never be pooled into one meaningless median.
+              // (No UNKNOWN bucket: such docs are dropped from byCurrency.)
+              "salaryRange.currency": { $ne: null },
             },
           },
           {
             $group: {
-              _id: { $ifNull: ["$salaryRange.currency", "UNKNOWN"] },
+              _id: "$salaryRange.currency",
               midpoints: { $push: "$salaryRange.midpoint" },
             },
           },

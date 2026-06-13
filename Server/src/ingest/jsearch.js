@@ -58,6 +58,23 @@ async function fetchPage({ query, page, numPages, datePosted }) {
 
 // ── Shape one JSearch item into our Job schema ──────────────────────────────
 // Matches the salaryRange shape used by adzuna: { min, max, midpoint, currency }.
+// Map an ISO-3166 alpha-2 country code to its currency. JSearch frequently
+// omits job_salary_currency, so we infer it from job_country (case-insensitive)
+// to keep disclosed salaries in the correct per-currency bucket. Unknown
+// country -> null (the salary stays disclosed but is excluded from medians).
+const COUNTRY_CURRENCY = {
+  us: "USD",
+  in: "INR",
+  gb: "GBP",
+  ca: "CAD",
+  au: "AUD",
+};
+
+function inferCurrency(country) {
+  if (!country) return null;
+  return COUNTRY_CURRENCY[String(country).toLowerCase()] ?? null;
+}
+
 function mapJob(item, roleQuery) {
   const title = item.job_title || "";
   const description = item.job_description || "";
@@ -67,7 +84,8 @@ function mapJob(item, roleQuery) {
   const max = item.job_max_salary ?? null;
   const midpoint =
     min != null && max != null ? (min + max) / 2 : (min ?? max ?? null);
-  const currency = item.job_salary_currency || null;
+  // Infer currency from job_country when JSearch omits job_salary_currency.
+  const currency = item.job_salary_currency || inferCurrency(item.job_country);
 
   const locationParts = [item.job_city, item.job_state, item.job_country].filter(
     Boolean,
