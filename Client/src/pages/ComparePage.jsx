@@ -830,7 +830,7 @@ export default function ComparePage() {
           <section className="flex flex-wrap items-center justify-end gap-2">
             {/* Month window toggle — mono pills matching the app's window switch */}
             <div
-              className="flex bg-[#121216] border border-[#26262E] rounded-lg p-0.5 mr-auto"
+              className="flex bg-[#121216] border border-[#26262E] rounded-lg p-0.5"
               role="group"
               aria-label="Time window"
             >
