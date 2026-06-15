@@ -127,7 +127,7 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
 
   return (
     <label className="space-y-2 relative block" ref={rootRef}>
-      <span className="font-mono text-xs uppercase tracking-widest text-[#9A9AA6]">{label}</span>
+      <span className="font-mono text-xs uppercase tracking-widest text-[var(--muted)]">{label}</span>
       <input
         value={value}
         onChange={(e) => {
@@ -142,10 +142,10 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
         autoComplete="off"
         role="combobox"
         aria-expanded={showPanel}
-        className="w-full bg-[#08080A] border border-[#26262E] rounded-lg px-4 py-2.5 text-[#F4F4F6] placeholder:text-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors"
+        className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text)] placeholder:text-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors"
       />
       {showPanel && (
-        <div className="absolute z-30 left-0 right-0 mt-1 bg-[#121216] border border-[#26262E] rounded-lg overflow-hidden shadow-2xl max-h-72 overflow-y-auto">
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-[var(--panel)] border border-[var(--border)] rounded-lg overflow-hidden shadow-2xl max-h-72 overflow-y-auto">
           {suggestions.length > 0 ? (
             suggestions.map((s, i) => (
               <button
@@ -158,17 +158,17 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
                 }}
                 onMouseEnter={() => setHighlight(i)}
                 className="w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors"
-                style={{ background: i === highlight ? "#1E1E24" : "transparent" }}
+                style={{ background: i === highlight ? "var(--surface-2)" : "transparent" }}
               >
-                <span className="text-[#F4F4F6] text-sm truncate">{s.label}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-[#9A9AA6] shrink-0">
+                <span className="text-[var(--text)] text-sm truncate">{s.label}</span>
+                <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted)] shrink-0">
                   {s.type === "country" ? "Country" : s.country.toUpperCase()}
                 </span>
               </button>
             ))
           ) : (
             !loading && searched && (
-              <div className="px-4 py-2.5 font-mono text-xs text-[#9A9AA6]">No matches</div>
+              <div className="px-4 py-2.5 font-mono text-xs text-[var(--muted)]">No matches</div>
             )
           )}
         </div>
