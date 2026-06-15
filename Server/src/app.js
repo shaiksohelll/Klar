@@ -11,7 +11,7 @@ import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
 import { getAtlas } from "./aggregations/atlas.js";
-import { relocationRoi } from "./lib/costOfLiving.js";
+import { relocationRoi, currencyForCountry } from "./lib/costOfLiving.js";
 import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
 import { makeDedupeKey, normalizeLocation } from "./lib/dedupe.js";
 import { geocodeCity, geocodeById, searchCities } from "./lib/geocode.js";
@@ -513,8 +513,8 @@ app.get("/api/relocation", readLimiter, (req, res, next) => {
 
     res.json({
       ok: true,
-      from: { ...from, input: fromRaw },
-      to: { ...to, input: toRaw },
+      from: { ...from, input: fromRaw, currency: currencyForCountry(from.country) },
+      to: { ...to, input: toRaw, currency: currencyForCountry(to.country) },
       salary: clampedSalary,
       currency,
       targetSalary: targetSalary ?? null,

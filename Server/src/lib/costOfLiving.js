@@ -77,7 +77,7 @@ function fxForCurrency(currency) {
 }
 
 /** Currency code for a country, or null if unknown. */
-function currencyForCountry(countryCode) {
+export function currencyForCountry(countryCode) {
   const key = normCountry(countryCode);
   if (!key) return null;
   const index = loadIndex();
