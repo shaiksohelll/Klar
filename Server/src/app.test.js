@@ -100,3 +100,42 @@ describe("POST /api/resume-gap", () => {
     expect(res.body).toEqual({ ok: false, error: "text is required" });
   });
 });
+
+describe("GET /api/relocation", () => {
+  it("returns 200 with an ROI payload on the happy path", async () => {
+    // Country-level US -> IN. Pure compute (no DB), so no mocks required.
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "us", to: "in", salary: 100000, currency: "USD" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.fromPriceLevel).toBe(100);
+    expect(typeof res.body.nominalUSD).toBe("number");
+    expect(typeof res.body.equivalentInTarget).toBe("number");
+    expect(res.body.confidence).toBe("high");
+  });
+
+  it("returns 400 when from/to are missing", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ salary: 100000, currency: "USD" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("returns 400 on a non-positive salary", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "us", to: "in", salary: -5, currency: "USD" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("returns 400 on an unknown currency", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "us", to: "in", salary: 100000, currency: "ZZZ" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+});

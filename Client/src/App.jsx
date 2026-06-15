@@ -335,6 +335,9 @@ export default function App() {
             <NavLink to="/atlas" className={navClass}>
               Atlas
             </NavLink>
+            <NavLink to="/relocate" className={navClass}>
+              Relocate
+            </NavLink>
             <NavLink to="/compare" className={navClass}>
               Compare
             </NavLink>
