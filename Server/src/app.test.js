@@ -23,6 +23,7 @@ const { default: app } = await import("./app.js");
 const { default: request } = await import("supertest");
 const { ingestAdzuna } = await import("./ingest/adzuna.js");
 const { ingestJSearch } = await import("./ingest/jsearch.js");
+const { searchCities } = await import("./lib/geocode.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -137,5 +138,76 @@ describe("GET /api/relocation", () => {
       .query({ from: "us", to: "in", salary: 100000, currency: "ZZZ" });
     expect(res.status).toBe(400);
     expect(res.body.ok).toBe(false);
+  });
+
+  it("resolves a numeric geonameId for `from`", async () => {
+    // Resolve a real geonameId via the alias-aware search, then feed it back
+    // to /api/relocation as a numeric token (deterministic resolution).
+    const [city] = searchCities("bangalore", 1);
+    expect(city).toBeTruthy();
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: String(city.geonameId), to: "us", salary: 2500000, currency: "INR" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // The numeric token resolved to the same verified place.
+    expect(res.body.from.geonameId).toBe(city.geonameId);
+    expect(res.body.from.country).toBe(city.country);
+  });
+});
+
+describe("searchCities", () => {
+  it("ranks results by population (desc)", () => {
+    const results = searchCities("a", 15);
+    expect(results.length).toBeGreaterThan(1);
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1].population).toBeGreaterThanOrEqual(results[i].population);
+    }
+  });
+
+  it("resolves an alias to its canonical city (bangalore -> Bengaluru)", () => {
+    const results = searchCities("bangalore", 8);
+    const match = results.find((c) => c.city.toLowerCase() === "bengaluru");
+    expect(match).toBeTruthy();
+    expect(Number.isFinite(match.geonameId)).toBe(true);
+    expect(match.country).toBe("in");
+  });
+
+  it("returns [] for an empty query", () => {
+    expect(searchCities("")).toEqual([]);
+  });
+});
+
+describe("GET /api/places/suggest", () => {
+  it("returns 400 when q is missing", async () => {
+    const res = await request(app).get("/api/places/suggest");
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("returns 200 with the documented suggestion shape", async () => {
+    const res = await request(app)
+      .get("/api/places/suggest")
+      .query({ q: "bangalore", limit: 5 });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.suggestions)).toBe(true);
+    expect(res.body.suggestions.length).toBeGreaterThan(0);
+    const city = res.body.suggestions.find((s) => s.type === "city");
+    expect(city).toBeTruthy();
+    expect(typeof city.label).toBe("string");
+    expect(typeof city.token).toBe("string");
+    expect(Number.isFinite(city.geonameId)).toBe(true);
+    expect(typeof city.country).toBe("string");
+  });
+
+  it("includes a supported country whose name matches q", async () => {
+    const res = await request(app)
+      .get("/api/places/suggest")
+      .query({ q: "united states" });
+    expect(res.status).toBe(200);
+    const country = res.body.suggestions.find((s) => s.type === "country");
+    expect(country).toBeTruthy();
+    expect(country.token).toBe("us");
+    expect(country.country).toBe("us");
   });
 });
