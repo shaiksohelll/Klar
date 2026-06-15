@@ -599,7 +599,7 @@ export function SkillDrawer({
                 className={`w-full py-4 px-6 rounded-xl font-mono text-sm uppercase tracking-widest font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
                   isTracked
                     ? "bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)]"
-                    : "bg-[var(--accent)] text-white shadow-[0_0_20px_rgba(235,0,41,0.3)] hover:shadow-[0_0_30px_rgba(255,39,64,0.5)] hover:bg-[var(--accent-hover)] hover:-translate-y-0.5"`
+                    : "bg-[var(--accent)] text-white shadow-[0_0_20px_rgba(235,0,41,0.3)] hover:shadow-[0_0_30px_rgba(255,39,64,0.5)] hover:bg-[var(--accent-hover)] hover:-translate-y-0.5"
                 }`}
               >
                 {/* Star with snappy spring pop on track */}
