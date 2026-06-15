@@ -7,6 +7,40 @@
   --font-space: "Space Grotesk", sans-serif;
 }
 
+/* ── Semantic theme tokens ──────────────────────────────────────────────
+   DARK is the default (on :root) so the app looks identical to today.
+   LIGHT is a deliberate, hand-tuned inverse applied via [data-theme="light"].
+   The brand red (--accent) is constant across both themes. */
+:root {
+  --bg: #08080a;
+  --panel: #121216;
+  --surface-2: #1e1e24;
+  --text: #f4f4f6;
+  --muted: #9a9aa6;
+  --muted-2: #5c5c66;
+  --border: #232329;
+  --accent: #eb0029;
+  --accent-hover: #ff2740;
+  --pos: #3fb950;
+  --neg: #eb0029;
+  --neutral: #9a9aa6;
+}
+
+[data-theme="light"] {
+  --bg: #f6f6f8;
+  --panel: #ffffff;
+  --surface-2: #ededf1;
+  --text: #16161a;
+  --muted: #5c5c66;
+  --muted-2: #8a8a93;
+  --border: #e4e4ea;
+  --accent: #eb0029;
+  --accent-hover: #c70022;
+  --pos: #1f9d4d;
+  --neg: #eb0029;
+  --neutral: #6b6b73;
+}
+
 html,
 body,
 #root {
@@ -15,10 +49,21 @@ body,
 
 body {
   margin: 0;
-  background: #08080a;
-  color: #f4f4f6;
+  background: var(--bg);
+  color: var(--text);
   font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Polished ~150ms cross-fade when switching themes. The `.theme-ready`
+   class is added by the app AFTER first paint so the initial render never
+   animates (no flash-of-transition on load). */
+.theme-ready,
+.theme-ready * {
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
