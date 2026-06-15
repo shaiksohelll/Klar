@@ -125,6 +125,7 @@ export function dedupeGroupStages() {
         salaryRange:    { $first: "$salaryRange" },
         salaryDisclosed: { $first: "$salaryDisclosed" },
         location:       { $first: "$location" },
+        geo:            { $first: "$geo" },
         postedAt:       { $first: "$postedAt" },
         title:          { $first: "$title" },
         redirectUrl:    { $first: "$redirectUrl" },

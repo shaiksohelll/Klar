@@ -21,6 +21,19 @@ const JobSchema = new mongoose.Schema(
         // direct employer disclosure (not Adzuna predictions, not null).
         // Used by salaryInsights to compute honest stats.
         salaryDisclosed: { type: Boolean, default: false },
+        // VERIFIED GeoNames place resolved at ingest time via geocodeCity().
+        // null when the posting's location could not be matched to a city.
+        // Powers the public Opportunity Map (/api/atlas).
+        geo: {
+            geonameId: Number,
+            city: String,
+            admin1: String,
+            country: String,
+            lat: Number,
+            lng: Number,
+        },
+        // Confidence of the geo resolution — see lib/geocode.js.
+        geoConfidence: { type: String, enum: ["exact", "ambiguous", "none"], default: "none" },
     },
     { timestamps: true },
 )
@@ -28,5 +41,6 @@ const JobSchema = new mongoose.Schema(
 JobSchema.index({ source: 1, externalId: 1 }, { unique: true })
 JobSchema.index({ normalizedRole: 1, postedAt: -1 })
 JobSchema.index({ postedAt: -1 })
+JobSchema.index({ "geo.geonameId": 1 })
 
 export default mongoose.model("Job", JobSchema)
