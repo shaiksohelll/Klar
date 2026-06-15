@@ -254,6 +254,15 @@ export default function RelocatePage() {
   // Destination currency for the equivalent-needed headline + breakdown.
   const destCurrency = result ? result.to?.currency || result.currency : currency;
 
+  // Render a price level WITH its city multiplier when one is in play, e.g.
+  // "25 x 0.95 = 23.75"; otherwise just the effective level.
+  const priceLevelStr = (base, mult, effective) => {
+    if (base != null && mult != null && mult !== 1) {
+      return `${base} \u00d7 ${mult} = ${effective}`;
+    }
+    return String(effective);
+  };
+
   // Per-place price-level breakdown strings, e.g. "25 x 0.95 = 23.75".
   // fromPriceLevel/toPriceLevel are already country x cityMultiplier; the
   // user-facing string reconstructs that product when a city multiplier is in
@@ -262,8 +271,14 @@ export default function RelocatePage() {
   const breakdownCells = result
     ? [
         ["Nominal (USD)", fmtUSD(result.nominalUSD)],
-        [`${result.from.input} price level`, String(result.fromPriceLevel)],
-        [`${result.to.input} price level`, String(result.toPriceLevel)],
+        [
+          `${result.from.input} price level`,
+          priceLevelStr(result.fromBaseLevel, result.fromMultiplier, result.fromPriceLevel),
+        ],
+        [
+          `${result.to.input} price level`,
+          priceLevelStr(result.toBaseLevel, result.toMultiplier, result.toPriceLevel),
+        ],
         ["Real value in origin", fmtUSD(result.realValueCurrent)],
         [`Equivalent needed in ${result.to.input}`, fmt(result.equivalentInTarget, destCurrency)],
         result.realValueTarget != null && ["Offer real value", fmtUSD(result.realValueTarget)],
