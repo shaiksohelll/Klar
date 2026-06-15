@@ -14,7 +14,7 @@ import { getAtlas } from "./aggregations/atlas.js";
 import { relocationRoi } from "./lib/costOfLiving.js";
 import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
 import { makeDedupeKey, normalizeLocation } from "./lib/dedupe.js";
-import { geocodeCity } from "./lib/geocode.js";
+import { geocodeCity, geocodeById, searchCities } from "./lib/geocode.js";
 import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
@@ -397,12 +397,29 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
 const RELO_CURRENCIES = new Set(["INR", "USD", "GBP", "CAD", "AUD"]);
 const MAX_SALARY = 1_000_000_000; // sane upper bound (covers any currency)
 
+// Supported countries for the relocation feature + the suggest endpoint.
+// Each entry exposes the ISO-2 code and a human-readable name.
+const SUPPORTED_COUNTRIES = [
+  { code: "in", name: "India" },
+  { code: "us", name: "United States" },
+  { code: "gb", name: "United Kingdom" },
+  { code: "ca", name: "Canada" },
+  { code: "au", name: "Australia" },
+];
+
 // Resolve a `from`/`to` param to { country, geonameId }.
-// A bare 2-letter token is treated as a country code (no city multiplier);
-// anything else is geocoded to a verified city. Returns null on no match.
+// A numeric token is treated as a geonameId and resolved deterministically
+// against the gazetteer (no fuzzy matching). A bare 2-letter token is treated
+// as a country code (no city multiplier); anything else is geocoded to a
+// verified city by name. Returns null on no match.
 function resolvePlace(raw) {
   const token = String(raw || "").trim();
   if (!token) return null;
+  if (/^\d+$/.test(token)) {
+    const rec = geocodeById(token);
+    if (!rec) return null;
+    return { country: rec.country, geonameId: rec.geonameId };
+  }
   if (/^[A-Za-z]{2}$/.test(token)) {
     return { country: token.toLowerCase(), geonameId: undefined };
   }
@@ -410,6 +427,43 @@ function resolvePlace(raw) {
   if (!g.value) return null;
   return { country: g.value.country, geonameId: g.value.geonameId };
 }
+
+// ── Places suggest (typeahead) ───────────────────────────────────────
+// Public, read-only. Returns up to `limit` verified-city matches PLUS any
+// supported country whose name or ISO-2 code matches the query. Cities carry
+// a geonameId token; countries carry an iso2 token. The frontend stores the
+// token and submits it to /api/relocation for deterministic resolution.
+app.get("/api/places/suggest", readLimiter, (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    if (!q) {
+      return res.status(400).json({ ok: false, error: "`q` is required." });
+    }
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 8, 1), 15);
+
+    const cities = searchCities(q, limit).map((c) => ({
+      type: "city",
+      label: `${c.city}, ${c.admin1}, ${c.country.toUpperCase()}`,
+      token: String(c.geonameId),
+      geonameId: c.geonameId,
+      country: c.country,
+    }));
+
+    const ql = q.toLowerCase();
+    const countries = SUPPORTED_COUNTRIES.filter(
+      (c) => c.code === ql || c.name.toLowerCase().includes(ql),
+    ).map((c) => ({
+      type: "country",
+      label: c.name,
+      token: c.code,
+      country: c.code,
+    }));
+
+    res.json({ suggestions: [...cities, ...countries] });
+  } catch (err) {
+    next(err);
+  }
+});
 
 app.get("/api/relocation", readLimiter, (req, res, next) => {
   try {
