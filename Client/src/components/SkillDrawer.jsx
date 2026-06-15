@@ -265,36 +265,36 @@ export function SkillDrawer({
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 relative z-10">
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                  <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider mb-2">
                     Demand
                   </div>
-                  <div className="font-mono text-2xl text-white">
+                  <div className="font-mono text-2xl text-[var(--text)]">
                     {demandVal != null ? demandVal.toLocaleString() : "…"}
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                  <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider mb-2">
                     Remote
                   </div>
-                  <div className="font-mono text-2xl text-white">
+                  <div className="font-mono text-2xl text-[var(--text)]">
                     {remoteShare}%
                     {remoteCountVal != null && (
-                      <span className="text-sm text-[#5C5C66] ml-1">
+                      <span className="text-sm text-[var(--muted-2)] ml-1">
                         ({remoteCountVal.toLocaleString()})
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] col-span-2">
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] col-span-2">
+                  <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider mb-2">
                     Share of Jobs
                   </div>
                   <div className="flex items-end gap-3">
-                    <div className="font-mono text-2xl text-white">
+                    <div className="font-mono text-2xl text-[var(--text)]">
                       {share}%
                     </div>
-                    <div className="w-full bg-[#26262E] h-2 rounded-full overflow-hidden mb-1.5">
+                    <div className="w-full bg-[var(--border)] h-2 rounded-full overflow-hidden mb-1.5">
                       <div
                         className="h-full bg-linear-to-r from-[#FF2740] to-[#9E0019]"
                         style={shareBarStyle(share)}
