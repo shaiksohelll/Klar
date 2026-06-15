@@ -217,7 +217,7 @@ function MultiTrendChart({ series, months }) {
           x2={CHART_W - PAD_R}
           y1={y}
           y2={y}
-          stroke="#26262E"
+          stroke="var(--border)"
           strokeWidth={1}
         />
       ))}
@@ -253,7 +253,7 @@ function MultiTrendChart({ series, months }) {
             textAnchor="middle"
             className="font-mono"
             fontSize={10}
-            fill="#5C5C66"
+            fill="var(--muted-2)"
           >
             {monthLabel(m)}
           </text>
@@ -313,11 +313,11 @@ function SkillPicker({ allSkills, selected, onAdd, disabled }) {
           disabled ? `Maximum ${MAX_SKILLS} skills` : "Add a skill to compare\u2026"
         }
         aria-label="Add a skill to compare"
-        className="w-full bg-[#0E0E12] border border-[#26262E] rounded-lg px-4 py-2.5 font-mono text-sm text-[#F4F4F6] placeholder-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 font-mono text-sm text-[var(--text)] placeholder-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       />
 
       {open && !disabled && matches.length > 0 && (
-        <div className="absolute z-30 mt-2 w-full max-h-72 overflow-y-auto bg-[#121216] border border-[#26262E] rounded-lg shadow-2xl py-1">
+        <div className="absolute z-30 mt-2 w-full max-h-72 overflow-y-auto bg-[var(--panel)] border border-[var(--border)] rounded-lg shadow-2xl py-1">
           {matches.map((s) => (
             <button
               key={s.skill}
@@ -328,10 +328,10 @@ function SkillPicker({ allSkills, selected, onAdd, disabled }) {
               }}
               className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-[#EB0029]/10 transition-colors"
             >
-              <span className="font-sans text-sm text-[#F4F4F6]">
+              <span className="font-sans text-sm text-[var(--text)]">
                 {displayName(s.skill)}
               </span>
-              <span className="font-mono text-xs tabular-nums text-[#9A9AA6]">
+              <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
                 {(s.demand ?? 0).toLocaleString()}
               </span>
             </button>
@@ -348,14 +348,14 @@ function SkillColumn({ skillKey, color, state }) {
 
   if (state?.error) {
     return (
-      <div className="flex-1 min-w-0 rounded-xl bg-[#121216] border border-[#26262E] p-5">
+      <div className="flex-1 min-w-0 rounded-xl bg-[var(--panel)] border border-[var(--border)] p-5">
         <div
           className="font-space font-bold text-xl tracking-tight mb-3 truncate"
           style={{ color }}
         >
           {name}
         </div>
-        <p className="font-mono text-xs text-[#9A9AA6]" role="status">
+        <p className="font-mono text-xs text-[var(--muted)]" role="status">
           Couldn&#39;t load {name}
         </p>
       </div>
@@ -364,7 +364,7 @@ function SkillColumn({ skillKey, color, state }) {
 
   if (!state || state.loading) {
     return (
-      <div className="flex-1 min-w-0 rounded-xl bg-[#121216] border border-[#26262E] p-5">
+      <div className="flex-1 min-w-0 rounded-xl bg-[var(--panel)] border border-[var(--border)] p-5">
         <div
           className="font-space font-bold text-xl tracking-tight mb-4 truncate"
           style={{ color }}
@@ -372,9 +372,9 @@ function SkillColumn({ skillKey, color, state }) {
           {name}
         </div>
         <div className="space-y-3 animate-pulse">
-          <div className="h-8 w-24 rounded bg-[#1E1E24]" />
-          <div className="h-2.5 w-32 rounded bg-[#1A1A20]" />
-          <div className="h-2.5 w-28 rounded bg-[#1A1A20]" />
+          <div className="h-8 w-24 rounded bg-[var(--surface-2)]" />
+          <div className="h-2.5 w-32 rounded bg-[var(--surface-2)]" />
+          <div className="h-2.5 w-28 rounded bg-[var(--surface-2)]" />
         </div>
       </div>
     );
@@ -389,7 +389,7 @@ function SkillColumn({ skillKey, color, state }) {
 
   return (
     <div
-      className="flex-1 min-w-0 rounded-xl bg-[#121216] border border-[#26262E] p-5 border-t-2"
+      className="flex-1 min-w-0 rounded-xl bg-[var(--panel)] border border-[var(--border)] p-5 border-t-2"
       style={{ borderTopColor: color }}
     >
       {/* Column header */}
@@ -402,38 +402,38 @@ function SkillColumn({ skillKey, color, state }) {
 
       {/* Demand */}
       <div className="mb-5">
-        <div className="font-mono text-[10px] text-[#5C5C66] uppercase tracking-widest mb-1">
+        <div className="font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-widest mb-1">
           Demand
         </div>
-        <div className="font-mono text-2xl text-white tabular-nums">
+        <div className="font-mono text-2xl text-[var(--text)] tabular-nums">
           {demand.toLocaleString()}
         </div>
-        <div className="font-mono text-xs text-[#9A9AA6] mt-0.5">
+        <div className="font-mono text-xs text-[var(--muted)] mt-0.5">
           {share}% of all jobs
         </div>
       </div>
 
       {/* Remote */}
       <div className="mb-5">
-        <div className="font-mono text-[10px] text-[#5C5C66] uppercase tracking-widest mb-1">
+        <div className="font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-widest mb-1">
           Remote
         </div>
-        <div className="font-mono text-xl text-white tabular-nums">{remoteShare}%</div>
+        <div className="font-mono text-xl text-[var(--text)] tabular-nums">{remoteShare}%</div>
       </div>
 
       {/* Salary */}
       <div>
-        <div className="font-mono text-[10px] text-[#5C5C66] uppercase tracking-widest mb-1">
+        <div className="font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-widest mb-1">
           Salary · Disclosed
         </div>
         {hasSalary ? (
           <>
-            <div className="font-mono text-2xl font-bold text-white">
+            <div className="font-mono text-2xl font-bold text-[var(--text)]">
               {currencySymbol(primary.currency)}
               {fmtSalary(primary.median, primary.currency)}
-              <span className="text-xs text-[#9A9AA6] font-normal ml-1.5">median</span>
+              <span className="text-xs text-[var(--muted)] font-normal ml-1.5">median</span>
             </div>
-            <div className="font-mono text-xs text-[#9A9AA6] mt-0.5">
+            <div className="font-mono text-xs text-[var(--muted)] mt-0.5">
               {currencySymbol(primary.currency)}
               {fmtSalary(primary.p25, primary.currency)}
               {" \u2013 "}
@@ -442,12 +442,12 @@ function SkillColumn({ skillKey, color, state }) {
             </div>
           </>
         ) : (
-          <p className="font-mono text-xs text-[#5C5C66] leading-relaxed">
+          <p className="font-mono text-xs text-[var(--muted-2)] leading-relaxed">
             Not enough disclosed salary data
           </p>
         )}
         {salary && (
-          <div className="font-mono text-[10px] text-[#5C5C66] leading-relaxed mt-2 pt-2 border-t border-[#26262E]">
+          <div className="font-mono text-[10px] text-[var(--muted-2)] leading-relaxed mt-2 pt-2 border-t border-[var(--border)]">
             {(salary.disclosedCount ?? 0).toLocaleString()} of{" "}
             {(salary.totalCount ?? 0).toLocaleString()} postings disclosed pay (
             {ratePct(salary.disclosureRate)}%)
@@ -769,13 +769,13 @@ export default function ComparePage() {
     <main className="max-w-6xl mx-auto px-6 mt-16 md:mt-24 space-y-12 relative z-10">
       {/* Header */}
       <section className="max-w-2xl space-y-4">
-        <div className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold">
+        <div className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold">
           Compare
         </div>
-        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-white">
+        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-[var(--text)]">
           Skills, side by side.
         </h1>
-        <p className="text-base md:text-lg text-[#9A9AA6] font-medium">
+        <p className="text-base md:text-lg text-[var(--muted)] font-medium">
           Pick 2–3 skills to compare demand, salary and how postings have
           trended over the last 12 months.
         </p>
@@ -798,18 +798,18 @@ export default function ComparePage() {
               return (
                 <span
                   key={key}
-                  className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full border bg-[#121216]"
+                  className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full border bg-[var(--panel)]"
                   style={{ borderColor: color }}
                 >
                   <span
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: color }}
                   />
-                  <span className="font-mono text-xs text-[#F4F4F6]">{name}</span>
+                  <span className="font-mono text-xs text-[var(--text)]">{name}</span>
                   <button
                     onClick={() => removeSkill(key)}
                     aria-label={`Remove ${name}`}
-                    className="w-5 h-5 flex items-center justify-center rounded-full text-[#9A9AA6] hover:text-white hover:bg-[#26262E] transition-colors"
+                    className="w-5 h-5 flex items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors"
                   >
                     ×
                   </button>
@@ -821,7 +821,7 @@ export default function ComparePage() {
       </section>
 
       {!canCompare ? (
-        <div className="text-center py-24 font-mono text-sm text-[#5C5C66] uppercase tracking-widest">
+        <div className="text-center py-24 font-mono text-sm text-[var(--muted-2)] uppercase tracking-widest">
           Pick at least 2 skills to compare.
         </div>
       ) : (
@@ -830,7 +830,7 @@ export default function ComparePage() {
           <section className="flex flex-wrap items-center justify-end gap-2">
             {/* Month window toggle — mono pills matching the app's window switch */}
             <div
-              className="flex bg-[#121216] border border-[#26262E] rounded-lg p-0.5"
+              className="flex bg-[var(--panel)] border border-[var(--border)] rounded-lg p-0.5"
               role="group"
               aria-label="Time window"
             >
@@ -844,8 +844,8 @@ export default function ComparePage() {
                     aria-pressed={active}
                     className={`relative px-3 py-2 rounded-md font-mono text-xs uppercase tracking-wider transition-colors ${
                       active
-                        ? "bg-[#EB0029] text-white"
-                        : "text-[#5C5C66] hover:text-[#9A9AA6]"
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--muted-2)] hover:text-[var(--muted)]"
                     }`}
                   >
                     {m}M
@@ -856,7 +856,7 @@ export default function ComparePage() {
             <button
               onClick={handleCopyLink}
               aria-label="Copy shareable link to this comparison"
-              className="font-mono text-xs bg-[#121216] border border-[#26262E] rounded-lg px-3 py-2 text-[#9A9AA6] hover:border-[#EB0029] hover:text-white transition-colors"
+              className="font-mono text-xs bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--text)] transition-colors"
             >
               {copied ? "Copied!" : "Copy link"}
             </button>
@@ -864,7 +864,7 @@ export default function ComparePage() {
               onClick={handleExportCsv}
               disabled={!allReady}
               aria-label="Export comparison as CSV"
-              className="font-mono text-xs bg-[#121216] border border-[#26262E] rounded-lg px-3 py-2 text-[#9A9AA6] hover:border-[#EB0029] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="font-mono text-xs bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--text)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Export CSV
             </button>
@@ -872,7 +872,7 @@ export default function ComparePage() {
               onClick={handleExportPdf}
               disabled={!allReady}
               aria-label="Export comparison as PDF"
-              className="font-mono text-xs bg-[#121216] border border-[#26262E] rounded-lg px-3 py-2 text-[#9A9AA6] hover:border-[#EB0029] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="font-mono text-xs bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--text)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Export PDF
             </button>
@@ -891,8 +891,8 @@ export default function ComparePage() {
           </section>
 
           {/* Multi-series trend chart */}
-          <section className="rounded-xl bg-[#121216] border border-[#26262E] p-5">
-            <div className="font-mono text-[10px] text-[#5C5C66] uppercase tracking-widest mb-4">
+          <section className="rounded-xl bg-[var(--panel)] border border-[var(--border)] p-5">
+            <div className="font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-widest mb-4">
               Postings Over Time
             </div>
 
@@ -908,7 +908,7 @@ export default function ComparePage() {
                         className="w-3 h-0.5 rounded-full"
                         style={{ backgroundColor: s.color }}
                       />
-                      <span className="font-mono text-xs text-[#9A9AA6]">
+                      <span className="font-mono text-xs text-[var(--muted)]">
                         {displayName(s.key)}
                       </span>
                     </div>
@@ -916,7 +916,7 @@ export default function ComparePage() {
                 </div>
               </>
             ) : (
-              <p className="font-mono text-xs text-[#5C5C66]">
+              <p className="font-mono text-xs text-[var(--muted-2)]">
                 Not enough trend data to chart yet.
               </p>
             )}
