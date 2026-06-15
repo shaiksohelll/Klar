@@ -122,3 +122,94 @@ export function geocodeCity(cityToken, countryHint) {
   }
   return { value: shape(candidates[0]), confidence: "ambiguous" };
 }
+
+/**
+ * Resolve a numeric geonameId directly to a VERIFIED GeoNames place.
+ *
+ * Deterministic lookup used by the typeahead: a suggestion stores the
+ * geonameId, so on submit we resolve it exactly (no fuzzy name matching).
+ * Scans the lazily-built index (records are shared across keys) and returns
+ * the first record whose geonameId matches.
+ *
+ * @param {number|string} geonameId
+ * @returns {{ geonameId:number, city:string, admin1:string, country:string, lat:number, lng:number }|null}
+ */
+export function geocodeById(geonameId) {
+  const id = Number(geonameId);
+  if (!Number.isFinite(id)) return null;
+  const index = loadIndex();
+  for (const arr of index.values()) {
+    for (const rec of arr) {
+      if (rec.geonameId === id) {
+        return {
+          geonameId: rec.geonameId,
+          city: rec.city,
+          admin1: rec.admin1,
+          country: rec.country,
+          lat: rec.lat,
+          lng: rec.lng,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+// Common alias -> canonical-city spellings. Typing an alias surfaces the
+// canonical GeoNames city (which stores only the official name). Keys are
+// lowercased; values are matched against the gazetteer name/ascii index.
+const CITY_ALIASES = {
+  bangalore: "bengaluru",
+  bombay: "mumbai",
+  calcutta: "kolkata",
+  madras: "chennai",
+  gurgaon: "gurugram",
+};
+
+/**
+ * Suggest VERIFIED cities for a free-typed query (typeahead backend).
+ *
+ * Case-insensitive substring match against BOTH the city name and the ascii
+ * name in the existing gazetteer (reuses the lazy-loaded index — does NOT
+ * re-read cities.json). A small alias map maps common spellings to their
+ * canonical city so e.g. "bangalore" surfaces Bengaluru. Results are
+ * de-duplicated by geonameId and ranked by population (desc).
+ *
+ * @param {string} query
+ * @param {number} [limit=8]
+ * @returns {Array<{ geonameId:number, city:string, admin1:string, country:string, lat:number, lng:number, population:number }>}
+ */
+export function searchCities(query, limit = 8) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return [];
+  const cap = Math.max(1, Number(limit) || 8);
+
+  const index = loadIndex();
+
+  // Expand the query with any alias so typing the alias surfaces the canonical
+  // city. We match on BOTH the original query and the aliased term.
+  const needles = [q];
+  if (CITY_ALIASES[q]) needles.push(CITY_ALIASES[q]);
+
+  const seen = new Set();
+  const out = [];
+  for (const [key, arr] of index.entries()) {
+    if (!needles.some((n) => key.includes(n))) continue;
+    for (const rec of arr) {
+      if (seen.has(rec.geonameId)) continue;
+      seen.add(rec.geonameId);
+      out.push({
+        geonameId: rec.geonameId,
+        city: rec.city,
+        admin1: rec.admin1,
+        country: rec.country,
+        lat: rec.lat,
+        lng: rec.lng,
+        population: rec.pop || 0,
+      });
+    }
+  }
+
+  out.sort((a, b) => b.population - a.population);
+  return out.slice(0, cap);
+}
