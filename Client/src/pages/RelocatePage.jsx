@@ -248,7 +248,14 @@ export default function RelocatePage() {
             ? -1
             : 0;
 
-  const deltaColor = delta == null ? "#9A9AA6" : delta > 0 ? "#3FB950" : delta < 0 ? "#EB0029" : "#9A9AA6";
+  const deltaColor =
+    delta == null
+      ? "var(--neutral)"
+      : delta > 0
+        ? "var(--pos)"
+        : delta < 0
+          ? "var(--neg)"
+          : "var(--neutral)";
   const deltaLabel =
     delta == null
       ? ""
@@ -282,19 +289,20 @@ export default function RelocatePage() {
     if (!hasOfferResult) return null;
     const pct = result.roiPct;
     if (pct >= 3) {
-      return { color: "#3FB950", label: `+${pct}% REAL RAISE`, word: "real raise" };
+      return { color: "var(--pos)", label: `+${pct}% REAL RAISE`, word: "real raise" };
     }
     if (pct <= -3) {
-      return { color: "#EB0029", label: `${pct}% REAL CUT`, word: "real cut" };
+      return { color: "var(--neg)", label: `${pct}% REAL CUT`, word: "real cut" };
     }
-    return { color: "#9A9AA6", label: "~ ROUGHLY FLAT", word: "roughly flat move" };
+    return { color: "var(--neutral)", label: "~ ROUGHLY FLAT", word: "roughly flat move" };
   })();
 
   // Break-even comparison: is the offer above or below the amount needed to
   // preserve the same real lifestyle in the destination?
   const breakEvenAbove =
     hasOfferResult && result.offerVsBreakEvenPct != null ? result.offerVsBreakEvenPct >= 0 : null;
-  const breakEvenColor = breakEvenAbove == null ? "#9A9AA6" : breakEvenAbove ? "#3FB950" : "#EB0029";
+  const breakEvenColor =
+    breakEvenAbove == null ? "var(--neutral)" : breakEvenAbove ? "var(--pos)" : "var(--neg)";
 
   // Render a price level WITH its city multiplier when one is in play, e.g.
   // "25 x 0.95 = 23.75"; otherwise just the effective level.
