@@ -11,6 +11,7 @@ import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
 import { getAtlas } from "./aggregations/atlas.js";
+import { relocationRoi } from "./lib/costOfLiving.js";
 import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
 import { makeDedupeKey, normalizeLocation } from "./lib/dedupe.js";
 import { geocodeCity } from "./lib/geocode.js";
@@ -384,6 +385,87 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const data = await getAtlas({ role, skill, months });
     res.json({ ok: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Relocation ROI (public) ──────────────────────────────────────────
+// Converts a nominal salary's purchasing power between two places.
+// Query: from, to (city token OR 2-letter country code), salary (number),
+// currency (INR/USD/GBP/CAD/AUD), optional targetSalary. Pure compute (no DB).
+const RELO_CURRENCIES = new Set(["INR", "USD", "GBP", "CAD", "AUD"]);
+const MAX_SALARY = 1_000_000_000; // sane upper bound (covers any currency)
+
+// Resolve a `from`/`to` param to { country, geonameId }.
+// A bare 2-letter token is treated as a country code (no city multiplier);
+// anything else is geocoded to a verified city. Returns null on no match.
+function resolvePlace(raw) {
+  const token = String(raw || "").trim();
+  if (!token) return null;
+  if (/^[A-Za-z]{2}$/.test(token)) {
+    return { country: token.toLowerCase(), geonameId: undefined };
+  }
+  const g = geocodeCity(normalizeLocation(token));
+  if (!g.value) return null;
+  return { country: g.value.country, geonameId: g.value.geonameId };
+}
+
+app.get("/api/relocation", readLimiter, (req, res, next) => {
+  try {
+    const { from: fromRaw, to: toRaw } = req.query;
+    if (!fromRaw || !toRaw) {
+      return res.status(400).json({ ok: false, error: "`from` and `to` are required (city name or 2-letter country code)." });
+    }
+
+    const currency = String(req.query.currency || "").toUpperCase();
+    if (!RELO_CURRENCIES.has(currency)) {
+      return res.status(400).json({ ok: false, error: `Unknown currency. Valid: ${[...RELO_CURRENCIES].join(", ")}` });
+    }
+
+    const salary = Number(req.query.salary);
+    if (!Number.isFinite(salary) || salary <= 0) {
+      return res.status(400).json({ ok: false, error: "`salary` must be a positive number." });
+    }
+    const clampedSalary = Math.min(salary, MAX_SALARY);
+
+    let targetSalary;
+    if (req.query.targetSalary != null && String(req.query.targetSalary).trim() !== "") {
+      const t = Number(req.query.targetSalary);
+      if (!Number.isFinite(t) || t <= 0) {
+        return res.status(400).json({ ok: false, error: "`targetSalary` must be a positive number." });
+      }
+      targetSalary = Math.min(t, MAX_SALARY);
+    }
+
+    const from = resolvePlace(fromRaw);
+    const to = resolvePlace(toRaw);
+    if (!from) {
+      return res.status(400).json({ ok: false, error: `Couldn't resolve \`from\`: "${fromRaw}". Use a known city or 2-letter country code.` });
+    }
+    if (!to) {
+      return res.status(400).json({ ok: false, error: `Couldn't resolve \`to\`: "${toRaw}". Use a known city or 2-letter country code.` });
+    }
+
+    const result = relocationRoi({
+      salary: clampedSalary,
+      currency,
+      fromCountry: from.country,
+      fromGeonameId: from.geonameId,
+      toCountry: to.country,
+      toGeonameId: to.geonameId,
+      targetSalary,
+    });
+
+    res.json({
+      ok: true,
+      from: { ...from, input: fromRaw },
+      to: { ...to, input: toRaw },
+      salary: clampedSalary,
+      currency,
+      targetSalary: targetSalary ?? null,
+      ...result,
+    });
   } catch (err) {
     next(err);
   }
