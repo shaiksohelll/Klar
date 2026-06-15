@@ -341,9 +341,9 @@ export default function App() {
         <div className="relative max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <NavLink
             to="/"
-            className="font-space font-bold text-xl tracking-tight text-white flex items-baseline"
+            className="font-space font-bold text-xl tracking-tight text-[var(--text)] flex items-baseline"
           >
-            Klar<span className="text-[#EB0029]">.</span>
+            Klar<span className="text-[var(--accent)]">.</span>
           </NavLink>
 
           <div className="hidden md:flex flex-1 min-w-0 justify-center items-center flex-wrap gap-x-5 lg:gap-x-7 gap-y-1 px-4 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
