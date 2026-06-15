@@ -407,25 +407,65 @@ const SUPPORTED_COUNTRIES = [
   { code: "au", name: "Australia" },
 ];
 
-// Resolve a `from`/`to` param to { country, geonameId }.
+// Human-readable name for a supported ISO-2 country code, or the uppercased
+// code as a fallback for any country not in the supported list.
+function countryName(code) {
+  const key = String(code || "").toLowerCase();
+  const found = SUPPORTED_COUNTRIES.find((c) => c.code === key);
+  return found ? found.name : key.toUpperCase();
+}
+
+// admin1 is only meaningful to show when it is an alphabetic code/name
+// (e.g. US "CA"); some gazetteer rows store numeric admin1 codes (e.g. India
+// "19") which are noise in a label, so we omit those.
+function isAlphaAdmin1(admin1) {
+  return typeof admin1 === "string" && admin1.trim() !== "" && /[A-Za-z]/.test(admin1) && !/^\d+$/.test(admin1);
+}
+
+// Build a city label from a gazetteer record, using the city NAME (never the
+// geonameId). Includes admin1 only when alphabetic: "San Francisco, CA, US"
+// vs "Bengaluru, IN".
+function cityDisplayName(rec) {
+  const parts = [rec.city];
+  if (isAlphaAdmin1(rec.admin1)) parts.push(rec.admin1);
+  parts.push((rec.country || "").toUpperCase());
+  return parts.join(", ");
+}
+
+// Resolve a `from`/`to` param to a rich descriptor including display info.
 // A numeric token is treated as a geonameId and resolved deterministically
 // against the gazetteer (no fuzzy matching). A bare 2-letter token is treated
 // as a country code (no city multiplier); anything else is geocoded to a
 // verified city by name. Returns null on no match.
+//
+// Shape: { country, geonameId?, city?, admin1?, displayName }.
 function resolvePlace(raw) {
   const token = String(raw || "").trim();
   if (!token) return null;
   if (/^\d+$/.test(token)) {
     const rec = geocodeById(token);
     if (!rec) return null;
-    return { country: rec.country, geonameId: rec.geonameId };
+    return {
+      country: rec.country,
+      geonameId: rec.geonameId,
+      city: rec.city,
+      admin1: isAlphaAdmin1(rec.admin1) ? rec.admin1 : undefined,
+      displayName: cityDisplayName(rec),
+    };
   }
   if (/^[A-Za-z]{2}$/.test(token)) {
-    return { country: token.toLowerCase(), geonameId: undefined };
+    const country = token.toLowerCase();
+    return { country, geonameId: undefined, displayName: countryName(country) };
   }
   const g = geocodeCity(normalizeLocation(token));
   if (!g.value) return null;
-  return { country: g.value.country, geonameId: g.value.geonameId };
+  return {
+    country: g.value.country,
+    geonameId: g.value.geonameId,
+    city: g.value.city,
+    admin1: isAlphaAdmin1(g.value.admin1) ? g.value.admin1 : undefined,
+    displayName: cityDisplayName(g.value),
+  };
 }
 
 // ── Places suggest (typeahead) ───────────────────────────────────────
@@ -443,7 +483,9 @@ app.get("/api/places/suggest", readLimiter, (req, res, next) => {
 
     const cities = searchCities(q, limit).map((c) => ({
       type: "city",
-      label: `${c.city}, ${c.admin1}, ${c.country.toUpperCase()}`,
+      // Use the city NAME and omit numeric admin1 codes:
+      // "San Francisco, CA, US" vs "Bengaluru, IN".
+      label: cityDisplayName(c),
       token: String(c.geonameId),
       geonameId: c.geonameId,
       country: c.country,
@@ -515,6 +557,8 @@ app.get("/api/relocation", readLimiter, (req, res, next) => {
       ok: true,
       from: { ...from, input: fromRaw, currency: currencyForCountry(from.country) },
       to: { ...to, input: toRaw, currency: currencyForCountry(to.country) },
+      // `from`/`to` above already carry { geonameId?, city?, admin1?, country,
+      // displayName }; `currency` is appended for the destination symbol.
       salary: clampedSalary,
       currency,
       targetSalary: targetSalary ?? null,
