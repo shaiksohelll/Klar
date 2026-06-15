@@ -438,24 +438,67 @@ export default function RelocatePage() {
           className="bg-[#121216] border border-[#26262E] rounded-2xl p-6 md:p-8 space-y-6"
         >
           {/* Verdict */}
-          <div className="space-y-3">
-            <span
-              className="inline-block font-mono text-xs uppercase tracking-widest px-3 py-1 rounded-full"
-              style={{ color: deltaColor, border: `1px solid ${deltaColor}` }}
-            >
-              {deltaLabel}
-            </span>
-            <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
-              Your {fmt(result.salary, result.currency)} in{" "}
-              <span className="text-white font-semibold">{fromLabel}</span>{" "}
-              ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
-              <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
-              <span className="text-[#EB0029] font-semibold">
-                {fmt(result.equivalentInTarget, destCurrency)}
+          {hasOfferResult ? (
+            /* Offer mode — color-coded real-raise verdict + break-even line. */
+            <div className="space-y-3">
+              <span
+                className="inline-block font-mono text-sm uppercase tracking-widest font-bold px-4 py-1.5 rounded-full"
+                style={{ color: offerVerdict.color, border: `1px solid ${offerVerdict.color}` }}
+              >
+                {offerVerdict.label}
               </span>
-              .
-            </p>
-          </div>
+              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+                This{" "}
+                <span className="text-white font-semibold">
+                  {fmt(result.targetSalary, destCurrency)}
+                </span>{" "}
+                offer in <span className="text-white font-semibold">{toLabel}</span> is a{" "}
+                <span className="font-semibold" style={{ color: offerVerdict.color }}>
+                  {offerVerdict.word}
+                </span>{" "}
+                vs your{" "}
+                <span className="text-white font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
+                in <span className="text-white font-semibold">{fromLabel}</span>.
+              </p>
+              {result.offerVsBreakEvenPct != null && (
+                <p className="text-base md:text-lg text-[#9A9AA6] leading-relaxed">
+                  You break even at{" "}
+                  <span className="text-[#F4F4F6] font-semibold">
+                    {fmt(result.breakEvenTarget, destCurrency)}
+                  </span>{" "}
+                  in <span className="text-[#F4F4F6] font-semibold">{toCity}</span>; this offer is{" "}
+                  <span className="font-semibold" style={{ color: breakEvenColor }}>
+                    {breakEvenAbove ? "above" : "below"}
+                  </span>{" "}
+                  it by{" "}
+                  <span className="font-semibold" style={{ color: breakEvenColor }}>
+                    {Math.abs(result.offerVsBreakEvenPct)}%
+                  </span>
+                  .
+                </p>
+              )}
+            </div>
+          ) : (
+            /* No-offer path — unchanged real-lifestyle headline. */
+            <div className="space-y-3">
+              <span
+                className="inline-block font-mono text-xs uppercase tracking-widest px-3 py-1 rounded-full"
+                style={{ color: deltaColor, border: `1px solid ${deltaColor}` }}
+              >
+                {deltaLabel}
+              </span>
+              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+                Your {fmt(result.salary, result.currency)} in{" "}
+                <span className="text-white font-semibold">{fromLabel}</span>{" "}
+                ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
+                <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
+                <span className="text-[#EB0029] font-semibold">
+                  {fmt(result.equivalentInTarget, destCurrency)}
+                </span>
+                .
+              </p>
+            </div>
+          )}
 
           {/* Breakdown — auto-fitting grid so cells never leave dangling gaps. */}
           <div
