@@ -263,6 +263,15 @@ export default function RelocatePage() {
   // Destination currency for the equivalent-needed headline + breakdown.
   const destCurrency = result ? result.to?.currency || result.currency : currency;
 
+  // Resolved, human-readable place labels from the API. NEVER the submitted
+  // token (which may be a bare numeric geonameId). Full label for the headline
+  // ("Bengaluru, IN"); short city name for the compact breakdown labels
+  // (falls back to the country displayName for country-level resolutions).
+  const fromLabel = result ? result.from.displayName || result.from.input : "";
+  const toLabel = result ? result.to.displayName || result.to.input : "";
+  const fromCity = result ? result.from.city || result.from.displayName || result.from.input : "";
+  const toCity = result ? result.to.city || result.to.displayName || result.to.input : "";
+
   // Render a price level WITH its city multiplier when one is in play, e.g.
   // "25 x 0.95 = 23.75"; otherwise just the effective level.
   const priceLevelStr = (base, mult, effective) => {
@@ -281,15 +290,15 @@ export default function RelocatePage() {
     ? [
         ["Nominal (USD)", fmtUSD(result.nominalUSD)],
         [
-          `${result.from.input} price level`,
+          `${fromCity} price level`,
           priceLevelStr(result.fromBaseLevel, result.fromMultiplier, result.fromPriceLevel),
         ],
         [
-          `${result.to.input} price level`,
+          `${toCity} price level`,
           priceLevelStr(result.toBaseLevel, result.toMultiplier, result.toPriceLevel),
         ],
         ["Real value in origin", fmtUSD(result.realValueCurrent)],
-        [`Equivalent needed in ${result.to.input}`, fmt(result.equivalentInTarget, destCurrency)],
+        [`Equivalent needed in ${toCity}`, fmt(result.equivalentInTarget, destCurrency)],
         result.realValueTarget != null && ["Offer real value", fmtUSD(result.realValueTarget)],
         result.roiPct != null && ["ROI", `${result.roiPct > 0 ? "+" : ""}${result.roiPct}%`],
         ["Confidence", result.confidence],
@@ -414,9 +423,9 @@ export default function RelocatePage() {
             </span>
             <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
               Your {fmt(result.salary, result.currency)} in{" "}
-              <span className="text-white font-semibold">{result.from.input}</span>{" "}
+              <span className="text-white font-semibold">{fromLabel}</span>{" "}
               ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
-              <span className="text-white font-semibold">{result.to.input}</span>, you’d need{" "}
+              <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
               <span className="text-[#EB0029] font-semibold">
                 {fmt(result.equivalentInTarget, destCurrency)}
               </span>
