@@ -332,6 +332,9 @@ export default function App() {
             <NavLink to="/" end className={navClass}>
               Demand
             </NavLink>
+            <NavLink to="/atlas" className={navClass}>
+              Atlas
+            </NavLink>
             <NavLink to="/compare" className={navClass}>
               Compare
             </NavLink>
