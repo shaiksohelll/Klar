@@ -2,12 +2,14 @@ import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
 import { detectRemote } from "../lib/remote.js";
-import { makeDedupeKey } from "../lib/dedupe.js";
+import { makeDedupeKey, normalizeLocation } from "../lib/dedupe.js";
+import { geocodeCity } from "../lib/geocode.js";
 import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
+import { clearAtlasCache } from "../aggregations/atlas.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -55,6 +57,9 @@ function mapJob(raw, country) {
   const max = raw.salary_max ?? null;
   const midpoint =
     min != null && max != null ? (min + max) / 2 : (min ?? max ?? null);
+  // Resolve the posting's display location to a VERIFIED GeoNames place.
+  // countryHint = the Adzuna country code (already ISO-2 lowercased, e.g. "in").
+  const g = geocodeCity(normalizeLocation(raw.location?.display_name || ""), country);
   return {
     externalId: String(raw.id),
     source: "adzuna",
@@ -76,6 +81,8 @@ function mapJob(raw, country) {
     redirectUrl: raw.redirect_url || "",
     postedAt: raw.created ? new Date(raw.created) : new Date(),
     dedupeKey: makeDedupeKey(companyName, title, raw.location?.display_name || ""),
+    geo: g.value,
+    geoConfidence: g.confidence,
   };
 }
 
@@ -215,6 +222,7 @@ export async function ingestAdzuna({
   clearDetailCache();
   clearCompaniesCache();
   clearSalaryCache();
+  clearAtlasCache();
   console.log("🗑️  Read caches cleared after ingest");
 
   return {
