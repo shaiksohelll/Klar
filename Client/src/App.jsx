@@ -347,7 +347,10 @@ export default function App() {
             <NavLink to="/watchlist" className={navClass}>
               Watchlist
             </NavLink>
-            <NavLink to="/resume" className={`${"whitespace-nowrap"}`}>
+            <NavLink
+              to="/resume"
+              className={(state) => `whitespace-nowrap ${navClass(state)}`}
+            >
               Resume Gap
             </NavLink>
             <NavLink to="/about" className={navClass}>
