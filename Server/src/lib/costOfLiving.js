@@ -77,7 +77,7 @@ function fxForCurrency(currency) {
 }
 
 /** Currency code for a country, or null if unknown. */
-function currencyForCountry(countryCode) {
+export function currencyForCountry(countryCode) {
   const key = normCountry(countryCode);
   if (!key) return null;
   const index = loadIndex();
@@ -152,6 +152,14 @@ export function relocationRoi({
 } = {}) {
   const from = getPriceLevel({ countryCode: fromCountry, geonameId: fromGeonameId });
   const to = getPriceLevel({ countryCode: toCountry, geonameId: toGeonameId });
+
+  // Expose the components behind each effective price level so the UI can show
+  // e.g. "25 x 0.95 = 23.75" (country base x city multiplier).
+  const fromMultiplier = cityMultiplier(fromGeonameId);
+  const toMultiplier = cityMultiplier(toGeonameId);
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const fromBaseLevel = fromMultiplier > 0 ? round2(from.priceLevel / fromMultiplier) : null;
+  const toBaseLevel = toMultiplier > 0 ? round2(to.priceLevel / toMultiplier) : null;
   const confidence = from.confidence === "low" || to.confidence === "low" ? "low" : "high";
 
   const nominalUSD = toUSD(salary, currency);
@@ -193,6 +201,10 @@ export function relocationRoi({
   return {
     fromPriceLevel: Math.round(from.priceLevel * 100) / 100,
     toPriceLevel: Math.round(to.priceLevel * 100) / 100,
+    fromBaseLevel,
+    toBaseLevel,
+    fromMultiplier,
+    toMultiplier,
     nominalUSD: round(nominalUSD),
     equivalentInTarget: round(equivalentInTarget),
     realValueCurrent: round(realValueCurrent),
