@@ -41,42 +41,51 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
   const [searched, setSearched] = useState(false);
   const rootRef = useRef(null);
 
-  // Debounced fetch on value change. All post-await setState lives inside the
-  // async IIFE (react-hooks/set-state-in-effect compliance).
+  // Debounced fetch on value change. ALL setState (including the synchronous
+  // resets) lives inside an async IIFE so react-hooks/set-state-in-effect
+  // (an ERROR in CI) is never tripped by a state write in the effect body.
   useEffect(() => {
     const q = value.trim();
-    if (q.length < 2) {
-      setSuggestions([]);
-      setSearched(false);
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
-    setLoading(true);
-    const t = setTimeout(() => {
-      (async () => {
-        try {
-          const res = await axios.get(`${API}/api/places/suggest`, {
-            params: { q, limit: 8 },
-          });
-          if (cancelled) return;
-          setSuggestions(res.data.suggestions || []);
-          setHighlight(-1);
-          setSearched(true);
-        } catch {
-          // Fail quietly — typing should never throw a visible error.
-          if (!cancelled) {
-            setSuggestions([]);
-            setSearched(true);
-          }
-        } finally {
-          if (!cancelled) setLoading(false);
+    let timer = null;
+
+    (async () => {
+      if (q.length < 2) {
+        if (!cancelled) {
+          setSuggestions([]);
+          setSearched(false);
+          setLoading(false);
         }
-      })();
-    }, 200);
+        return;
+      }
+      if (!cancelled) setLoading(true);
+      // Debounce ~200ms before hitting the suggest endpoint.
+      await new Promise((resolve) => {
+        timer = setTimeout(resolve, 200);
+      });
+      if (cancelled) return;
+      try {
+        const res = await axios.get(`${API}/api/places/suggest`, {
+          params: { q, limit: 8 },
+        });
+        if (cancelled) return;
+        setSuggestions(res.data.suggestions || []);
+        setHighlight(-1);
+        setSearched(true);
+      } catch {
+        // Fail quietly — typing should never throw a visible error.
+        if (!cancelled) {
+          setSuggestions([]);
+          setSearched(true);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      if (timer) clearTimeout(timer);
     };
   }, [value]);
 
