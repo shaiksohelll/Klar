@@ -272,6 +272,30 @@ export default function RelocatePage() {
   const fromCity = result ? result.from.city || result.from.displayName || result.from.input : "";
   const toCity = result ? result.to.city || result.to.displayName || result.to.input : "";
 
+  // ── Offer mode (real-raise verdict) ──────────────────────────────────
+  // An offer was evaluated when the API echoed a targetSalary and a roiPct.
+  const hasOfferResult = !!(result && result.targetSalary != null && result.roiPct != null);
+
+  // Verdict thresholds: >= +3% real raise (green), <= -3% real cut (red),
+  // otherwise roughly flat (grey).
+  const offerVerdict = (() => {
+    if (!hasOfferResult) return null;
+    const pct = result.roiPct;
+    if (pct >= 3) {
+      return { color: "#3FB950", label: `+${pct}% REAL RAISE`, word: "real raise" };
+    }
+    if (pct <= -3) {
+      return { color: "#EB0029", label: `${pct}% REAL CUT`, word: "real cut" };
+    }
+    return { color: "#9A9AA6", label: "~ ROUGHLY FLAT", word: "roughly flat move" };
+  })();
+
+  // Break-even comparison: is the offer above or below the amount needed to
+  // preserve the same real lifestyle in the destination?
+  const breakEvenAbove =
+    hasOfferResult && result.offerVsBreakEvenPct != null ? result.offerVsBreakEvenPct >= 0 : null;
+  const breakEvenColor = breakEvenAbove == null ? "#9A9AA6" : breakEvenAbove ? "#3FB950" : "#EB0029";
+
   // Render a price level WITH its city multiplier when one is in play, e.g.
   // "25 x 0.95 = 23.75"; otherwise just the effective level.
   const priceLevelStr = (base, mult, effective) => {
@@ -414,24 +438,67 @@ export default function RelocatePage() {
           className="bg-[#121216] border border-[#26262E] rounded-2xl p-6 md:p-8 space-y-6"
         >
           {/* Verdict */}
-          <div className="space-y-3">
-            <span
-              className="inline-block font-mono text-xs uppercase tracking-widest px-3 py-1 rounded-full"
-              style={{ color: deltaColor, border: `1px solid ${deltaColor}` }}
-            >
-              {deltaLabel}
-            </span>
-            <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
-              Your {fmt(result.salary, result.currency)} in{" "}
-              <span className="text-white font-semibold">{fromLabel}</span>{" "}
-              ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
-              <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
-              <span className="text-[#EB0029] font-semibold">
-                {fmt(result.equivalentInTarget, destCurrency)}
+          {hasOfferResult ? (
+            /* Offer mode — color-coded real-raise verdict + break-even line. */
+            <div className="space-y-3">
+              <span
+                className="inline-block font-mono text-sm uppercase tracking-widest font-bold px-4 py-1.5 rounded-full"
+                style={{ color: offerVerdict.color, border: `1px solid ${offerVerdict.color}` }}
+              >
+                {offerVerdict.label}
               </span>
-              .
-            </p>
-          </div>
+              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+                This{" "}
+                <span className="text-white font-semibold">
+                  {fmt(result.targetSalary, destCurrency)}
+                </span>{" "}
+                offer in <span className="text-white font-semibold">{toLabel}</span> is a{" "}
+                <span className="font-semibold" style={{ color: offerVerdict.color }}>
+                  {offerVerdict.word}
+                </span>{" "}
+                vs your{" "}
+                <span className="text-white font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
+                in <span className="text-white font-semibold">{fromLabel}</span>.
+              </p>
+              {result.offerVsBreakEvenPct != null && (
+                <p className="text-base md:text-lg text-[#9A9AA6] leading-relaxed">
+                  You break even at{" "}
+                  <span className="text-[#F4F4F6] font-semibold">
+                    {fmt(result.breakEvenTarget, destCurrency)}
+                  </span>{" "}
+                  in <span className="text-[#F4F4F6] font-semibold">{toCity}</span>; this offer is{" "}
+                  <span className="font-semibold" style={{ color: breakEvenColor }}>
+                    {breakEvenAbove ? "above" : "below"}
+                  </span>{" "}
+                  it by{" "}
+                  <span className="font-semibold" style={{ color: breakEvenColor }}>
+                    {Math.abs(result.offerVsBreakEvenPct)}%
+                  </span>
+                  .
+                </p>
+              )}
+            </div>
+          ) : (
+            /* No-offer path — unchanged real-lifestyle headline. */
+            <div className="space-y-3">
+              <span
+                className="inline-block font-mono text-xs uppercase tracking-widest px-3 py-1 rounded-full"
+                style={{ color: deltaColor, border: `1px solid ${deltaColor}` }}
+              >
+                {deltaLabel}
+              </span>
+              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+                Your {fmt(result.salary, result.currency)} in{" "}
+                <span className="text-white font-semibold">{fromLabel}</span>{" "}
+                ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
+                <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
+                <span className="text-[#EB0029] font-semibold">
+                  {fmt(result.equivalentInTarget, destCurrency)}
+                </span>
+                .
+              </p>
+            </div>
+          )}
 
           {/* Breakdown — auto-fitting grid so cells never leave dangling gaps. */}
           <div

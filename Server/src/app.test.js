@@ -24,6 +24,7 @@ const { default: request } = await import("supertest");
 const { ingestAdzuna } = await import("./ingest/adzuna.js");
 const { ingestJSearch } = await import("./ingest/jsearch.js");
 const { searchCities } = await import("./lib/geocode.js");
+const { relocationRoi } = await import("./lib/costOfLiving.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -202,6 +203,67 @@ describe("GET /api/relocation", () => {
     expect(res.status).toBe(200);
     expect(res.body.from.displayName).toBe("India");
     expect(res.body.to.displayName).toBe("United States");
+  });
+
+  it("returns offer fields (realValueTarget, roiPct, breakEvenTarget) with targetSalary", async () => {
+    // First resolve the break-even (equivalent) without an offer.
+    const base = await request(app)
+      .get("/api/relocation")
+      .query({ from: "in", to: "us", salary: 2500000, currency: "INR" });
+    expect(base.status).toBe(200);
+    const breakEven = base.body.equivalentInTarget;
+    expect(typeof breakEven).toBe("number");
+
+    // An offer ABOVE break-even (destination currency = USD).
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "in", to: "us", salary: 2500000, currency: "INR", targetSalary: breakEven + 20000 });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.realValueTarget).toBe("number");
+    expect(typeof res.body.roiPct).toBe("number");
+    expect(res.body.breakEvenTarget).toBe(breakEven);
+    expect(res.body.offerVsBreakEvenPct).toBeGreaterThan(0);
+    expect(res.body.roiPct).toBeGreaterThan(0);
+  });
+});
+
+describe("relocationRoi offer mode", () => {
+  // Break-even = equivalentInTarget (the offer that preserves real lifestyle).
+  const baseArgs = {
+    salary: 2500000,
+    currency: "INR",
+    fromCountry: "in",
+    toCountry: "us",
+  };
+
+  it("yields a positive roiPct for an offer ABOVE break-even (real raise)", () => {
+    const { equivalentInTarget } = relocationRoi(baseArgs);
+    expect(equivalentInTarget).toBeGreaterThan(0);
+    const r = relocationRoi({ ...baseArgs, targetSalary: equivalentInTarget * 1.2 });
+    expect(r.roiPct).toBeGreaterThan(0);
+    expect(r.offerVsBreakEvenPct).toBeGreaterThan(0);
+    expect(r.breakEvenTarget).toBe(equivalentInTarget);
+  });
+
+  it("yields a negative roiPct for an offer BELOW break-even (real cut)", () => {
+    const { equivalentInTarget } = relocationRoi(baseArgs);
+    const r = relocationRoi({ ...baseArgs, targetSalary: equivalentInTarget * 0.8 });
+    expect(r.roiPct).toBeLessThan(0);
+    expect(r.offerVsBreakEvenPct).toBeLessThan(0);
+  });
+
+  it("guards divide-by-zero: no targetSalary -> null offer fields, no throw", () => {
+    const r = relocationRoi(baseArgs);
+    expect(r.realValueTarget).toBeNull();
+    expect(r.roiPct).toBeNull();
+    expect(r.breakEvenTarget).toBeNull();
+    expect(r.offerVsBreakEvenPct).toBeNull();
+  });
+
+  it("does not throw on a zero salary (guarded null fields)", () => {
+    expect(() =>
+      relocationRoi({ ...baseArgs, salary: 0, targetSalary: 100000 }),
+    ).not.toThrow();
   });
 });
 

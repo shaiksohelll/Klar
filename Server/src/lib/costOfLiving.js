@@ -186,12 +186,28 @@ export function relocationRoi({
   // value and the ROI vs their current real value.
   let realValueTarget = null;
   let roiPct = null;
+  // The offer needed to break even on real lifestyle, in destination currency.
+  // It is exactly the equivalent-needed figure (FX + price-level adjusted).
+  let breakEvenTarget = null;
+  // How far the offer sits above (+) or below (-) break-even, as a percentage.
+  let offerVsBreakEvenPct = null;
   if (targetSalary != null && Number.isFinite(targetSalary) && targetCurrency) {
     const targetUSD = toUSD(targetSalary, targetCurrency);
     if (targetUSD != null && to.priceLevel > 0) {
       realValueTarget = targetUSD / (to.priceLevel / 100);
+      // Guard divide-by-zero: only compute roiPct when realValueCurrent > 0.
       if (realValueCurrent != null && realValueCurrent > 0) {
         roiPct = Math.round(((realValueTarget - realValueCurrent) / realValueCurrent) * 100);
+      }
+    }
+    // break-even = equivalentInTarget. offerVsBreakEvenPct guards a zero
+    // (or null) break-even amount so we never divide by zero.
+    if (equivalentInTarget != null) {
+      breakEvenTarget = equivalentInTarget;
+      if (equivalentInTarget > 0) {
+        offerVsBreakEvenPct = Math.round(
+          ((targetSalary - equivalentInTarget) / equivalentInTarget) * 100,
+        );
       }
     }
   }
@@ -210,6 +226,8 @@ export function relocationRoi({
     realValueCurrent: round(realValueCurrent),
     realValueTarget: round(realValueTarget),
     roiPct,
+    breakEvenTarget: round(breakEvenTarget),
+    offerVsBreakEvenPct,
     confidence,
   };
 }
