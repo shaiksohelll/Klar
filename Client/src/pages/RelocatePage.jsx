@@ -443,7 +443,7 @@ export default function RelocatePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: EASE }}
-          className="bg-[#121216] border border-[#26262E] rounded-2xl p-6 md:p-8 space-y-6"
+          className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6 md:p-8 space-y-6"
         >
           {/* Verdict */}
           {hasOfferResult ? (
@@ -455,26 +455,26 @@ export default function RelocatePage() {
               >
                 {offerVerdict.label}
               </span>
-              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+              <p className="text-xl md:text-2xl text-[var(--text)] leading-relaxed">
                 This{" "}
-                <span className="text-white font-semibold">
+                <span className="text-[var(--text)] font-semibold">
                   {fmt(result.targetSalary, destCurrency)}
                 </span>{" "}
-                offer in <span className="text-white font-semibold">{toLabel}</span> is a{" "}
+                offer in <span className="text-[var(--text)] font-semibold">{toLabel}</span> is a{" "}
                 <span className="font-semibold" style={{ color: offerVerdict.color }}>
                   {offerVerdict.word}
                 </span>{" "}
                 vs your{" "}
-                <span className="text-white font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
-                in <span className="text-white font-semibold">{fromLabel}</span>.
+                <span className="text-[var(--text)] font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
+                in <span className="text-[var(--text)] font-semibold">{fromLabel}</span>.
               </p>
               {result.offerVsBreakEvenPct != null && (
-                <p className="text-base md:text-lg text-[#9A9AA6] leading-relaxed">
+                <p className="text-base md:text-lg text-[var(--muted)] leading-relaxed">
                   You break even at{" "}
-                  <span className="text-[#F4F4F6] font-semibold">
+                  <span className="text-[var(--text)] font-semibold">
                     {fmt(result.breakEvenTarget, destCurrency)}
                   </span>{" "}
-                  in <span className="text-[#F4F4F6] font-semibold">{toCity}</span>; this offer is{" "}
+                  in <span className="text-[var(--text)] font-semibold">{toCity}</span>; this offer is{" "}
                   <span className="font-semibold" style={{ color: breakEvenColor }}>
                     {breakEvenAbove ? "above" : "below"}
                   </span>{" "}
@@ -495,12 +495,12 @@ export default function RelocatePage() {
               >
                 {deltaLabel}
               </span>
-              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+              <p className="text-xl md:text-2xl text-[var(--text)] leading-relaxed">
                 Your {fmt(result.salary, result.currency)} in{" "}
-                <span className="text-white font-semibold">{fromLabel}</span>{" "}
+                <span className="text-[var(--text)] font-semibold">{fromLabel}</span>{" "}
                 ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
-                <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
-                <span className="text-[#EB0029] font-semibold">
+                <span className="text-[var(--text)] font-semibold">{toLabel}</span>, you’d need{" "}
+                <span className="text-[var(--accent)] font-semibold">
                   {fmt(result.equivalentInTarget, destCurrency)}
                 </span>
                 .
@@ -510,22 +510,22 @@ export default function RelocatePage() {
 
           {/* Breakdown — auto-fitting grid so cells never leave dangling gaps. */}
           <div
-            className="grid gap-px bg-[#26262E] rounded-xl overflow-hidden"
+            className="grid gap-px bg-[var(--border)] rounded-xl overflow-hidden"
             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
           >
             {breakdownCells.map(([label, value]) => (
-              <div key={label} className="bg-[#121216] p-4">
-                <div className="font-mono text-[10px] uppercase tracking-widest text-[#5C5C66] mb-1">
+              <div key={label} className="bg-[var(--panel)] p-4">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted-2)] mb-1">
                   {label}
                 </div>
-                <div className="text-[#F4F4F6] font-semibold">{value}</div>
+                <div className="text-[var(--text)] font-semibold">{value}</div>
               </div>
             ))}
           </div>
         </motion.section>
       )}
 
-      <footer className="font-mono text-[10px] text-[#5C5C66] text-center leading-relaxed max-w-2xl mx-auto">
+      <footer className="font-mono text-[10px] text-[var(--muted-2)] text-center leading-relaxed max-w-2xl mx-auto">
         Country-level price data from World Bank (CC-BY-4.0); city adjustments are
         approximate. Not financial advice.
       </footer>
