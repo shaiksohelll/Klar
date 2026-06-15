@@ -328,7 +328,7 @@ export default function App() {
             Klar<span className="text-[#EB0029]">.</span>
           </NavLink>
 
-          <div className="hidden md:flex items-center gap-8 font-mono text-xs uppercase tracking-widest text-[#9A9AA6] absolute left-1/2 -translate-x-1/2">
+          <div className="hidden md:flex flex-1 min-w-0 justify-center items-center flex-wrap gap-x-5 lg:gap-x-7 gap-y-1 px-4 font-mono text-xs uppercase tracking-widest text-[#9A9AA6]">
             <NavLink to="/" end className={navClass}>
               Demand
             </NavLink>
@@ -347,7 +347,7 @@ export default function App() {
             <NavLink to="/watchlist" className={navClass}>
               Watchlist
             </NavLink>
-            <NavLink to="/resume" className={navClass}>
+            <NavLink to="/resume" className={`${"whitespace-nowrap"}`}>
               Resume Gap
             </NavLink>
             <NavLink to="/about" className={navClass}>
