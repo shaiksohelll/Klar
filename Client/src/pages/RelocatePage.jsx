@@ -340,14 +340,14 @@ export default function RelocatePage() {
   return (
     <main className="max-w-4xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-12 relative z-10">
       <section className="text-center max-w-2xl mx-auto space-y-6">
-        <div className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold">
+        <div className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold">
           Relocation ROI
         </div>
-        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-white">
+        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-[var(--text)]">
           What your salary is{" "}
-          <span className="text-[#EB0029] italic">really</span> worth.
+          <span className="text-[var(--accent)] italic">really</span> worth.
         </h1>
-        <p className="text-lg text-[#9A9AA6] font-medium">
+        <p className="text-lg text-[var(--muted)] font-medium">
           Convert a nominal salary into real, cost-of-living-adjusted purchasing
           power between two cities.
         </p>
@@ -356,7 +356,7 @@ export default function RelocatePage() {
       {/* ── Form ── */}
       <form
         onSubmit={onSubmit}
-        className="bg-[#121216] border border-[#26262E] rounded-2xl p-6 md:p-8 space-y-6"
+        className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6 md:p-8 space-y-6"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Combobox
@@ -377,7 +377,7 @@ export default function RelocatePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <label className="space-y-2">
-            <span className="font-mono text-xs uppercase tracking-widest text-[#9A9AA6]">Current salary</span>
+            <span className="font-mono text-xs uppercase tracking-widest text-[var(--muted)]">Current salary</span>
             <div className="flex gap-2">
               <input
                 type="number"
@@ -385,7 +385,7 @@ export default function RelocatePage() {
                 value={salary}
                 onChange={(e) => setSalary(e.target.value)}
                 placeholder="2500000"
-                className="flex-1 bg-[#08080A] border border-[#26262E] rounded-lg px-4 py-2.5 text-[#F4F4F6] placeholder:text-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors"
+                className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text)] placeholder:text-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
               <select
                 value={currency}
@@ -393,7 +393,7 @@ export default function RelocatePage() {
                   setCurrency(e.target.value);
                   setCurrencyTouched(true);
                 }}
-                className="bg-[#08080A] border border-[#26262E] rounded-lg px-3 py-2.5 text-[#F4F4F6] font-mono text-sm focus:outline-none focus:border-[#EB0029] transition-colors"
+                className="bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-[var(--text)] font-mono text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
               >
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -403,7 +403,7 @@ export default function RelocatePage() {
           </label>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[#9A9AA6] cursor-pointer">
+            <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={hasOffer}
@@ -419,7 +419,7 @@ export default function RelocatePage() {
               value={targetSalary}
               onChange={(e) => setTargetSalary(e.target.value)}
               placeholder="Target salary (destination currency)"
-              className="w-full bg-[#08080A] border border-[#26262E] rounded-lg px-4 py-2.5 text-[#F4F4F6] placeholder:text-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors disabled:opacity-40"
+              className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text)] placeholder:text-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors disabled:opacity-40"
             />
           </div>
         </div>
@@ -427,7 +427,7 @@ export default function RelocatePage() {
         <button
           type="submit"
           disabled={loading}
-          className="bg-[#EB0029] hover:bg-[#FF2740] disabled:opacity-50 text-white px-6 py-2.5 rounded-full font-medium text-sm transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)]"
+          className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white px-6 py-2.5 rounded-full font-medium text-sm transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)]"
         >
           {loading ? "Calculating\u2026" : "Calculate real value"}
         </button>
@@ -435,7 +435,7 @@ export default function RelocatePage() {
 
       {/* ── States ── */}
       {error && (
-        <div className="text-center py-6 font-mono text-sm text-[#EB0029]">{error}</div>
+        <div className="text-center py-6 font-mono text-sm text-[var(--accent)]">{error}</div>
       )}
 
       {result && !error && (
