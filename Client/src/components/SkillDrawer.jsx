@@ -225,7 +225,7 @@ export function SkillDrawer({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-[#08080A]/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-[var(--bg)]/70 backdrop-blur-sm"
           />
 
           {/* Drawer — slides in from right using UI spring, slides out on close */}
@@ -235,27 +235,27 @@ export function SkillDrawer({
             animate={drawerAnimate}
             exit={drawerExit}
             transition={drawerTransition}
-            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-linear-to-b from-[#121216] to-[#1A1A20] border-l border-[#26262E] shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-linear-to-b from-[var(--panel)] to-[var(--surface-2)] border-l border-[var(--border)] shadow-2xl flex flex-col"
           >
             {/* Header */}
-            <div className="p-6 md:p-8 flex justify-between items-start border-b border-[#26262E]/50 relative overflow-hidden">
+            <div className="p-6 md:p-8 flex justify-between items-start border-b border-[var(--border)]/50 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF2740] rounded-full blur-[120px] opacity-10 pointer-events-none" />
               <div className="relative z-10">
-                <div className="font-mono text-xs tracking-widest text-[#9A9AA6] uppercase mb-2">
+                <div className="font-mono text-xs tracking-widest text-[var(--muted)] uppercase mb-2">
                   Skill Profile
                 </div>
-                <h2 className="font-space font-bold text-3xl text-white tracking-tight">
+                <h2 className="font-space font-bold text-3xl text-[var(--text)] tracking-tight">
                   {name}
                 </h2>
                 <div className="flex items-center gap-2 mt-3">
-                  <span className="px-2.5 py-1 rounded-full border border-[#26262E] bg-[#08080A] text-xs font-mono text-[#F4F4F6]">
+                  <span className="px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--bg)] text-xs font-mono text-[var(--text)]">
                     {current.role}
                   </span>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="relative z-10 p-2 text-[#9A9AA6] hover:text-white transition-colors bg-[#08080A]/50 rounded-full hover:bg-[#26262E]"
+                className="relative z-10 p-2 text-[var(--muted)] hover:text-[var(--text)] transition-colors bg-[var(--bg)]/50 rounded-full hover:bg-[var(--surface-2)]"
               >
                 <XIcon className="w-5 h-5" />
               </button>
