@@ -309,7 +309,9 @@ export default function App() {
   };
 
   const navClass = (state) =>
-    state.isActive ? "text-white" : "hover:text-white transition-colors";
+    state.isActive
+      ? "text-[var(--text)]"
+      : "hover:text-[var(--text)] transition-colors";
 
   const outletContext = {
     sorted,
