@@ -189,27 +189,27 @@ export default function AtlasPage() {
   return (
     <main className="max-w-6xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-12 relative z-10">
       <section className="text-center max-w-3xl mx-auto space-y-6">
-        <div className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold">
+        <div className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold">
           The Opportunity Map
         </div>
-        <h1 className="font-space font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight text-white">
+        <h1 className="font-space font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight text-[var(--text)]">
           Where the work{" "}
-          <span className="text-[#EB0029] italic">actually</span> is.
+          <span className="text-[var(--accent)] italic">actually</span> is.
         </h1>
-        <p className="text-lg md:text-xl text-[#9A9AA6] max-w-2xl mx-auto font-medium">
+        <p className="text-lg md:text-xl text-[var(--muted)] max-w-2xl mx-auto font-medium">
           Job demand, average disclosed salary, and 30-day momentum for every
           verified city. No hype, no predictions. Just the data.
         </p>
-        <div className="font-mono text-[#5C5C66] text-sm uppercase tracking-widest pt-4 flex items-center justify-center gap-3">
-          <div className="w-12 h-px bg-[#26262E]" />
+        <div className="font-mono text-[var(--muted-2)] text-sm uppercase tracking-widest pt-4 flex items-center justify-center gap-3">
+          <div className="w-12 h-px bg-[var(--border)]" />
           <span aria-live="polite">
             {totalCities.toLocaleString()} cities · {totalJobs.toLocaleString()} jobs
           </span>
-          <div className="w-12 h-px bg-[#26262E]" />
+          <div className="w-12 h-px bg-[var(--border)]" />
         </div>
       </section>
 
-      <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[#26262E] pb-6">
+      <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[var(--border)] pb-6">
         {/* Role segmented control — sliding red pill (matches DemandPage) */}
         <div className="flex flex-wrap justify-center gap-2">
           {ROLES.map((role) => (
@@ -219,13 +219,13 @@ export default function AtlasPage() {
               className={`relative px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
                 activeRole === role
                   ? "text-white"
-                  : "text-[#9A9AA6] hover:text-white"
+                  : "text-[var(--muted)] hover:text-[var(--text)]"
               }`}
             >
               {activeRole === role && (
                 <motion.div
                   layoutId="activeRoleAtlas"
-                  className="absolute inset-0 bg-[#EB0029] rounded-full -z-10"
+                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
                   transition={pillSpring}
                 />
               )}
@@ -235,7 +235,7 @@ export default function AtlasPage() {
         </div>
 
         {/* Window segmented control — sliding red pill (matches DemandPage) */}
-        <div className="flex bg-[#121216] border border-[#26262E] rounded-full p-1">
+        <div className="flex bg-[var(--panel)] border border-[var(--border)] rounded-full p-1">
           {WINDOWS.map((w) => (
             <button
               key={w}
@@ -243,13 +243,13 @@ export default function AtlasPage() {
               className={`relative px-4 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
                 activeWindow === w
                   ? "text-white"
-                  : "text-[#5C5C66] hover:text-[#9A9AA6]"
+                  : "text-[var(--muted-2)] hover:text-[var(--muted)]"
               }`}
             >
               {activeWindow === w && (
                 <motion.div
                   layoutId="activeWindowAtlas"
-                  className="absolute inset-0 bg-[#EB0029] rounded-full -z-10"
+                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
                   transition={pillSpring}
                 />
               )}
@@ -264,25 +264,25 @@ export default function AtlasPage() {
       <section className="relative">
         <div
           ref={mapContainerRef}
-          className="w-full h-[600px] rounded-2xl overflow-hidden border border-[#26262E] bg-[#0A0A0E]"
+          className="w-full h-[600px] rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--panel)]"
         />
 
         {error ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[#08080A]/80 font-mono text-sm text-[#EB0029]">
+          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[var(--bg)]/80 font-mono text-sm text-[var(--accent)]">
             {error}
           </div>
         ) : loading ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[#08080A]/60">
-            <div className="w-6 h-6 rounded-full border-2 border-[#26262E] border-t-[#EB0029] animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[var(--bg)]/60">
+            <div className="w-6 h-6 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
           </div>
         ) : cities.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[#08080A]/70 font-mono text-sm text-[#5C5C66]">
+          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[var(--bg)]/70 font-mono text-sm text-[var(--muted-2)]">
             No cities found for this filter.
           </div>
         ) : null}
 
         {/* Legend */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-widest text-[#5C5C66]">
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-widest text-[var(--muted-2)]">
           <span className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full" style={{ background: "#EB0029" }} /> Rising
           </span>

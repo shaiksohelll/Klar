@@ -23,23 +23,23 @@ function SkeletonRows({ count = 12, shouldReduceMotion }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className={`flex items-center gap-4 px-5 py-4 rounded-xl bg-[#0A0A0E] border border-[#26262E] ${
+          className={`flex items-center gap-4 px-5 py-4 rounded-xl bg-[var(--panel)] border border-[var(--border)] ${
             shouldReduceMotion ? "" : "animate-pulse"
           }`}
           style={shouldReduceMotion ? {} : { animationDelay: `${i * 45}ms` }}
         >
           {/* Rank */}
-          <div className="w-7 h-3.5 rounded bg-[#26262E] shrink-0" />
+          <div className="w-7 h-3.5 rounded bg-[var(--border)] shrink-0" />
           {/* Company name */}
-          <div className="flex-1 h-4 rounded bg-[#1E1E24]" />
+          <div className="flex-1 h-4 rounded bg-[var(--surface-2)]" />
           {/* Openings */}
-          <div className="w-16 h-3 rounded bg-[#26262E] shrink-0" />
+          <div className="w-16 h-3 rounded bg-[var(--border)] shrink-0" />
           {/* Remote */}
-          <div className="w-12 h-3 rounded bg-[#26262E] shrink-0" />
+          <div className="w-12 h-3 rounded bg-[var(--border)] shrink-0" />
           {/* Skill chips */}
           <div className="hidden sm:flex gap-1.5 shrink-0">
             {[48, 36, 44].map((w, j) => (
-              <div key={j} className={`h-5 rounded-full bg-[#1A1A20]`} style={{ width: w }} />
+              <div key={j} className={`h-5 rounded-full bg-[var(--surface-2)]`} style={{ width: w }} />
             ))}
           </div>
         </div>
@@ -94,7 +94,7 @@ export default function HiringPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold"
+          className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold"
         >
           Who's Hiring
         </motion.div>
@@ -102,16 +102,16 @@ export default function HiringPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="font-space font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight text-white"
+          className="font-space font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight text-[var(--text)]"
         >
           The companies{" "}
-          <span className="text-[#EB0029] italic">actually</span> posting.
+          <span className="text-[var(--accent)] italic">actually</span> posting.
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="text-lg text-[#9A9AA6] max-w-2xl mx-auto font-medium"
+          className="text-lg text-[var(--muted)] max-w-2xl mx-auto font-medium"
         >
           Top hiring companies ranked by active postings, with the skills each
           one asks for most. Pure counts from real listings — no predictions.
@@ -119,7 +119,7 @@ export default function HiringPage() {
       </section>
 
       {/* ── Controls ── */}
-      <section className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-[#26262E] pb-6">
+      <section className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-[var(--border)] pb-6">
         {/* Role filter */}
         <div className="flex flex-wrap justify-center gap-2">
           {ROLES.map((role) => (
@@ -127,13 +127,13 @@ export default function HiringPage() {
               key={role}
               onClick={() => setActiveRole(role)}
               className={`relative px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
-                activeRole === role ? "text-white" : "text-[#9A9AA6] hover:text-white"
+                activeRole === role ? "text-white" : "text-[var(--muted)] hover:text-[var(--text)]"
               }`}
             >
               {activeRole === role && (
                 <motion.div
                   layoutId="hiringActiveRole"
-                  className="absolute inset-0 bg-[#EB0029] rounded-full -z-10"
+                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
                   transition={pillSpring}
                 />
               )}
@@ -143,19 +143,19 @@ export default function HiringPage() {
         </div>
 
         {/* Window filter */}
-        <div className="flex bg-[#121216] border border-[#26262E] rounded-full p-1 shrink-0">
+        <div className="flex bg-[var(--panel)] border border-[var(--border)] rounded-full p-1 shrink-0">
           {WINDOWS.map((w) => (
             <button
               key={w}
               onClick={() => setActiveWindow(w)}
               className={`relative px-4 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
-                activeWindow === w ? "text-white" : "text-[#5C5C66] hover:text-[#9A9AA6]"
+                activeWindow === w ? "text-white" : "text-[var(--muted-2)] hover:text-[var(--muted)]"
               }`}
             >
               {activeWindow === w && (
                 <motion.div
                   layoutId="hiringActiveWindow"
-                  className="absolute inset-0 bg-[#EB0029] rounded-full -z-10"
+                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
                   transition={pillSpring}
                 />
               )}
@@ -168,12 +168,12 @@ export default function HiringPage() {
       {/* ── Body ── */}
       {state === "error" ? (
         <div className="text-center py-20 space-y-4">
-          <p className="font-mono text-sm text-[#EB0029]" role="alert">
+          <p className="font-mono text-sm text-[var(--accent)]" role="alert">
             Couldn't load hiring data right now.
           </p>
           <button
             onClick={fetchCompanies}
-            className="font-mono text-xs text-[#9A9AA6] hover:text-white underline transition-colors"
+            className="font-mono text-xs text-[var(--muted)] hover:text-[var(--text)] underline transition-colors"
           >
             Try again
           </button>
@@ -181,7 +181,7 @@ export default function HiringPage() {
       ) : state === "loading" ? (
         <SkeletonRows count={12} shouldReduceMotion={shouldReduceMotion} />
       ) : companies.length === 0 ? (
-        <div className="text-center py-20 font-mono text-sm text-[#5C5C66]">
+        <div className="text-center py-20 font-mono text-sm text-[var(--muted-2)]">
           No companies found for this filter.
         </div>
       ) : (
@@ -191,28 +191,28 @@ export default function HiringPage() {
               key={co.company}
               whileHover={rowHover}
               transition={rowTransition}
-              className="flex flex-wrap md:flex-nowrap items-center gap-3 md:gap-4 px-5 py-4 rounded-xl bg-[#0A0A0E] border border-[#26262E] group cursor-default"
+              className="flex flex-wrap md:flex-nowrap items-center gap-3 md:gap-4 px-5 py-4 rounded-xl bg-[var(--panel)] border border-[var(--border)] group cursor-default"
             >
               {/* Rank */}
-              <span className="font-mono text-sm text-[#5C5C66] group-hover:text-[#9A9AA6] transition-colors shrink-0 w-7 text-right tabular-nums">
+              <span className="font-mono text-sm text-[var(--muted-2)] group-hover:text-[var(--muted)] transition-colors shrink-0 w-7 text-right tabular-nums">
                 {String(i + 1).padStart(2, "0")}
               </span>
 
               {/* Company name */}
-              <span className="flex-1 font-sans font-semibold text-base text-[#F4F4F6] group-hover:text-white transition-colors truncate min-w-0">
+              <span className="flex-1 font-sans font-semibold text-base text-[var(--text)] group-hover:text-[var(--text)] transition-colors truncate min-w-0">
                 {co.company}
               </span>
 
               {/* Openings */}
-              <span className="font-mono text-sm tabular-nums text-white shrink-0">
+              <span className="font-mono text-sm tabular-nums text-[var(--text)] shrink-0">
                 {co.openings.toLocaleString()}
-                <span className="text-[#5C5C66] ml-1 text-xs">openings</span>
+                <span className="text-[var(--muted-2)] ml-1 text-xs">openings</span>
               </span>
 
               {/* Remote % */}
-              <span className="font-mono text-xs tabular-nums text-[#9A9AA6] shrink-0 w-16 text-right">
+              <span className="font-mono text-xs tabular-nums text-[var(--muted)] shrink-0 w-16 text-right">
                 {pct(co.remoteShare)}
-                <span className="text-[#5C5C66] ml-0.5">remote</span>
+                <span className="text-[var(--muted-2)] ml-0.5">remote</span>
               </span>
 
               {/* Top-skill chips — clicking opens the SkillDrawer */}
@@ -222,7 +222,7 @@ export default function HiringPage() {
                     <button
                       key={skill}
                       onClick={() => openSkill(skill)}
-                      className="px-2.5 py-0.5 rounded-full border border-[#26262E] bg-[#121216] hover:border-[#EB0029] hover:text-white font-mono text-[10px] text-[#9A9AA6] transition-colors"
+                      className="px-2.5 py-0.5 rounded-full border border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--accent)] hover:text-[var(--text)] font-mono text-[10px] text-[var(--muted)] transition-colors"
                     >
                       {displayName(skill)}
                     </button>

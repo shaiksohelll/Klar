@@ -27,7 +27,7 @@ export function BarChart({ skills, maxCount, onSelect }) {
     <div className="w-full flex flex-col">
       {/* Eyebrow title */}
       <div
-        className="font-mono uppercase text-[#5C5C66] tracking-[0.18em] mb-5 select-none"
+        className="font-mono uppercase text-[var(--muted-2)] tracking-[0.18em] mb-5 select-none"
         style={{ fontSize: 11 }}
       >
         Top Skills by Volume
@@ -143,14 +143,14 @@ export function BarChart({ skills, maxCount, onSelect }) {
                     className="absolute z-30 pointer-events-none"
                     style={{ bottom: heightPx + 34 }}
                   >
-                    <div className="bg-[#08080A] border border-[#26262E] rounded-lg px-3 py-2.5 shadow-2xl flex flex-col gap-0.5 min-w-[110px] whitespace-nowrap">
-                      <div className="font-sans text-sm font-medium text-white">
+                    <div className="bg-[var(--panel)] border border-[var(--border)] rounded-lg px-3 py-2.5 shadow-2xl flex flex-col gap-0.5 min-w-[110px] whitespace-nowrap">
+                      <div className="font-sans text-sm font-medium text-[var(--text)]">
                         {display}
                       </div>
-                      <div className="font-mono text-xs text-[#9A9AA6]">
+                      <div className="font-mono text-xs text-[var(--muted)]">
                         {skill.count.toLocaleString()} jobs
                       </div>
-                      <div className="font-mono text-[10px] text-[#EB0029] uppercase tracking-wider">
+                      <div className="font-mono text-[10px] text-[var(--accent)] uppercase tracking-wider">
                         {remotePct}% Remote
                       </div>
                     </div>
@@ -163,7 +163,7 @@ export function BarChart({ skills, maxCount, onSelect }) {
       </div>
 
       {/* Baseline */}
-      <div className="h-px bg-[#26262E]" />
+      <div className="h-px bg-[var(--border)]" />
 
       {/* Horizontal skill labels — no rotation, centered under bars */}
       <div className="flex gap-1 mt-2.5">
@@ -181,7 +181,7 @@ export function BarChart({ skills, maxCount, onSelect }) {
                   // Three tiers so names always fit on one line — no mid-word breaks.
                   fontSize:
                     skill.name.length > 11 ? 9 : skill.name.length > 8 ? 10 : 11,
-                  color: isHovered ? "#FFFFFF" : "#9A9AA6",
+                  color: isHovered ? "var(--text)" : "var(--muted)",
                   whiteSpace: "nowrap",
                 }}
               >

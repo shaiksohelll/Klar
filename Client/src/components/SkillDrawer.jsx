@@ -225,7 +225,7 @@ export function SkillDrawer({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-[#08080A]/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-[var(--bg)]/70 backdrop-blur-sm"
           />
 
           {/* Drawer — slides in from right using UI spring, slides out on close */}
@@ -235,27 +235,27 @@ export function SkillDrawer({
             animate={drawerAnimate}
             exit={drawerExit}
             transition={drawerTransition}
-            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-linear-to-b from-[#121216] to-[#1A1A20] border-l border-[#26262E] shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 bg-linear-to-b from-[var(--panel)] to-[var(--surface-2)] border-l border-[var(--border)] shadow-2xl flex flex-col"
           >
             {/* Header */}
-            <div className="p-6 md:p-8 flex justify-between items-start border-b border-[#26262E]/50 relative overflow-hidden">
+            <div className="p-6 md:p-8 flex justify-between items-start border-b border-[var(--border)]/50 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF2740] rounded-full blur-[120px] opacity-10 pointer-events-none" />
               <div className="relative z-10">
-                <div className="font-mono text-xs tracking-widest text-[#9A9AA6] uppercase mb-2">
+                <div className="font-mono text-xs tracking-widest text-[var(--muted)] uppercase mb-2">
                   Skill Profile
                 </div>
-                <h2 className="font-space font-bold text-3xl text-white tracking-tight">
+                <h2 className="font-space font-bold text-3xl text-[var(--text)] tracking-tight">
                   {name}
                 </h2>
                 <div className="flex items-center gap-2 mt-3">
-                  <span className="px-2.5 py-1 rounded-full border border-[#26262E] bg-[#08080A] text-xs font-mono text-[#F4F4F6]">
+                  <span className="px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--bg)] text-xs font-mono text-[var(--text)]">
                     {current.role}
                   </span>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="relative z-10 p-2 text-[#9A9AA6] hover:text-white transition-colors bg-[#08080A]/50 rounded-full hover:bg-[#26262E]"
+                className="relative z-10 p-2 text-[var(--muted)] hover:text-[var(--text)] transition-colors bg-[var(--bg)]/50 rounded-full hover:bg-[var(--surface-2)]"
               >
                 <XIcon className="w-5 h-5" />
               </button>
@@ -265,36 +265,36 @@ export function SkillDrawer({
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 relative z-10">
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                  <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider mb-2">
                     Demand
                   </div>
-                  <div className="font-mono text-2xl text-white">
+                  <div className="font-mono text-2xl text-[var(--text)]">
                     {demandVal != null ? demandVal.toLocaleString() : "…"}
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                  <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider mb-2">
                     Remote
                   </div>
-                  <div className="font-mono text-2xl text-white">
+                  <div className="font-mono text-2xl text-[var(--text)]">
                     {remoteShare}%
                     {remoteCountVal != null && (
-                      <span className="text-sm text-[#5C5C66] ml-1">
+                      <span className="text-sm text-[var(--muted-2)] ml-1">
                         ({remoteCountVal.toLocaleString()})
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] col-span-2">
-                  <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-2">
+                <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] col-span-2">
+                  <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider mb-2">
                     Share of Jobs
                   </div>
                   <div className="flex items-end gap-3">
-                    <div className="font-mono text-2xl text-white">
+                    <div className="font-mono text-2xl text-[var(--text)]">
                       {share}%
                     </div>
-                    <div className="w-full bg-[#26262E] h-2 rounded-full overflow-hidden mb-1.5">
+                    <div className="w-full bg-[var(--border)] h-2 rounded-full overflow-hidden mb-1.5">
                       <div
                         className="h-full bg-linear-to-r from-[#FF2740] to-[#9E0019]"
                         style={shareBarStyle(share)}
@@ -316,7 +316,7 @@ export function SkillDrawer({
                         key={t.month}
                         className="flex-1 flex flex-col items-center gap-2 h-full"
                       >
-                        <div className="w-full bg-[#26262E] rounded-sm flex items-end h-full overflow-hidden">
+                        <div className="w-full bg-[var(--border)] rounded-sm flex items-end h-full overflow-hidden">
                           <div
                             className="w-full bg-linear-to-t from-[#9E0019] to-[#FF2740] rounded-sm"
                             style={trendBarStyle(
@@ -327,7 +327,7 @@ export function SkillDrawer({
                             )}
                           />
                         </div>
-                        <div className="font-mono text-[10px] text-[#5C5C66]">
+                        <div className="font-mono text-[10px] text-[var(--muted-2)]">
                           {monthLabel(t.month)}
                         </div>
                       </div>
@@ -348,12 +348,12 @@ export function SkillDrawer({
                       {detail.topCompanies.map((c) => (
                         <div
                           key={c.company}
-                          className="flex items-center justify-between p-3 rounded-lg bg-[#08080A] border border-[#26262E]"
+                          className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
                         >
-                          <span className="text-sm text-[#F4F4F6] truncate pr-3">
+                          <span className="text-sm text-[var(--text)] truncate pr-3">
                             {c.company}
                           </span>
-                          <span className="font-mono text-xs text-[#9A9AA6] shrink-0">
+                          <span className="font-mono text-xs text-[var(--muted)] shrink-0">
                             {c.count} jobs
                           </span>
                         </div>
@@ -368,16 +368,16 @@ export function SkillDrawer({
                 <div
                   aria-label="Loading salary data"
                   aria-busy="true"
-                  className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] space-y-3"
+                  className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-3"
                 >
-                  <div className="h-2.5 w-28 rounded bg-[#26262E]" />
+                  <div className="h-2.5 w-28 rounded bg-[var(--border)]" />
                   <div
-                    className={`h-9 w-32 rounded bg-[#1E1E24] ${
+                    className={`h-9 w-32 rounded bg-[var(--surface-2)] ${
                       shouldReduceMotion ? "" : "animate-pulse"
                     }`}
                   />
-                  <div className="h-2 w-48 rounded bg-[#1A1A20]" />
-                  <div className="h-2 w-40 rounded bg-[#1A1A20]" />
+                  <div className="h-2 w-48 rounded bg-[var(--surface-2)]" />
+                  <div className="h-2 w-40 rounded bg-[var(--surface-2)]" />
                 </div>
               )}
 
@@ -389,30 +389,30 @@ export function SkillDrawer({
                   </div>
 
                   {salary.primary && salary.primary.count > 0 ? (
-                    <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E] space-y-2">
+                    <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-2">
                       {/* Median — large prominent number */}
-                      <div className="font-mono text-3xl font-bold text-white">
+                      <div className="font-mono text-3xl font-bold text-[var(--text)]">
                         {currencySymbol(salary.primary.currency)}
                         {fmtSalary(salary.primary.median, salary.primary.currency)}
-                        <span className="text-sm text-[#9A9AA6] font-normal ml-2">median</span>
+                        <span className="text-sm text-[var(--muted)] font-normal ml-2">median</span>
                       </div>
 
                       {/* p25–p75 range */}
-                      <div className="font-mono text-sm text-[#9A9AA6]">
+                      <div className="font-mono text-sm text-[var(--muted)]">
                         {currencySymbol(salary.primary.currency)}
                         {fmtSalary(salary.primary.p25, salary.primary.currency)}
                         {" – "}
                         {currencySymbol(salary.primary.currency)}
                         {fmtSalary(salary.primary.p75, salary.primary.currency)}
-                        <span className="text-[#5C5C66] ml-1">typical range</span>
+                        <span className="text-[var(--muted-2)] ml-1">typical range</span>
                       </div>
 
                       {/* Disclosure caption */}
-                      <div className="font-mono text-[10px] text-[#5C5C66] leading-relaxed pt-1 border-t border-[#26262E]">
+                      <div className="font-mono text-[10px] text-[var(--muted-2)] leading-relaxed pt-1 border-t border-[var(--border)]">
                         Disclosed by{" "}
-                        <span className="text-[#9A9AA6]">{salary.disclosedCount.toLocaleString()}</span>
+                        <span className="text-[var(--muted)]">{salary.disclosedCount.toLocaleString()}</span>
                         {" of "}
-                        <span className="text-[#9A9AA6]">{salary.totalCount.toLocaleString()}</span>
+                        <span className="text-[var(--muted)]">{salary.totalCount.toLocaleString()}</span>
                         {" postings ("}
                         {Math.round((salary.disclosureRate ?? 0) * 100)}%
                         {" disclosure rate). Employer-disclosed only — no estimates."}
@@ -420,8 +420,8 @@ export function SkillDrawer({
                     </div>
                   ) : (
                     /* Empty state — calm, honest, never shows a zero or broken chart */
-                    <div className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                      <p className="font-mono text-xs text-[#5C5C66] leading-relaxed">
+                    <div className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                      <p className="font-mono text-xs text-[var(--muted-2)] leading-relaxed">
                         No salaries disclosed yet for this skill.
                       </p>
                     </div>
@@ -448,15 +448,15 @@ export function SkillDrawer({
                           <div className="flex items-center justify-between mb-1">
                             <button
                               onClick={() => goToSkill(p.skill)}
-                              className="font-mono text-xs text-[#F4F4F6] hover:text-white transition-colors cursor-pointer text-left"
+                              className="font-mono text-xs text-[var(--text)] hover:text-[var(--accent)] transition-colors cursor-pointer text-left"
                             >
                               {displayName(p.skill)}
                             </button>
-                            <span className="font-mono text-xs text-[#9A9AA6] shrink-0 ml-3">
+                            <span className="font-mono text-xs text-[var(--muted)] shrink-0 ml-3">
                               {p.percentage}%
                             </span>
                           </div>
-                          <div className="h-1 rounded-full bg-[#26262E] overflow-hidden">
+                          <div className="h-1 rounded-full bg-[var(--border)] overflow-hidden">
                             <div
                               className="h-full rounded-full bg-[#FF2740]"
                               style={{ width: `${p.percentage}%` }}
@@ -479,7 +479,7 @@ export function SkillDrawer({
                       const inner = (
                         <>
                           <div className="flex items-center gap-2">
-                            <div className="text-sm text-[#F4F4F6] font-medium truncate">
+                            <div className="text-sm text-[var(--text)] font-medium truncate">
                               {j.title}
                             </div>
                             {j.url && (
@@ -488,7 +488,7 @@ export function SkillDrawer({
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-1 font-mono text-xs text-[#5C5C66]">
+                          <div className="flex items-center gap-2 mt-1 font-mono text-xs text-[var(--muted-2)]">
                             <span className="truncate">{j.company || "—"}</span>
                             {j.isRemote && (
                               <span className="px-1.5 py-0.5 rounded bg-[rgba(235,0,41,0.15)] text-[#FF2740]">
@@ -507,14 +507,14 @@ export function SkillDrawer({
                           href={j.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="group block p-3 rounded-lg bg-[#08080A] border border-[#26262E] hover:border-[#EB0029] transition-colors"
+                          className="group block p-3 rounded-lg bg-[var(--bg)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
                         >
                           {inner}
                         </a>
                       ) : (
                         <div
                           key={i}
-                          className="p-3 rounded-lg bg-[#08080A] border border-[#26262E]"
+                          className="p-3 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
                         >
                           {inner}
                         </div>
@@ -572,8 +572,8 @@ export function SkillDrawer({
 
               {/* Detail fetch error — shown when the /api/skill request fails */}
               {detailError && !loadingDetail && (
-                <div role="status" className="p-4 rounded-xl bg-[#08080A] border border-[#26262E]">
-                  <p className="font-mono text-xs text-[#9A9AA6]">
+                <div role="status" className="p-4 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                  <p className="font-mono text-xs text-[var(--muted)]">
                     Couldn&#39;t load details. Try closing and reopening the drawer.
                   </p>
                 </div>
@@ -584,7 +584,7 @@ export function SkillDrawer({
                 <div className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider mb-3">
                   The Reality
                 </div>
-                <p className="text-[#F4F4F6] leading-relaxed">
+                <p className="text-[var(--text)] leading-relaxed">
                   {`${name} shows ${
                     demandVal != null ? demandVal.toLocaleString() : "…"
                   } active postings in this window — about ${share}% of all jobs analyzed, ${remoteShare}% of them remote. A live read on current demand, not a forecast.`}
@@ -593,13 +593,13 @@ export function SkillDrawer({
             </div>
 
             {/* Footer — track button with star pop animation */}
-            <div className="p-6 md:p-8 border-t border-[#26262E]/50 bg-[#08080A]/50 relative z-10">
+            <div className="p-6 md:p-8 border-t border-[var(--border)]/50 bg-[var(--bg)]/50 relative z-10">
               <button
                 onClick={() => onTrack(current.id)}
                 className={`w-full py-4 px-6 rounded-xl font-mono text-sm uppercase tracking-widest font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
                   isTracked
-                    ? "bg-[#26262E] text-white hover:bg-[#32323C]"
-                    : "bg-[#EB0029] text-white shadow-[0_0_20px_rgba(235,0,41,0.3)] hover:shadow-[0_0_30px_rgba(255,39,64,0.5)] hover:bg-[#FF2740] hover:-translate-y-0.5"
+                    ? "bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--border)]"
+                    : "bg-[var(--accent)] text-white shadow-[0_0_20px_rgba(235,0,41,0.3)] hover:shadow-[0_0_30px_rgba(255,39,64,0.5)] hover:bg-[var(--accent-hover)] hover:-translate-y-0.5"
                 }`}
               >
                 {/* Star with snappy spring pop on track */}

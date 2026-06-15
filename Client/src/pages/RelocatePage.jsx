@@ -127,7 +127,7 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
 
   return (
     <label className="space-y-2 relative block" ref={rootRef}>
-      <span className="font-mono text-xs uppercase tracking-widest text-[#9A9AA6]">{label}</span>
+      <span className="font-mono text-xs uppercase tracking-widest text-[var(--muted)]">{label}</span>
       <input
         value={value}
         onChange={(e) => {
@@ -142,10 +142,10 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
         autoComplete="off"
         role="combobox"
         aria-expanded={showPanel}
-        className="w-full bg-[#08080A] border border-[#26262E] rounded-lg px-4 py-2.5 text-[#F4F4F6] placeholder:text-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors"
+        className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text)] placeholder:text-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors"
       />
       {showPanel && (
-        <div className="absolute z-30 left-0 right-0 mt-1 bg-[#121216] border border-[#26262E] rounded-lg overflow-hidden shadow-2xl max-h-72 overflow-y-auto">
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-[var(--panel)] border border-[var(--border)] rounded-lg overflow-hidden shadow-2xl max-h-72 overflow-y-auto">
           {suggestions.length > 0 ? (
             suggestions.map((s, i) => (
               <button
@@ -158,17 +158,17 @@ function Combobox({ label, placeholder, value, onChange, onSelect }) {
                 }}
                 onMouseEnter={() => setHighlight(i)}
                 className="w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors"
-                style={{ background: i === highlight ? "#1E1E24" : "transparent" }}
+                style={{ background: i === highlight ? "var(--surface-2)" : "transparent" }}
               >
-                <span className="text-[#F4F4F6] text-sm truncate">{s.label}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-[#9A9AA6] shrink-0">
+                <span className="text-[var(--text)] text-sm truncate">{s.label}</span>
+                <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted)] shrink-0">
                   {s.type === "country" ? "Country" : s.country.toUpperCase()}
                 </span>
               </button>
             ))
           ) : (
             !loading && searched && (
-              <div className="px-4 py-2.5 font-mono text-xs text-[#9A9AA6]">No matches</div>
+              <div className="px-4 py-2.5 font-mono text-xs text-[var(--muted)]">No matches</div>
             )
           )}
         </div>
@@ -248,7 +248,14 @@ export default function RelocatePage() {
             ? -1
             : 0;
 
-  const deltaColor = delta == null ? "#9A9AA6" : delta > 0 ? "#3FB950" : delta < 0 ? "#EB0029" : "#9A9AA6";
+  const deltaColor =
+    delta == null
+      ? "var(--neutral)"
+      : delta > 0
+        ? "var(--pos)"
+        : delta < 0
+          ? "var(--neg)"
+          : "var(--neutral)";
   const deltaLabel =
     delta == null
       ? ""
@@ -282,19 +289,20 @@ export default function RelocatePage() {
     if (!hasOfferResult) return null;
     const pct = result.roiPct;
     if (pct >= 3) {
-      return { color: "#3FB950", label: `+${pct}% REAL RAISE`, word: "real raise" };
+      return { color: "var(--pos)", label: `+${pct}% REAL RAISE`, word: "real raise" };
     }
     if (pct <= -3) {
-      return { color: "#EB0029", label: `${pct}% REAL CUT`, word: "real cut" };
+      return { color: "var(--neg)", label: `${pct}% REAL CUT`, word: "real cut" };
     }
-    return { color: "#9A9AA6", label: "~ ROUGHLY FLAT", word: "roughly flat move" };
+    return { color: "var(--neutral)", label: "~ ROUGHLY FLAT", word: "roughly flat move" };
   })();
 
   // Break-even comparison: is the offer above or below the amount needed to
   // preserve the same real lifestyle in the destination?
   const breakEvenAbove =
     hasOfferResult && result.offerVsBreakEvenPct != null ? result.offerVsBreakEvenPct >= 0 : null;
-  const breakEvenColor = breakEvenAbove == null ? "#9A9AA6" : breakEvenAbove ? "#3FB950" : "#EB0029";
+  const breakEvenColor =
+    breakEvenAbove == null ? "var(--neutral)" : breakEvenAbove ? "var(--pos)" : "var(--neg)";
 
   // Render a price level WITH its city multiplier when one is in play, e.g.
   // "25 x 0.95 = 23.75"; otherwise just the effective level.
@@ -332,14 +340,14 @@ export default function RelocatePage() {
   return (
     <main className="max-w-4xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-12 relative z-10">
       <section className="text-center max-w-2xl mx-auto space-y-6">
-        <div className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold">
+        <div className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold">
           Relocation ROI
         </div>
-        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-white">
+        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-[var(--text)]">
           What your salary is{" "}
-          <span className="text-[#EB0029] italic">really</span> worth.
+          <span className="text-[var(--accent)] italic">really</span> worth.
         </h1>
-        <p className="text-lg text-[#9A9AA6] font-medium">
+        <p className="text-lg text-[var(--muted)] font-medium">
           Convert a nominal salary into real, cost-of-living-adjusted purchasing
           power between two cities.
         </p>
@@ -348,7 +356,7 @@ export default function RelocatePage() {
       {/* ── Form ── */}
       <form
         onSubmit={onSubmit}
-        className="bg-[#121216] border border-[#26262E] rounded-2xl p-6 md:p-8 space-y-6"
+        className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6 md:p-8 space-y-6"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Combobox
@@ -369,7 +377,7 @@ export default function RelocatePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <label className="space-y-2">
-            <span className="font-mono text-xs uppercase tracking-widest text-[#9A9AA6]">Current salary</span>
+            <span className="font-mono text-xs uppercase tracking-widest text-[var(--muted)]">Current salary</span>
             <div className="flex gap-2">
               <input
                 type="number"
@@ -377,7 +385,7 @@ export default function RelocatePage() {
                 value={salary}
                 onChange={(e) => setSalary(e.target.value)}
                 placeholder="2500000"
-                className="flex-1 bg-[#08080A] border border-[#26262E] rounded-lg px-4 py-2.5 text-[#F4F4F6] placeholder:text-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors"
+                className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text)] placeholder:text-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
               <select
                 value={currency}
@@ -385,7 +393,7 @@ export default function RelocatePage() {
                   setCurrency(e.target.value);
                   setCurrencyTouched(true);
                 }}
-                className="bg-[#08080A] border border-[#26262E] rounded-lg px-3 py-2.5 text-[#F4F4F6] font-mono text-sm focus:outline-none focus:border-[#EB0029] transition-colors"
+                className="bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-[var(--text)] font-mono text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
               >
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -395,7 +403,7 @@ export default function RelocatePage() {
           </label>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[#9A9AA6] cursor-pointer">
+            <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--muted)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={hasOffer}
@@ -411,7 +419,7 @@ export default function RelocatePage() {
               value={targetSalary}
               onChange={(e) => setTargetSalary(e.target.value)}
               placeholder="Target salary (destination currency)"
-              className="w-full bg-[#08080A] border border-[#26262E] rounded-lg px-4 py-2.5 text-[#F4F4F6] placeholder:text-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors disabled:opacity-40"
+              className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-[var(--text)] placeholder:text-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors disabled:opacity-40"
             />
           </div>
         </div>
@@ -419,7 +427,7 @@ export default function RelocatePage() {
         <button
           type="submit"
           disabled={loading}
-          className="bg-[#EB0029] hover:bg-[#FF2740] disabled:opacity-50 text-white px-6 py-2.5 rounded-full font-medium text-sm transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)]"
+          className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white px-6 py-2.5 rounded-full font-medium text-sm transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)]"
         >
           {loading ? "Calculating\u2026" : "Calculate real value"}
         </button>
@@ -427,7 +435,7 @@ export default function RelocatePage() {
 
       {/* ── States ── */}
       {error && (
-        <div className="text-center py-6 font-mono text-sm text-[#EB0029]">{error}</div>
+        <div className="text-center py-6 font-mono text-sm text-[var(--accent)]">{error}</div>
       )}
 
       {result && !error && (
@@ -435,7 +443,7 @@ export default function RelocatePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: EASE }}
-          className="bg-[#121216] border border-[#26262E] rounded-2xl p-6 md:p-8 space-y-6"
+          className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6 md:p-8 space-y-6"
         >
           {/* Verdict */}
           {hasOfferResult ? (
@@ -447,26 +455,26 @@ export default function RelocatePage() {
               >
                 {offerVerdict.label}
               </span>
-              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+              <p className="text-xl md:text-2xl text-[var(--text)] leading-relaxed">
                 This{" "}
-                <span className="text-white font-semibold">
+                <span className="text-[var(--text)] font-semibold">
                   {fmt(result.targetSalary, destCurrency)}
                 </span>{" "}
-                offer in <span className="text-white font-semibold">{toLabel}</span> is a{" "}
+                offer in <span className="text-[var(--text)] font-semibold">{toLabel}</span> is a{" "}
                 <span className="font-semibold" style={{ color: offerVerdict.color }}>
                   {offerVerdict.word}
                 </span>{" "}
                 vs your{" "}
-                <span className="text-white font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
-                in <span className="text-white font-semibold">{fromLabel}</span>.
+                <span className="text-[var(--text)] font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
+                in <span className="text-[var(--text)] font-semibold">{fromLabel}</span>.
               </p>
               {result.offerVsBreakEvenPct != null && (
-                <p className="text-base md:text-lg text-[#9A9AA6] leading-relaxed">
+                <p className="text-base md:text-lg text-[var(--muted)] leading-relaxed">
                   You break even at{" "}
-                  <span className="text-[#F4F4F6] font-semibold">
+                  <span className="text-[var(--text)] font-semibold">
                     {fmt(result.breakEvenTarget, destCurrency)}
                   </span>{" "}
-                  in <span className="text-[#F4F4F6] font-semibold">{toCity}</span>; this offer is{" "}
+                  in <span className="text-[var(--text)] font-semibold">{toCity}</span>; this offer is{" "}
                   <span className="font-semibold" style={{ color: breakEvenColor }}>
                     {breakEvenAbove ? "above" : "below"}
                   </span>{" "}
@@ -487,12 +495,12 @@ export default function RelocatePage() {
               >
                 {deltaLabel}
               </span>
-              <p className="text-xl md:text-2xl text-[#F4F4F6] leading-relaxed">
+              <p className="text-xl md:text-2xl text-[var(--text)] leading-relaxed">
                 Your {fmt(result.salary, result.currency)} in{" "}
-                <span className="text-white font-semibold">{fromLabel}</span>{" "}
+                <span className="text-[var(--text)] font-semibold">{fromLabel}</span>{" "}
                 ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
-                <span className="text-white font-semibold">{toLabel}</span>, you’d need{" "}
-                <span className="text-[#EB0029] font-semibold">
+                <span className="text-[var(--text)] font-semibold">{toLabel}</span>, you’d need{" "}
+                <span className="text-[var(--accent)] font-semibold">
                   {fmt(result.equivalentInTarget, destCurrency)}
                 </span>
                 .
@@ -502,22 +510,22 @@ export default function RelocatePage() {
 
           {/* Breakdown — auto-fitting grid so cells never leave dangling gaps. */}
           <div
-            className="grid gap-px bg-[#26262E] rounded-xl overflow-hidden"
+            className="grid gap-px bg-[var(--border)] rounded-xl overflow-hidden"
             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
           >
             {breakdownCells.map(([label, value]) => (
-              <div key={label} className="bg-[#121216] p-4">
-                <div className="font-mono text-[10px] uppercase tracking-widest text-[#5C5C66] mb-1">
+              <div key={label} className="bg-[var(--panel)] p-4">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted-2)] mb-1">
                   {label}
                 </div>
-                <div className="text-[#F4F4F6] font-semibold">{value}</div>
+                <div className="text-[var(--text)] font-semibold">{value}</div>
               </div>
             ))}
           </div>
         </motion.section>
       )}
 
-      <footer className="font-mono text-[10px] text-[#5C5C66] text-center leading-relaxed max-w-2xl mx-auto">
+      <footer className="font-mono text-[10px] text-[var(--muted-2)] text-center leading-relaxed max-w-2xl mx-auto">
         Country-level price data from World Bank (CC-BY-4.0); city adjustments are
         approximate. Not financial advice.
       </footer>
