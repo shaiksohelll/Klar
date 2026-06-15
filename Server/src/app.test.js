@@ -154,6 +154,55 @@ describe("GET /api/relocation", () => {
     expect(res.body.from.geonameId).toBe(city.geonameId);
     expect(res.body.from.country).toBe(city.country);
   });
+
+  it("returns resolved displayName containing the city NAME, not a geonameId", async () => {
+    const [city] = searchCities("bangalore", 1); // Bengaluru (India)
+    expect(city).toBeTruthy();
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: String(city.geonameId), to: "us", salary: 2500000, currency: "INR" });
+    expect(res.status).toBe(200);
+    const dn = res.body.from.displayName;
+    expect(typeof dn).toBe("string");
+    // The label uses the city NAME, never the bare numeric geonameId.
+    expect(dn).toContain(city.city);
+    expect(dn).not.toBe(String(city.geonameId));
+    expect(/^\d+$/.test(dn)).toBe(false);
+  });
+
+  it("omits a numeric admin1 from displayName (e.g. India), keeps alphabetic", async () => {
+    const [india] = searchCities("bangalore", 1); // Bengaluru, admin1 "19"
+    expect(india).toBeTruthy();
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: String(india.geonameId), to: "us", salary: 2500000, currency: "INR" });
+    expect(res.status).toBe(200);
+    // Numeric admin1 must NOT leak into the label or the resolved field.
+    expect(res.body.from.displayName).not.toMatch(/\b\d+\b/);
+    expect(res.body.from.admin1).toBeUndefined();
+
+    // A US city should keep its alphabetic admin1 (e.g. "CA").
+    const usCity = searchCities("san francisco", 5).find(
+      (c) => c.country === "us" && typeof c.admin1 === "string" && /[A-Za-z]/.test(c.admin1),
+    );
+    if (usCity) {
+      const res2 = await request(app)
+        .get("/api/relocation")
+        .query({ from: String(usCity.geonameId), to: "in", salary: 150000, currency: "USD" });
+      expect(res2.status).toBe(200);
+      expect(res2.body.from.admin1).toBe(usCity.admin1);
+      expect(res2.body.from.displayName).toContain(usCity.admin1);
+    }
+  });
+
+  it("uses the country name as displayName for a 2-letter country code", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "in", to: "us", salary: 100000, currency: "USD" });
+    expect(res.status).toBe(200);
+    expect(res.body.from.displayName).toBe("India");
+    expect(res.body.to.displayName).toBe("United States");
+  });
 });
 
 describe("searchCities", () => {
