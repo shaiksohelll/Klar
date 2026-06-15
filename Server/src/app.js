@@ -10,8 +10,10 @@ import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.j
 import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
+import { getAtlas } from "./aggregations/atlas.js";
 import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
-import { makeDedupeKey } from "./lib/dedupe.js";
+import { makeDedupeKey, normalizeLocation } from "./lib/dedupe.js";
+import { geocodeCity } from "./lib/geocode.js";
 import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
@@ -205,6 +207,41 @@ app.post("/api/admin/backfill-dedupe", async (req, res, next) => {
   }
 });
 
+// ── Backfill geo (admin) ─────────────────────────────────────────
+// Resolves geo + geoConfidence onto every existing Job doc using geocodeCity().
+// Mirrors /api/admin/backfill-dedupe: streamed cursor + bulkWrite(ordered:false).
+// countryHint is inferred from the stored salary currency (best available
+// signal for an existing row). Safe to call repeatedly (idempotent $set).
+app.post("/api/admin/backfill-geo", async (req, res, next) => {
+  if (!isValidIngestSecret(req)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  try {
+    // Map stored salary currency -> ISO-2 country hint for geocodeCity().
+    const CURRENCY_HINT = { INR: "in", USD: "us", GBP: "gb", CAD: "ca", AUD: "au" };
+    const cursor = Job.find({}).select("location salaryRange.currency").lean().cursor();
+    const ops = [];
+    for await (const job of cursor) {
+      const hint = CURRENCY_HINT[job.salaryRange?.currency] || undefined;
+      const g = geocodeCity(normalizeLocation(job.location || ""), hint);
+      ops.push({
+        updateOne: {
+          filter: { _id: job._id },
+          update: { $set: { geo: g.value, geoConfidence: g.confidence } },
+        },
+      });
+    }
+    let updated = 0;
+    if (ops.length > 0) {
+      const result = await Job.bulkWrite(ops, { ordered: false });
+      updated = result.modifiedCount || 0;
+    }
+    res.json({ ok: true, processed: ops.length, updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Trending skills ────────────────────────────────────────────────────────
 app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
   try {
@@ -320,6 +357,32 @@ app.get("/api/salary", readLimiter, async (req, res, next) => {
     }
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const data = await getSalaryInsights({ skill, role, months });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Atlas — public Opportunity Map ───────────────────────────────────
+// Public, read-only. Per-VERIFIED-city demand, disclosed avg salary, and
+// 30-day momentum. Optional ?role= ?skill= ?months= (clamped 1-24, default 12).
+app.get("/api/atlas", readLimiter, async (req, res, next) => {
+  try {
+    let role, skill;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+    if (req.query.skill != null && String(req.query.skill).trim() !== "") {
+      skill = resolveSkill(req.query.skill);
+      if (!skill) {
+        return res.status(400).json({ ok: false, error: "Unknown skill — see /api/skills/all for valid values." });
+      }
+    }
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const data = await getAtlas({ role, skill, months });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);
