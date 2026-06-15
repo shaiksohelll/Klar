@@ -272,6 +272,30 @@ export default function RelocatePage() {
   const fromCity = result ? result.from.city || result.from.displayName || result.from.input : "";
   const toCity = result ? result.to.city || result.to.displayName || result.to.input : "";
 
+  // ── Offer mode (real-raise verdict) ──────────────────────────────────
+  // An offer was evaluated when the API echoed a targetSalary and a roiPct.
+  const hasOfferResult = !!(result && result.targetSalary != null && result.roiPct != null);
+
+  // Verdict thresholds: >= +3% real raise (green), <= -3% real cut (red),
+  // otherwise roughly flat (grey).
+  const offerVerdict = (() => {
+    if (!hasOfferResult) return null;
+    const pct = result.roiPct;
+    if (pct >= 3) {
+      return { color: "#3FB950", label: `+${pct}% REAL RAISE`, word: "real raise" };
+    }
+    if (pct <= -3) {
+      return { color: "#EB0029", label: `${pct}% REAL CUT`, word: "real cut" };
+    }
+    return { color: "#9A9AA6", label: "~ ROUGHLY FLAT", word: "roughly flat move" };
+  })();
+
+  // Break-even comparison: is the offer above or below the amount needed to
+  // preserve the same real lifestyle in the destination?
+  const breakEvenAbove =
+    hasOfferResult && result.offerVsBreakEvenPct != null ? result.offerVsBreakEvenPct >= 0 : null;
+  const breakEvenColor = breakEvenAbove == null ? "#9A9AA6" : breakEvenAbove ? "#3FB950" : "#EB0029";
+
   // Render a price level WITH its city multiplier when one is in play, e.g.
   // "25 x 0.95 = 23.75"; otherwise just the effective level.
   const priceLevelStr = (base, mult, effective) => {
