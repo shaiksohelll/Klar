@@ -39,7 +39,7 @@ export function TiltCard({ children, className = "" }) {
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         style={cardStyle}
-        className="w-full h-full relative rounded-2xl bg-linear-to-b from-[#121216] to-[#1A1A20] border border-[#26262E] overflow-hidden transition-shadow duration-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6),_0_0_40px_rgba(235,0,41,0.05)]"
+        className="w-full h-full relative rounded-2xl bg-linear-to-b from-[var(--panel)] to-[var(--surface-2)] border border-[var(--border)] overflow-hidden transition-shadow duration-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6),_0_0_40px_rgba(235,0,41,0.05)]"
       >
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#FF2740] rounded-full blur-[100px] opacity-10 pointer-events-none group-hover:opacity-20 transition-opacity duration-500" />
         <div style={innerStyle} className="w-full h-full relative z-10 p-6 md:p-8">
