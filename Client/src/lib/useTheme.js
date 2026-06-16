@@ -19,8 +19,10 @@ export function useTheme() {
     const el = document.documentElement;
     const obs = new MutationObserver(() => setTheme(read()));
     obs.observe(el, { attributes: true, attributeFilter: ["data-theme"] });
-    // Sync once in case the attribute changed between first render and effect.
-    setTheme(read());
+    // Catch any data-theme change between first render and the observer
+    // attaching. Deferred via microtask so it is not a synchronous setState
+    // in the effect body (which the react-hooks rule forbids).
+    queueMicrotask(() => setTheme(read()));
     return () => obs.disconnect();
   }, []);
 
