@@ -425,10 +425,37 @@ export default function RelocatePage() {
 
       {/* ── States ── */}
       {error && (
-        <div className="text-center py-6 font-mono text-sm text-[var(--accent)]">{error}</div>
+        /* ERROR — plain what happened + what to check; never a raw code. */
+        <div
+          role="alert"
+          className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-6"
+        >
+          <h2 className="font-space text-lg font-bold text-[var(--text)]">
+            We couldn't run that comparison
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            {error} Check that both cities are recognised and the salary is a
+            number, then calculate again.
+          </p>
+        </div>
       )}
 
-      {result && !error && (
+      {/* LOADING — skeleton mirrors the result card so nothing jumps. */}
+      {loading && !error && (
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 md:p-8 space-y-5" aria-busy="true" aria-label="Calculating real value">
+          <div className="skeleton h-3 w-40" />
+          <div className="skeleton h-9 w-2/3" />
+          <div className="skeleton h-3 w-32" />
+          <div className="skeleton h-12 w-1/2" />
+          <div className="grid grid-cols-2 gap-px md:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="skeleton h-16" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {result && !error && !loading && (
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
