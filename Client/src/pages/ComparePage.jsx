@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import axios from "axios";
 import { motion, useReducedMotion } from "framer-motion";
+import Confidence from "../components/ui/Confidence";
 import { useSearchParams } from "react-router-dom";
 import { displayName } from "../lib/displayName";
 
@@ -778,6 +779,11 @@ export default function ComparePage() {
           Pick 2–3 skills to compare demand, salary and how postings have
           trended over the last 12 months.
         </p>
+        <Confidence
+          level={70}
+          why="Salary figures are medians of postings that disclosed pay; demand and remote share are exact counts."
+          source="Disclosed-salary postings in the selected window; medians and P25/P75 percentiles, not individual offers."
+        />
       </section>
 
       {/* Picker + chips */}
