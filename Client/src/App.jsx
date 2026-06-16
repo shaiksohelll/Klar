@@ -1,15 +1,12 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import axios from "axios";
 import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
   UserButton,
   useUser,
   useAuth,
   useClerk,
 } from "@clerk/clerk-react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Brand from "./components/Brand";
@@ -311,11 +308,6 @@ export default function App() {
       }
     }
   };
-
-  const navClass = (state) =>
-    state.isActive
-      ? "text-[var(--text)]"
-      : "hover:text-[var(--text)] transition-colors";
 
   const outletContext = {
     sorted,
