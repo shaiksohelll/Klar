@@ -5,6 +5,8 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { useTheme } from "./lib/useTheme";
+import { clerkAppearance } from "./lib/clerkAppearance";
 import "./index.css";
 
 const DemandPage = lazy(() => import("./pages/DemandPage"));
@@ -22,31 +24,25 @@ if (!PUBLISHABLE_KEY) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in Client/.env");
 }
 
-const clerkAppearance = {
-  variables: {
-    colorPrimary: "#EB0029",
-    colorBackground: "#121216",
-    colorText: "#F4F4F6",
-    colorTextSecondary: "#9A9AA6",
-    colorInputBackground: "#08080A",
-    colorInputText: "#F4F4F6",
-    borderRadius: "0.75rem",
-  },
-  elements: {
-    card: "bg-[#121216] border border-[#26262E]",
-    headerTitle: "text-white",
-    socialButtonsBlockButton: "border border-[#26262E] text-[#F4F4F6]",
-  },
-};
+// Subscribe to the live theme so Clerk's literal-hex appearance tracks the
+// app's light/dark state (Clerk cannot read CSS variables).
+function ThemedClerkProvider({ children }) {
+  const theme = useTheme();
+  return (
+    <ClerkProvider
+      publishableKey={PUBLISHABLE_KEY}
+      appearance={clerkAppearance(theme)}
+      afterSignOutUrl="/"
+    >
+      {children}
+    </ClerkProvider>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <ClerkProvider
-        publishableKey={PUBLISHABLE_KEY}
-        appearance={clerkAppearance}
-        afterSignOutUrl="/"
-      >
+      <ThemedClerkProvider>
         <BrowserRouter>
           <Routes>
             <Route element={<App />}>
@@ -61,7 +57,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             </Route>
           </Routes>
         </BrowserRouter>
-      </ClerkProvider>
+      </ThemedClerkProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );
