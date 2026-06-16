@@ -1,17 +1,63 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Clarity design system — token layer.
+   Klar means "clear": nominal noise resolves into sharp, mono, verdict-
+   colored truth. Red (--accent) is the verdict signal, never decoration.
+
+   DARK is the default (on :root) and LIGHT is a hand-tuned inverse applied
+   via [data-theme="light"]. Every value below is a token; utilities map to
+   them through the @theme block so routes never hard-code a hex.
+   ──────────────────────────────────────────────────────────────────────── */
+
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
-  --font-space: "Space Grotesk", sans-serif;
+  /* Type families. Space Grotesk drives display/UI; JetBrains Mono carries
+     every numeral (tabular-nums) so I/l/1 stay unambiguous. */
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-space: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Type scale — 1.250 ratio from a 16px base (editorial display sizes). */
+  --text-base: 1rem;        /* 16 */
+  --text-lg: 1.25rem;       /* 20 */
+  --text-xl: 1.5625rem;     /* 25 */
+  --text-2xl: 1.9375rem;    /* 31 */
+  --text-3xl: 2.4375rem;    /* 39 */
+  --text-4xl: 3rem;         /* 48 */
+
+  /* Map color tokens into Tailwind's color space so text-accent, bg-panel,
+     border-border, text-pos, etc. all resolve to the live CSS variable. */
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-neutral: var(--neutral);
+
+  /* Radius scale (px). */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Motion easings + durations. */
+  --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-accelerate: cubic-bezier(0.7, 0, 0.84, 0);
 }
 
-/* ── Semantic theme tokens ──────────────────────────────────────────────
-   DARK is the default (on :root) so the app looks identical to today.
-   LIGHT is a deliberate, hand-tuned inverse applied via [data-theme="light"].
-   The brand red (--accent) is constant across both themes. */
 :root {
+  /* Dark (default) */
   --bg: #08080a;
   --panel: #121216;
   --surface-2: #1e1e24;
@@ -19,11 +65,47 @@
   --muted: #9a9aa6;
   --muted-2: #5c5c66;
   --border: #232329;
+
   --accent: #eb0029;
   --accent-hover: #ff2740;
+  --glow-red: 0 0 0 4px rgba(255, 39, 64, 0.22);
+
+  /* Verdict signals. */
   --pos: #3fb950;
   --neg: #eb0029;
   --neutral: #9a9aa6;
+
+  /* Liquid glass surfaces. */
+  --glass-bg: rgba(18, 18, 22, 0.62);
+  --glass-blur: 18px;
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Spacing scale (px) — referenced by hand-tuned layouts. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+
+  /* Elevation — soft, low-opacity shadows. */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --elev-3: 0 16px 40px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.35);
+
+  /* Motion durations. */
+  --d-1: 80ms;
+  --d-2: 120ms;
+  --d-3: 200ms;
+  --d-4: 320ms;
+  --d-5: 480ms;
+
+  /* 3D. */
+  --perspective: 1200px;
+  --tilt-max: 6deg;
 }
 
 [data-theme="light"] {
@@ -34,11 +116,21 @@
   --muted: #5c5c66;
   --muted-2: #8a8a93;
   --border: #e4e4ea;
+
   --accent: #eb0029;
   --accent-hover: #c70022;
+  --glow-red: 0 0 0 4px rgba(235, 0, 41, 0.18);
+
   --pos: #1f9d4d;
   --neg: #eb0029;
   --neutral: #6b6b73;
+
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-border: rgba(0, 0, 0, 0.06);
+
+  --elev-1: 0 1px 2px rgba(16, 16, 26, 0.06), 0 1px 3px rgba(16, 16, 26, 0.05);
+  --elev-2: 0 4px 12px rgba(16, 16, 26, 0.08), 0 2px 4px rgba(16, 16, 26, 0.05);
+  --elev-3: 0 16px 40px rgba(16, 16, 26, 0.12), 0 4px 10px rgba(16, 16, 26, 0.07);
 }
 
 html,
@@ -51,13 +143,107 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Space Grotesk", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Polished ~150ms cross-fade when switching themes. The `.theme-ready`
-   class is added by the app AFTER first paint so the initial render never
-   animates (no flash-of-transition on load). */
+/* Every numeral the product renders rides the same mono, tabular baseline.
+   The <Num> helper applies .num; tables right-align via .num-cell. */
+.num {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.01em;
+}
+.num-cell {
+  text-align: right;
+}
+
+/* Blueprint grid — a faint technical grid behind hero + key data sections.
+   ~32px cells drawn from --border over --bg. Never placed behind dense
+   tables (it would fight the row rhythm). */
+.bp-grid {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center top;
+  opacity: 0.4;
+}
+.bp-grid-mask {
+  /* Fade the grid out toward the edges so it reads as a backdrop, not a box. */
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 30%, transparent 100%);
+}
+
+/* Liquid glass surface — Nav, Modal, Sheet. */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--glass-border);
+}
+
+/* Focus ring — the single, consistent --glow-red used on every interactive
+   element. Applied via the .focus-ring utility or :focus-visible. */
+.focus-ring:focus-visible,
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--glow-red);
+  border-radius: var(--radius-md);
+}
+
+/* Shimmer skeleton — left-to-right sweep, mirrors final layout to avoid CLS. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+  animation: klar-shimmer 1.4s var(--ease-fluid) infinite;
+}
+[data-theme="light"] .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(16, 16, 26, 0.05) 50%,
+    transparent 100%
+  );
+}
+@keyframes klar-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* The "resolve" transition: nominal numbers arrive blurred and settle sharp.
+   Verdict color is applied by the component only after this completes. */
+.resolving {
+  filter: blur(6px);
+  opacity: 0.5;
+}
+.resolved {
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    filter var(--d-5) var(--ease-decelerate),
+    opacity var(--d-4) var(--ease-decelerate);
+}
+
+/* Polished ~150ms cross-fade when switching themes. .theme-ready is added
+   AFTER first paint so the initial render never animates. */
 .theme-ready,
 .theme-ready * {
   transition:
@@ -72,5 +258,12 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  .resolving {
+    filter: none;
+    opacity: 1;
+  }
+  .skeleton::after {
+    animation: none;
   }
 }
