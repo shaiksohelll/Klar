@@ -6,6 +6,7 @@ import { BarChart } from "../components/BarChart";
 import { RankingList } from "../components/RankingList";
 import { SkillSearch } from "../components/SkillSearch";
 import { useCountUp } from "../hooks/useCountUp";
+import Num from "../components/ui/Num";
 
 const ROLES = [
   "All",
@@ -95,10 +96,18 @@ export default function DemandPage() {
           <div className="w-12 h-px bg-[var(--border)]" />
           {/* Count-up number — key forces re-mount (re-animation) on filter change */}
           <span key={totalJobs} aria-live="polite" aria-atomic="true">
-            {animatedTotal.toLocaleString()} jobs analyzed
+            <Num className="text-[var(--text)]">{animatedTotal.toLocaleString()}</Num>{" "}
+            jobs analyzed
           </span>
           <div className="w-12 h-px bg-[var(--border)]" />
         </motion.div>
+
+        {/* Trust signal near the number it backs: Demand is a live count, not a
+            prediction, so we state how it's counted rather than a confidence %. */}
+        <p className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted-2)]">
+          How we count this: distinct active postings across sources in the
+          selected role and window. Descriptive, not predictive.
+        </p>
       </section>
 
       <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[var(--border)] pb-6">
