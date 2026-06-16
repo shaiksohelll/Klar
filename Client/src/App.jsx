@@ -1,19 +1,18 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import axios from "axios";
 import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
   UserButton,
   useUser,
   useAuth,
   useClerk,
 } from "@clerk/clerk-react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Brand from "./components/Brand";
 import ThemeToggle from "./components/ThemeToggle";
+import Nav, { NavRoutes } from "./components/ui/Nav";
+import Sheet from "./components/ui/Sheet";
 import { getInitialTheme, applyTheme } from "./lib/theme";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
@@ -87,6 +86,8 @@ export default function App() {
   const [error, setError] = useState(null);
   // Incrementing this forces the watchlist effect to re-run (manual retry).
   const [watchlistRetry, setWatchlistRetry] = useState(0);
+  // Mobile nav glass sheet open state.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // In-memory cache keyed by "role|window" so repeat switches are instant.
   const cacheRef = useRef(new Map());
@@ -308,11 +309,6 @@ export default function App() {
     }
   };
 
-  const navClass = (state) =>
-    state.isActive
-      ? "text-[var(--text)]"
-      : "hover:text-[var(--text)] transition-colors";
-
   const outletContext = {
     sorted,
     maxCount,
@@ -337,72 +333,53 @@ export default function App() {
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[#EB0029]/30 selection:text-white pb-24 overflow-x-hidden">
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-200 h-100 bg-[var(--accent)] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
 
-      <nav className="sticky top-0 z-40 bg-[var(--bg)]/70 backdrop-blur-xl border-b border-[var(--border)]">
-        <div className="relative max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <NavLink
-            to="/"
-            className="font-space font-bold text-xl tracking-tight text-[var(--text)] flex items-baseline"
-          >
-            Klar<span className="text-[var(--accent)]">.</span>
-          </NavLink>
+      <Nav
+        freshness={lastUpdated ? timeAgo(lastUpdated) : null}
+        signedIn={!!isSignedIn}
+        onSignIn={() => openSignIn()}
+        onSignOut={() => signOut()}
+        onOpenMenu={() => setMenuOpen(true)}
+        userButton={<UserButton afterSignOutUrl="/" />}
+      />
 
-          <div className="hidden md:flex flex-1 min-w-0 justify-center items-center flex-wrap gap-x-5 lg:gap-x-7 gap-y-1 px-4 font-mono text-xs uppercase tracking-widest text-[var(--muted)]">
-            <NavLink to="/" end className={navClass}>
-              Demand
-            </NavLink>
-            <NavLink to="/atlas" className={navClass}>
-              Atlas
-            </NavLink>
-            <NavLink to="/relocate" className={navClass}>
-              Relocate
-            </NavLink>
-            <NavLink to="/compare" className={navClass}>
-              Compare
-            </NavLink>
-            <NavLink to="/hiring" className={navClass}>
-              Hiring
-            </NavLink>
-            <NavLink to="/watchlist" className={navClass}>
-              Watchlist
-            </NavLink>
-            <NavLink
-              to="/resume"
-              className={(state) => `whitespace-nowrap ${navClass(state)}`}
-            >
-              Resume Gap
-            </NavLink>
-            <NavLink to="/about" className={navClass}>
-              About
-            </NavLink>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {lastUpdated && (
-              <span className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-[var(--muted-2)] mr-1 pr-4 border-r border-[var(--border)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-                Updated {timeAgo(lastUpdated)}
-              </span>
-            )}
+      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} label="Menu">
+        <div className="flex h-full flex-col gap-6 p-6">
+          <div className="flex items-center justify-between">
+            <span className="font-space text-lg font-bold tracking-tight text-[var(--text)]">
+              <Brand />
+            </span>
             <ThemeToggle />
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button className="bg-[#EB0029] hover:bg-[#FF2740] text-white px-5 py-2 rounded-full font-medium text-sm transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5">
-                  Sign in
-                </button>
-              </SignInButton>
-            </SignedOut>
-            <SignedIn>
+          </div>
+          <nav className="flex flex-col gap-4">
+            <NavRoutes onNavigate={() => setMenuOpen(false)} className="text-sm" />
+          </nav>
+          <div className="mt-auto border-t border-[var(--border)] pt-5">
+            {isSignedIn ? (
               <button
-                onClick={() => signOut()}
-                className="font-mono text-xs uppercase tracking-widest text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  signOut();
+                }}
+                className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--muted)] transition-colors hover:text-[var(--text)]"
               >
                 Sign out
               </button>
-              <UserButton afterSignOutUrl="/" />
-            </SignedIn>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  openSignIn();
+                }}
+                className="inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-pill)] bg-[var(--accent)] px-5 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98]"
+              >
+                Sign in
+              </button>
+            )}
           </div>
         </div>
-      </nav>
+      </Sheet>
 
       <ErrorBoundary key={location.pathname}>
         <Suspense fallback={<PageLoader />}>

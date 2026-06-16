@@ -17,29 +17,26 @@ function pct(share) {
 }
 
 // ── Skeleton ───────────────────────────────────────────────────────────────
-function SkeletonRows({ count = 12, shouldReduceMotion }) {
+function SkeletonRows({ count = 12 }) {
   return (
     <div className="space-y-2" aria-label="Loading companies" aria-busy="true">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className={`flex items-center gap-4 px-5 py-4 rounded-xl bg-[var(--panel)] border border-[var(--border)] ${
-            shouldReduceMotion ? "" : "animate-pulse"
-          }`}
-          style={shouldReduceMotion ? {} : { animationDelay: `${i * 45}ms` }}
+          className="flex items-center gap-4 px-5 py-4 rounded-xl bg-[var(--panel)] border border-[var(--border)]"
         >
           {/* Rank */}
-          <div className="w-7 h-3.5 rounded bg-[var(--border)] shrink-0" />
+          <div className="skeleton w-7 h-3.5 shrink-0" />
           {/* Company name */}
-          <div className="flex-1 h-4 rounded bg-[var(--surface-2)]" />
+          <div className="skeleton flex-1 h-4" />
           {/* Openings */}
-          <div className="w-16 h-3 rounded bg-[var(--border)] shrink-0" />
+          <div className="skeleton w-16 h-3 shrink-0" />
           {/* Remote */}
-          <div className="w-12 h-3 rounded bg-[var(--border)] shrink-0" />
+          <div className="skeleton w-12 h-3 shrink-0" />
           {/* Skill chips */}
           <div className="hidden sm:flex gap-1.5 shrink-0">
             {[48, 36, 44].map((w, j) => (
-              <div key={j} className={`h-5 rounded-full bg-[var(--surface-2)]`} style={{ width: w }} />
+              <div key={j} className="skeleton h-5 rounded-full" style={{ width: w }} />
             ))}
           </div>
         </div>
@@ -167,22 +164,46 @@ export default function HiringPage() {
 
       {/* ── Body ── */}
       {state === "error" ? (
-        <div className="text-center py-20 space-y-4">
-          <p className="font-mono text-sm text-[var(--accent)]" role="alert">
-            Couldn't load hiring data right now.
+        /* ERROR — what happened, why, next step. Not color-only. */
+        <div
+          role="alert"
+          className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-6 text-center"
+        >
+          <h2 className="font-space text-lg font-bold text-[var(--text)]">
+            We couldn't load who's hiring
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            The hiring feed didn't respond just now. It's usually back in a
+            moment.
           </p>
           <button
             onClick={fetchCompanies}
-            className="font-mono text-xs text-[var(--muted)] hover:text-[var(--text)] underline transition-colors"
+            className="mt-5 inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
             Try again
           </button>
         </div>
       ) : state === "loading" ? (
-        <SkeletonRows count={12} shouldReduceMotion={shouldReduceMotion} />
+        <SkeletonRows count={12} />
       ) : companies.length === 0 ? (
-        <div className="text-center py-20 font-mono text-sm text-[var(--muted-2)]">
-          No companies found for this filter.
+        /* EMPTY — onboarding: why it's empty + a single next action. */
+        <div className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-8 text-center">
+          <h2 className="font-space text-xl font-bold text-[var(--text)]">
+            No companies in this slice
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            This role and window don't have enough active postings to rank yet.
+            Widen the window or view every role.
+          </p>
+          <button
+            onClick={() => {
+              setActiveRole("All");
+              setActiveWindow("12M");
+            }}
+            className="mt-6 inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
+          >
+            Show all companies
+          </button>
         </div>
       ) : (
         <div className="space-y-2">

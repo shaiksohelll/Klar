@@ -1,7 +1,31 @@
 import { useMemo } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { RankingList } from "../components/RankingList";
 import { SkillGap } from "../components/SkillGap";
+import Button from "../components/ui/Button";
+
+// Loading skeleton — mirrors the ranking-list rows so the layout doesn't
+// shift when the real list arrives.
+function WatchlistSkeleton() {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label="Loading your watchlist">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--panel)]"
+        >
+          <div className="skeleton h-3.5 w-7 shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <div className="skeleton h-3.5 w-3/4" />
+            <div className="skeleton h-1.5 w-full" />
+          </div>
+          <div className="skeleton h-3 w-12 shrink-0" />
+          <div className="skeleton h-6 w-6 rounded-full shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 
@@ -42,23 +66,41 @@ export default function WatchlistPage() {
       </section>
 
       {loading ? (
-        <div className="text-center py-20 font-mono text-sm text-[var(--muted-2)] uppercase tracking-widest animate-pulse">
-          Loading…
-        </div>
+        <WatchlistSkeleton />
       ) : watched.length === 0 && watchlistError ? (
-        <div className="text-center py-20 font-mono text-sm text-[var(--muted)] space-y-4">
-          <p>{watchlistError}</p>
-          <button
-            onClick={retryWatchlist}
-            className="underline hover:text-[var(--text)] transition-colors"
-          >
-            Try again
-          </button>
+        /* ERROR — what happened, why, and the next step. Not color-only. */
+        <div
+          role="alert"
+          className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-6 text-center"
+        >
+          <h2 className="font-space text-lg font-bold text-[var(--text)]">
+            We couldn't load your watchlist
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            The connection dropped before your tracked skills came back. Your
+            saved skills are safe — this is just a display hiccup.
+          </p>
+          <div className="mt-5 flex justify-center">
+            <Button variant="secondary" onClick={retryWatchlist}>
+              Try again
+            </Button>
+          </div>
         </div>
       ) : watched.length === 0 ? (
-        <div className="text-center py-20 font-mono text-sm text-[var(--muted-2)] leading-relaxed">
-          No tracked skills yet. Tap the star on any skill in the Demand report
-          to add it here.
+        /* EMPTY — onboarding: one-line value prop + a single next action. */
+        <div className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-8 text-center">
+          <h2 className="font-space text-xl font-bold text-[var(--text)]">
+            Track the skills that matter to you
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            Star any skill and Klar keeps its live demand right here, so you can
+            watch where the market is heading at a glance.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Link to="/">
+              <Button variant="primary">Browse the Demand report</Button>
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="space-y-10">
