@@ -268,16 +268,53 @@ export default function AtlasPage() {
         />
 
         {error ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[var(--bg)]/80 font-mono text-sm text-[var(--accent)]">
-            {error}
+          /* ERROR — what happened, why, and how to recover. Not color-only. */
+          <div
+            role="alert"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-2xl bg-[var(--bg)]/85 px-6 text-center"
+          >
+            <div>
+              <h2 className="font-space text-lg font-bold text-[var(--text)]">
+                The map couldn't load
+              </h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                We hit a snag fetching city demand. It's usually momentary.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setActiveRole("All");
+                setActiveWindow("12M");
+              }}
+              className="inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
+            >
+              Reset the view
+            </button>
           </div>
         ) : loading ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[var(--bg)]/60">
-            <div className="w-6 h-6 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
-          </div>
+          /* LOADING — shimmer over the reserved map card; no layout shift. */
+          <div className="skeleton absolute inset-0 rounded-2xl" aria-busy="true" aria-label="Loading the Opportunity Map" />
         ) : cities.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[var(--bg)]/70 font-mono text-sm text-[var(--muted-2)]">
-            No cities found for this filter.
+          /* EMPTY — onboarding: tell the user why and the single next action. */
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-2xl bg-[var(--bg)]/80 px-6 text-center">
+            <div>
+              <h2 className="font-space text-lg font-bold text-[var(--text)]">
+                No cities in this slice yet
+              </h2>
+              <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">
+                This role and window don't have enough verified postings to map.
+                Widen the window or view every role.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setActiveRole("All");
+                setActiveWindow("12M");
+              }}
+              className="inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
+            >
+              Show all cities
+            </button>
           </div>
         ) : null}
 
