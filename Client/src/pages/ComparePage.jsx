@@ -529,7 +529,6 @@ export default function ComparePage() {
     }
     if (keys.length) {
       skipNextSyncRef.current = true;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(keys);
     }
   }, [allLoaded, allSkills, searchParams, windowMonths]);

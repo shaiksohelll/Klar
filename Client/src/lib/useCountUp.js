@@ -15,10 +15,8 @@ export function useCountUp(target, { duration = 700 } = {}) {
   const fromRef = useRef(0);
 
   useEffect(() => {
-    if (reduced) {
-      setValue(target);
-      return;
-    }
+    // reduced-motion shows the final value via the return below — no setState.
+    if (reduced) return;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
     const from = fromRef.current;

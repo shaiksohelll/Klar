@@ -12,10 +12,7 @@ export default function PageTransition({ children, className = "" }) {
   const [entered, setEntered] = useState(reduced);
 
   useEffect(() => {
-    if (reduced) {
-      setEntered(true);
-      return;
-    }
+    if (reduced) return;
     const id = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(id);
   }, [reduced]);
