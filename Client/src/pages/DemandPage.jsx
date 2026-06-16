@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
-import { useReducedMotion } from "framer-motion";
 import { TiltCard } from "../components/TiltCard";
 import { BarChart } from "../components/BarChart";
 import { RankingList } from "../components/RankingList";
@@ -51,8 +50,6 @@ export default function DemandPage() {
     velocityReady,
     velocityBasisDays,
   } = ctx;
-
-  const shouldReduceMotion = useReducedMotion();
 
   // Count-up for the hero stat — re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);
@@ -161,45 +158,71 @@ export default function DemandPage() {
       </section>
 
       {error ? (
-        <div className="text-center py-20 font-mono text-sm text-[var(--accent)]">
-          {error}
+        /* ERROR — adaptive recovery: what/why/next, retry not color-only. */
+        <div
+          role="alert"
+          className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-6 text-center"
+        >
+          <h2 className="font-space text-lg font-bold text-[var(--text)]">
+            We couldn't load the Demand report
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            The market feed didn't respond just now. It usually recovers within
+            a few seconds.
+          </p>
+          <button
+            onClick={() => setActiveRole(activeRole)}
+            className="mt-5 inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
+          >
+            Try again
+          </button>
         </div>
       ) : loading ? (
-        // Skeleton — mirrors the chart+ranking 2-column layout
+        // Skeleton — mirrors the chart+ranking 2-column layout (shimmer; CSS
+        // disables the sweep under prefers-reduced-motion).
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
           {/* Chart skeleton */}
           <div className="lg:col-span-7 xl:col-span-8">
-            <div
-              className={`rounded-2xl bg-[var(--panel)] border border-[var(--border)] h-[420px] ${
-                shouldReduceMotion ? "" : "animate-pulse"
-              }`}
-            />
+            <div className="skeleton rounded-2xl h-[420px]" />
           </div>
           {/* Ranking skeleton */}
           <div className="lg:col-span-5 xl:col-span-4 space-y-1">
-            <div className="h-3 w-28 rounded bg-[var(--border)] mb-4 ml-4" />
+            <div className="skeleton h-3 w-28 mb-4 ml-4" />
             {Array.from({ length: 8 }).map((_, i) => (
               <div
                 key={i}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg ${
-                  shouldReduceMotion ? "" : "animate-pulse"
-                }`}
-                style={shouldReduceMotion ? {} : { animationDelay: `${i * 50}ms` }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg"
               >
-                <div className="w-8 h-3 rounded bg-[var(--border)] shrink-0" />
+                <div className="skeleton w-8 h-3 shrink-0" />
                 <div className="flex-1 space-y-1.5">
-                  <div className="h-3.5 rounded bg-[var(--surface-2)] w-3/4" />
-                  <div className="h-1.5 rounded bg-[var(--surface-2)] w-full" />
+                  <div className="skeleton h-3.5 w-3/4" />
+                  <div className="skeleton h-1.5 w-full" />
                 </div>
-                <div className="w-12 h-3 rounded bg-[var(--border)] shrink-0" />
-                <div className="w-6 h-6 rounded-full bg-[var(--border)] shrink-0" />
+                <div className="skeleton w-12 h-3 shrink-0" />
+                <div className="skeleton w-6 h-6 rounded-full shrink-0" />
               </div>
             ))}
           </div>
         </div>
       ) : visibleSkills.length === 0 ? (
-        <div className="text-center py-20 font-mono text-sm text-[var(--muted-2)]">
-          No skills found for this filter.
+        /* EMPTY — onboarding: why it's empty + one next action. */
+        <div className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-8 text-center">
+          <h2 className="font-space text-xl font-bold text-[var(--text)]">
+            No skills in this slice
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            This role and window don't have enough postings to rank yet. Widen
+            the window or view every role.
+          </p>
+          <button
+            onClick={() => {
+              setActiveRole("All");
+              setActiveWindow("12M");
+            }}
+            className="mt-6 inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
+          >
+            Show all skills
+          </button>
         </div>
       ) : (
         <div className="space-y-10">
