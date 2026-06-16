@@ -1,8 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
+import Reveal from "../components/ui/Reveal";
+import Num from "../components/ui/Num";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// Map the API's qualitative confidence to a % level for the Confidence meter.
+const CONFIDENCE_LEVEL = { high: 88, medium: 65, low: 40 };
+function confidenceLevel(c) {
+  if (typeof c === "number") return Math.round(c <= 1 ? c * 100 : c);
+  return CONFIDENCE_LEVEL[String(c || "").toLowerCase()] ?? 60;
+}
 
 const CURRENCIES = ["INR", "USD", "GBP", "CAD", "AUD"];
 const CURRENCY_SYMBOL = { INR: "\u20b9", USD: "$", GBP: "\u00a3", CAD: "$", AUD: "$" };
@@ -445,67 +454,89 @@ export default function RelocatePage() {
           transition={{ duration: 0.5, ease: EASE }}
           className="bg-[var(--panel)] border border-[var(--border)] rounded-2xl p-6 md:p-8 space-y-6"
         >
-          {/* Verdict */}
+          {/* Verdict — choreographed reveal: nominal -> factors -> resolved
+             real value (verdict color applies only after the number settles). */}
           {hasOfferResult ? (
-            /* Offer mode — color-coded real-raise verdict + break-even line. */
-            <div className="space-y-3">
-              <span
-                className="inline-block font-mono text-sm uppercase tracking-widest font-bold px-4 py-1.5 rounded-full"
-                style={{ color: offerVerdict.color, border: `1px solid ${offerVerdict.color}` }}
-              >
-                {offerVerdict.label}
-              </span>
-              <p className="text-xl md:text-2xl text-[var(--text)] leading-relaxed">
-                This{" "}
-                <span className="text-[var(--text)] font-semibold">
-                  {fmt(result.targetSalary, destCurrency)}
-                </span>{" "}
-                offer in <span className="text-[var(--text)] font-semibold">{toLabel}</span> is a{" "}
-                <span className="font-semibold" style={{ color: offerVerdict.color }}>
-                  {offerVerdict.word}
-                </span>{" "}
-                vs your{" "}
-                <span className="text-[var(--text)] font-semibold">{fmt(result.salary, result.currency)}</span>{" "}
-                in <span className="text-[var(--text)] font-semibold">{fromLabel}</span>.
-              </p>
+            /* Offer mode — the real-raise verdict resolves from the offer's
+               real value, with the break-even line kept beneath. */
+            <div className="space-y-4">
+              <Reveal
+                nominal={{
+                  label: `Offer in ${toLabel}`,
+                  value: fmt(result.targetSalary, destCurrency),
+                }}
+                factors={[
+                  [`${fromCity} price level`, String(result.fromPriceLevel)],
+                  [`${toCity} price level`, String(result.toPriceLevel)],
+                ].map(([label, value]) => ({ label, value }))}
+                realValue={result.realValueTarget}
+                format={fmtUSD}
+                verdict={
+                  offerVerdict.color === "var(--pos)"
+                    ? "pos"
+                    : offerVerdict.color === "var(--neg)"
+                      ? "neg"
+                      : "neutral"
+                }
+                verdictValue={`${result.roiPct > 0 ? "+" : ""}${result.roiPct}%`}
+                verdictLabel={
+                  result.roiPct >= 3
+                    ? "REAL RAISE"
+                    : result.roiPct <= -3
+                      ? "REAL CUT"
+                      : "ROUGHLY FLAT"
+                }
+                confidence={{
+                  level: confidenceLevel(result.confidence),
+                  why: `Compares the real, cost-of-living-adjusted value of your ${fmt(result.salary, result.currency)} in ${fromCity} against this offer in ${toCity}.`,
+                  source:
+                    "World Bank price levels (country) with approximate city multipliers.",
+                }}
+              />
               {result.offerVsBreakEvenPct != null && (
                 <p className="text-base md:text-lg text-[var(--muted)] leading-relaxed">
                   You break even at{" "}
-                  <span className="text-[var(--text)] font-semibold">
+                  <Num className="text-[var(--text)] font-semibold">
                     {fmt(result.breakEvenTarget, destCurrency)}
-                  </span>{" "}
+                  </Num>{" "}
                   in <span className="text-[var(--text)] font-semibold">{toCity}</span>; this offer is{" "}
                   <span className="font-semibold" style={{ color: breakEvenColor }}>
                     {breakEvenAbove ? "above" : "below"}
                   </span>{" "}
                   it by{" "}
-                  <span className="font-semibold" style={{ color: breakEvenColor }}>
+                  <Num className="font-semibold" style={{ color: breakEvenColor }}>
                     {Math.abs(result.offerVsBreakEvenPct)}%
-                  </span>
+                  </Num>
                   .
                 </p>
               )}
             </div>
           ) : (
-            /* No-offer path — unchanged real-lifestyle headline. */
-            <div className="space-y-3">
-              <span
-                className="inline-block font-mono text-xs uppercase tracking-widest px-3 py-1 rounded-full"
-                style={{ color: deltaColor, border: `1px solid ${deltaColor}` }}
-              >
-                {deltaLabel}
-              </span>
-              <p className="text-xl md:text-2xl text-[var(--text)] leading-relaxed">
-                Your {fmt(result.salary, result.currency)} in{" "}
-                <span className="text-[var(--text)] font-semibold">{fromLabel}</span>{" "}
-                ≈ {fmtUSD(result.realValueCurrent)} of real lifestyle. To match it in{" "}
-                <span className="text-[var(--text)] font-semibold">{toLabel}</span>, you’d need{" "}
-                <span className="text-[var(--accent)] font-semibold">
-                  {fmt(result.equivalentInTarget, destCurrency)}
-                </span>
-                .
-              </p>
-            </div>
+            /* No-offer path — the real lifestyle value resolves; the verdict
+               reflects purchasing-power direction between the two cities. */
+            <Reveal
+              nominal={{
+                label: `Your salary in ${fromLabel}`,
+                value: fmt(result.salary, result.currency),
+              }}
+              factors={[
+                [`${fromCity} price level`, String(result.fromPriceLevel)],
+                [`${toCity} price level`, String(result.toPriceLevel)],
+              ].map(([label, value]) => ({ label, value }))}
+              realValue={result.realValueCurrent}
+              format={fmtUSD}
+              verdict={
+                delta > 0 ? "pos" : delta < 0 ? "neg" : "neutral"
+              }
+              verdictValue={fmt(result.equivalentInTarget, destCurrency)}
+              verdictLabel={`NEEDED IN ${toCity.toUpperCase()}`}
+              confidence={{
+                level: confidenceLevel(result.confidence),
+                why: `Your ${fmt(result.salary, result.currency)} in ${fromCity} buys about ${fmtUSD(result.realValueCurrent)} of real lifestyle; matching it in ${toCity} needs ${fmt(result.equivalentInTarget, destCurrency)}.`,
+                source:
+                  "World Bank price levels (country) with approximate city multipliers.",
+              }}
+            />
           )}
 
           {/* Breakdown — auto-fitting grid so cells never leave dangling gaps. */}
