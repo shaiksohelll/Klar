@@ -257,25 +257,6 @@ export default function RelocatePage() {
             ? -1
             : 0;
 
-  const deltaColor =
-    delta == null
-      ? "var(--neutral)"
-      : delta > 0
-        ? "var(--pos)"
-        : delta < 0
-          ? "var(--neg)"
-          : "var(--neutral)";
-  const deltaLabel =
-    delta == null
-      ? ""
-      : result.roiPct != null
-        ? `${result.roiPct > 0 ? "+" : ""}${result.roiPct}% real ${result.roiPct >= 0 ? "gain" : "cut"}`
-        : delta > 0
-          ? "Real purchasing-power gain"
-          : delta < 0
-            ? "Real purchasing-power cut"
-            : "Roughly neutral";
-
   // Destination currency for the equivalent-needed headline + breakdown.
   const destCurrency = result ? result.to?.currency || result.currency : currency;
 
