@@ -36,7 +36,7 @@ function ScoreDial({ score }) {
       width="120"
       height="120"
       viewBox="0 0 100 100"
-      className="rotate-[-90deg]"
+      className="-rotate-90"
       aria-hidden="true"
     >
       <circle
@@ -134,7 +134,7 @@ function ResultsSkeleton() {
       className="space-y-8"
     >
       {/* Overview card skeleton */}
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 md:p-8">
+      <div className="rounded-2xl border border-(--border) bg-(--panel) p-6 md:p-8">
         <div className="flex flex-col sm:flex-row items-center gap-8">
           {/* Dial placeholder */}
           <div className="skeleton shrink-0 w-[120px] h-[120px] rounded-full" />
@@ -179,12 +179,12 @@ function EmptyState({ onAnalyze }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.4, ease: EASE }}
-      className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel)] p-10 flex flex-col items-center gap-5 text-center"
+      className="rounded-2xl border border-dashed border-(--border) bg-(--panel) p-10 flex flex-col items-center gap-5 text-center"
     >
       {/* Value prop */}
-      <p className="text-base text-[var(--muted)] font-medium max-w-sm leading-relaxed">
+      <p className="text-base text-(--muted) font-medium max-w-sm leading-relaxed">
         Paste or upload your resume above, then hit{" "}
-        <span className="text-[var(--text)] font-semibold">Analyze</span> to
+        <span className="text-(--text) font-semibold">Analyze</span> to
         see exactly which top-40 in-demand skills are missing — sourced from
         live job postings, not guesswork.
       </p>
@@ -192,7 +192,7 @@ function EmptyState({ onAnalyze }) {
       {/* Single CTA */}
       <button
         onClick={onAnalyze}
-        className="px-8 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
+        className="px-8 py-3 rounded-xl bg-(--accent) hover:bg-(--accent-hover) text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
       >
         Analyze Resume
       </button>
@@ -324,7 +324,7 @@ export default function ResumePage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold"
+          className="font-mono text-(--accent) text-xs uppercase tracking-[0.2em] font-bold"
         >
           <Brand /> RESUME Gap Analysis
         </motion.div>
@@ -332,16 +332,16 @@ export default function ResumePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.6, ease: EASE }}
-          className="font-space font-bold text-5xl md:text-6xl leading-[1.05] tracking-tight text-[var(--text)]"
+          className="font-space font-bold text-5xl md:text-6xl leading-[1.05] tracking-tight text-(--text)"
         >
           See exactly what{" "}
-          <span className="text-[var(--accent)] italic">you&apos;re missing.</span>
+          <span className="text-(--accent) italic">you&apos;re missing.</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.6, ease: EASE }}
-          className="text-lg text-[var(--muted)] font-medium"
+          className="text-lg text-(--muted) font-medium"
         >
           Paste your resume or upload a file. We compare it against the current top-40
           in-demand skills from live job postings — no AI, no estimates.
@@ -353,7 +353,7 @@ export default function ResumePage() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6, ease: EASE }}
-        className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 md:p-8 space-y-5"
+        className="rounded-2xl border border-(--border) bg-(--panel) p-6 md:p-8 space-y-5"
       >
         {/* Drag-and-drop zone */}
         <div
@@ -371,10 +371,10 @@ export default function ResumePage() {
               fileInputRef.current?.click();
             }
           }}
-          className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors focus:outline-none focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+          className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors focus:outline-none focus-visible:border-(--accent) focus-visible:ring-2 focus-visible:ring-(--accent) ${
             isDragging
-              ? "border-[var(--accent)] bg-[#EB0029]/5"
-              : "border-[var(--border)] hover:border-[var(--muted-2)]"
+              ? "border-(--accent) bg-[#EB0029]/5"
+              : "border-(--border) hover:border-(--muted-2)"
           }`}
         >
           <input
@@ -389,32 +389,32 @@ export default function ResumePage() {
           {/* Inline SVG replaces the 📄 emoji */}
           <IconDocument />
           <div className="text-center">
-            <p className="text-sm text-[var(--text)] font-medium">
+            <p className="text-sm text-(--text) font-medium">
               {fileName ? (
-                <span className="text-[var(--accent)]">{fileName}</span>
+                <span className="text-(--accent)">{fileName}</span>
               ) : (
                 <>
-                  <span className="text-[var(--accent)]">Click to upload</span> or drag &amp; drop
+                  <span className="text-(--accent)">Click to upload</span> or drag &amp; drop
                 </>
               )}
             </p>
-            <p className="font-mono text-xs text-[var(--muted-2)] mt-1">
+            <p className="font-mono text-xs text-(--muted-2) mt-1">
               PDF, DOCX, or TXT
             </p>
           </div>
         </div>
 
         {parseError && (
-          <p className="font-mono text-xs text-[var(--accent)]" role="alert">
+          <p className="font-mono text-xs text-(--accent)" role="alert">
             {parseError}
           </p>
         )}
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-[var(--border)]" />
-          <span className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-widest">or paste text</span>
-          <div className="flex-1 h-px bg-[var(--border)]" />
+          <div className="flex-1 h-px bg-(--border)" />
+          <span className="font-mono text-xs text-(--muted-2) uppercase tracking-widest">or paste text</span>
+          <div className="flex-1 h-px bg-(--border)" />
         </div>
 
         {/* Textarea */}
@@ -436,17 +436,17 @@ export default function ResumePage() {
             rows={10}
             maxLength={MAX_CHARS}
             placeholder="Paste your resume here…"
-            className="w-full rounded-xl bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none text-[var(--text)] placeholder-[var(--muted-2)] text-sm p-4 resize-y transition-colors font-mono leading-relaxed"
+            className="w-full rounded-xl bg-(--bg) border border-(--border) focus:border-(--accent) focus:outline-none text-(--text) placeholder-(--muted-2) text-sm p-4 resize-y transition-colors font-mono leading-relaxed"
             aria-label="Resume text"
           />
           {/* Char counter — Num wraps both numerals */}
-          <div className="absolute bottom-3 right-3 font-mono text-[10px] text-[var(--muted-2)]">
+          <div className="absolute bottom-3 right-3 font-mono text-[10px] text-(--muted-2)">
             <Num>{text.length}</Num> / <Num>{MAX_CHARS}</Num>
           </div>
         </div>
 
         {text.trim().length > MAX_CHARS && (
-          <p className="font-mono text-[10px] text-[var(--muted-2)]">
+          <p className="font-mono text-[10px] text-(--muted-2)">
             Only the first 50,000 characters were analyzed.
           </p>
         )}
@@ -456,7 +456,7 @@ export default function ResumePage() {
           <button
             onClick={handleAnalyze}
             disabled={loading || parsing}
-            className="flex-1 py-4 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
+            className="flex-1 py-4 rounded-xl bg-(--accent) hover:bg-(--accent-hover) disabled:opacity-50 disabled:cursor-not-allowed text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
             aria-busy={loading || parsing}
           >
             {parsing ? (
@@ -484,7 +484,7 @@ export default function ResumePage() {
           {(text || result) && (
             <button
               onClick={handleClear}
-              className="px-5 py-4 rounded-xl border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--muted-2)] font-mono text-sm uppercase tracking-widest transition-colors"
+              className="px-5 py-4 rounded-xl border border-(--border) text-(--muted) hover:text-(--text) hover:border-(--muted-2) font-mono text-sm uppercase tracking-widest transition-colors"
             >
               Clear
             </button>
@@ -492,7 +492,7 @@ export default function ResumePage() {
         </div>
 
         {apiError && (
-          <p className="font-mono text-xs text-[var(--accent)]" role="alert">
+          <p className="font-mono text-xs text-(--accent)" role="alert">
             {apiError}
           </p>
         )}
@@ -532,7 +532,7 @@ export default function ResumePage() {
             {/* Overview card */}
             <motion.div
               variants={itemVariants}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 md:p-8"
+              className="rounded-2xl border border-(--border) bg-(--panel) p-6 md:p-8"
             >
               <div className="flex flex-col sm:flex-row items-center gap-8">
                 {/* Score dial — accessible wrapper */}
@@ -543,11 +543,11 @@ export default function ResumePage() {
                 >
                   <ScoreDial score={matchScore} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="font-space font-bold text-3xl text-[var(--text)] leading-none">
+                    <span className="font-space font-bold text-3xl text-(--text) leading-none">
                       {/* match score numeral */}
                       <Num>{matchScore}</Num>
                     </span>
-                    <span className="font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-widest mt-0.5">
+                    <span className="font-mono text-[10px] text-(--muted-2) uppercase tracking-widest mt-0.5">
                       %
                     </span>
                   </div>
@@ -555,18 +555,18 @@ export default function ResumePage() {
 
                 {/* Copy */}
                 <div className="text-center sm:text-left space-y-2">
-                  <div className="font-mono text-xs uppercase tracking-widest text-[var(--accent)]">
+                  <div className="font-mono text-xs uppercase tracking-widest text-(--accent)">
                     Match Score
                   </div>
-                  <p className="text-xl md:text-2xl font-space font-bold text-[var(--text)] leading-snug">
+                  <p className="text-xl md:text-2xl font-space font-bold text-(--text) leading-snug">
                     You cover{" "}
                     {/* "cover X of top N" counts */}
-                    <span className="text-[var(--accent)]"><Num>{matchedCount}</Num></span>{" "}
+                    <span className="text-(--accent)"><Num>{matchedCount}</Num></span>{" "}
                     of the top{" "}
-                    <span className="text-[var(--accent)]"><Num>{totalConsidered}</Num></span>{" "}
+                    <span className="text-(--accent)"><Num>{totalConsidered}</Num></span>{" "}
                     in-demand skills.
                   </p>
-                  <p className="text-sm text-[var(--muted)]">
+                  <p className="text-sm text-(--muted)">
                     {(() => {
                       const considered = result?.totalConsidered
                         ?? ((result?.matched?.length ?? 0) + (result?.missing?.length ?? 0));
@@ -580,7 +580,7 @@ export default function ResumePage() {
                   </p>
 
                   {/* Methodology note — no fake confidence % */}
-                  <p className="font-mono text-[10px] text-[var(--muted-2)] leading-relaxed mt-1">
+                  <p className="font-mono text-[10px] text-(--muted-2) leading-relaxed mt-1">
                     Exact count of matched ÷ top-N from live postings — not an AI estimate.
                   </p>
                 </div>
@@ -594,10 +594,10 @@ export default function ResumePage() {
                   {/* Inline SVG replaces ✅ emoji */}
                   <IconCheck />
                   <div>
-                    <div className="font-mono text-xs uppercase tracking-widest text-[var(--muted-2)]">
+                    <div className="font-mono text-xs uppercase tracking-widest text-(--muted-2)">
                       Skills you have that the market wants
                     </div>
-                    <div className="font-mono text-[10px] text-[var(--muted-2)] mt-0.5">
+                    <div className="font-mono text-[10px] text-(--muted-2) mt-0.5">
                       {/* "N skills matched" count */}
                       <Num>{matchedCount}</Num> skill{matchedCount !== 1 ? "s" : ""} matched
                     </div>
@@ -609,7 +609,7 @@ export default function ResumePage() {
                       key={skill}
                       layout
                       transition={UI_SPRING}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[#22c55e] font-mono text-xs"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-(--border) bg-(--surface-2) text-[#22c55e] font-mono text-xs"
                     >
                       {displayName(skill)}
                       {/* matched chip count */}
@@ -627,10 +627,10 @@ export default function ResumePage() {
                   {/* Inline SVG dot replaces 🔴 emoji */}
                   <IconMissing />
                   <div>
-                    <div className="font-mono text-xs uppercase tracking-widest text-[var(--muted-2)]">
+                    <div className="font-mono text-xs uppercase tracking-widest text-(--muted-2)">
                       In-demand skills you&apos;re missing
                     </div>
-                    <div className="font-mono text-[10px] text-[var(--muted-2)] mt-0.5">
+                    <div className="font-mono text-[10px] text-(--muted-2) mt-0.5">
                       Click any chip to explore the skill
                     </div>
                   </div>
@@ -642,11 +642,11 @@ export default function ResumePage() {
                       layout
                       transition={UI_SPRING}
                       onClick={() => openSkill(skill)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--accent)] hover:bg-[#1A0508] font-mono text-xs transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-(--border) bg-(--panel) text-(--muted) hover:text-(--text) hover:border-(--accent) hover:bg-[#1A0508] font-mono text-xs transition-colors cursor-pointer"
                     >
                       {displayName(skill)}
                       {/* missing chip count */}
-                      <span className="text-[var(--muted-2)] text-[10px]"><Num>{count}</Num></span>
+                      <span className="text-(--muted-2) text-[10px]"><Num>{count}</Num></span>
                     </motion.button>
                   ))}
                 </div>
@@ -657,22 +657,22 @@ export default function ResumePage() {
             {(result?.resumeSkills ?? []).length > 0 && (
               <motion.div
                 variants={itemVariants}
-                className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-5 space-y-3"
+                className="rounded-xl border border-(--border) bg-(--panel) p-5 space-y-3"
               >
-                <div className="font-mono text-xs uppercase tracking-widest text-[var(--muted-2)]">
+                <div className="font-mono text-xs uppercase tracking-widest text-(--muted-2)">
                   All skills detected in your resume
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(result?.resumeSkills ?? []).map((skill) => (
                     <span
                       key={skill}
-                      className="inline-flex items-center px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)] font-mono text-[11px]"
+                      className="inline-flex items-center px-2.5 py-1 rounded-full border border-(--border) bg-(--surface-2) text-(--muted) font-mono text-[11px]"
                     >
                       {displayName(skill)}
                     </span>
                   ))}
                 </div>
-                <p className="font-mono text-[10px] text-[var(--muted-2)] leading-relaxed">
+                <p className="font-mono text-[10px] text-(--muted-2) leading-relaxed">
                   Only skills from our market taxonomy are detected. The comparison is
                   against the top <Num>{totalConsidered}</Num> by current job-posting demand.
                 </p>
