@@ -29,3 +29,21 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Skeleton shimmer ───────────────────────────────────────────────────────
+   Use .skeleton on any placeholder block during loading states.
+   The pulse animation is suppressed when the user prefers reduced motion. */
+.skeleton {
+  border-radius: 0.5rem;
+  background: var(--surface-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
