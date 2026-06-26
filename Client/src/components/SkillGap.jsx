@@ -69,14 +69,14 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
   return (
     <section
       aria-label="Skill-gap advisor"
-      className="border border-[#26262E] rounded-xl bg-[#0A0A0E] overflow-hidden"
+      className="border border-[var(--border)] rounded-xl bg-[var(--panel)] overflow-hidden"
     >
       {/* ── Header ── */}
-      <div className="px-5 pt-5 pb-4 border-b border-[#26262E]">
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#EB0029] font-bold mb-1">
+      <div className="px-5 pt-5 pb-4 border-b border-[var(--border)]">
+        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--accent)] font-bold mb-1">
           What to Learn Next
         </div>
-        <p className="font-mono text-[11px] text-[#5C5C66] leading-relaxed">
+        <p className="font-mono text-[11px] text-[var(--muted-2)] leading-relaxed">
           Skills that show up most often alongside what you track, ranked by
           co-occurrence, with current demand.
         </p>
@@ -102,16 +102,16 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
                 {/* Top row: rank + name bar + demand pill + remote pill */}
                 <div className="flex items-center gap-3">
                   {/* Rank */}
-                  <div className="w-5 h-3 rounded bg-[#26262E] shrink-0" />
+                  <div className="w-5 h-3 rounded bg-[var(--border)] shrink-0" />
                   {/* Name — wider */}
-                  <div className="flex-1 h-3.5 rounded bg-[#1E1E24]" />
+                  <div className="flex-1 h-3.5 rounded bg-[var(--surface-2)]" />
                   {/* Demand */}
-                  <div className="w-14 h-3 rounded bg-[#26262E] shrink-0" />
+                  <div className="w-14 h-3 rounded bg-[var(--border)] shrink-0" />
                   {/* Remote */}
-                  <div className="w-12 h-3 rounded bg-[#26262E] shrink-0" />
+                  <div className="w-12 h-3 rounded bg-[var(--border)] shrink-0" />
                 </div>
                 {/* Reason line — narrower */}
-                <div className="pl-8 h-2.5 w-2/5 rounded bg-[#1A1A20]" />
+                <div className="pl-8 h-2.5 w-2/5 rounded bg-[var(--surface-2)]" />
               </div>
             ))}
           </div>
@@ -120,12 +120,12 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
         {/* Error */}
         {state === "error" && (
           <div className="py-6 text-center space-y-3">
-            <p className="font-mono text-xs text-[#EB0029]" role="alert">
+            <p className="font-mono text-xs text-[var(--accent)]" role="alert">
               Couldn't load recommendations right now.
             </p>
             <button
               onClick={fetchGap}
-              className="font-mono text-xs text-[#9A9AA6] hover:text-white underline transition-colors"
+              className="font-mono text-xs text-[var(--muted)] hover:text-[var(--text)] underline transition-colors"
             >
               Try again
             </button>
@@ -135,7 +135,7 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
         {/* Empty watchlist */}
         {state === "done" && empty && (
           <div
-            className="py-8 text-center font-mono text-xs text-[#5C5C66] leading-relaxed"
+            className="py-8 text-center font-mono text-xs text-[var(--muted-2)] leading-relaxed"
             aria-live="polite"
           >
             Track a few skills first and we'll show you what pairs with them.
@@ -144,7 +144,7 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
 
         {/* No gaps found (all pairs already tracked) */}
         {state === "done" && !empty && gaps.length === 0 && (
-          <div className="py-8 text-center font-mono text-xs text-[#5C5C66]">
+          <div className="py-8 text-center font-mono text-xs text-[var(--muted-2)]">
             You're already tracking all the top co-occurring skills. Nice work.
           </div>
         )}
@@ -171,31 +171,31 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
                 {/* Top row: rank + name + demand + remote */}
                 <div className="flex items-center gap-3">
                   {/* Rank badge */}
-                  <span className="font-mono text-xs text-[#5C5C66] group-hover:text-white transition-colors shrink-0 w-5 text-right">
+                  <span className="font-mono text-xs text-[var(--muted-2)] group-hover:text-[var(--text)] transition-colors shrink-0 w-5 text-right">
                     {String(i + 1).padStart(2, "0")}
                   </span>
 
                   {/* Skill name */}
-                  <span className="flex-1 font-sans font-medium text-sm text-[#F4F4F6] group-hover:text-white transition-colors truncate">
+                  <span className="flex-1 font-sans font-medium text-sm text-[var(--text)] group-hover:text-[var(--text)] transition-colors truncate">
                     {displayName(gap.skill)}
                   </span>
 
                   {/* Demand */}
-                  <span className="font-mono text-xs tabular-nums text-[#9A9AA6] shrink-0">
+                  <span className="font-mono text-xs tabular-nums text-[var(--muted)] shrink-0">
                     {gap.demand.toLocaleString()}
-                    <span className="text-[#5C5C66] ml-0.5">jobs</span>
+                    <span className="text-[var(--muted-2)] ml-0.5">jobs</span>
                   </span>
 
                   {/* Remote % */}
-                  <span className="font-mono text-xs tabular-nums text-[#9A9AA6] shrink-0 w-12 text-right">
+                  <span className="font-mono text-xs tabular-nums text-[var(--muted)] shrink-0 w-12 text-right">
                     {pct(gap.remoteShare)}
-                    <span className="text-[#5C5C66] ml-0.5">remote</span>
+                    <span className="text-[var(--muted-2)] ml-0.5">remote</span>
                   </span>
                 </div>
 
                 {/* Reason line: "Pairs with React, Node.js" */}
                 {gap.pairedWith && gap.pairedWith.length > 0 && (
-                  <div className="pl-8 font-mono text-[10px] text-[#5C5C66] group-hover:text-[#9A9AA6] transition-colors truncate">
+                  <div className="pl-8 font-mono text-[10px] text-[var(--muted-2)] group-hover:text-[var(--muted)] transition-colors truncate">
                     Pairs with{" "}
                     {gap.pairedWith.map(displayName).join(", ")}
                   </div>

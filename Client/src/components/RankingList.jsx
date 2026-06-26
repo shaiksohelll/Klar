@@ -26,7 +26,7 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
   return (
     <div className="w-full">
       {/* Header row */}
-      <div className="flex items-center px-4 py-3 border-b border-[#26262E] text-xs font-mono text-[#5C5C66] uppercase tracking-wider mb-2">
+      <div className="flex items-center px-4 py-3 border-b border-[var(--border)] text-xs font-mono text-[var(--muted-2)] uppercase tracking-wider mb-2">
         <div className="w-12">Rank</div>
         <div className="flex-1">Skill</div>
         <div className="w-32 hidden md:block text-right">Remote</div>
@@ -56,25 +56,25 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
               transition={rowTransition}
               className="flex items-center px-4 py-3 rounded-lg cursor-pointer group relative overflow-hidden"
             >
-              <div className="w-12 font-mono text-[#5C5C66] group-hover:text-white transition-colors">
+              <div className="w-12 font-mono text-[var(--muted-2)] group-hover:text-[var(--text)] transition-colors">
                 {String(index + 1).padStart(2, "0")}
               </div>
 
               <div className="flex-1 pr-4 relative">
                 <div className="flex items-center gap-2">
-                  <span className="font-sans font-medium text-[#F4F4F6] group-hover:text-white transition-colors">
+                  <span className="font-sans font-medium text-[var(--text)] group-hover:text-[var(--text)] transition-colors">
                     {displayName(skill.name)}
                   </span>
                   <VelocityBadge
                     velocity={skill.velocity}
                     trend={skill.trend}
                   />
-                  <div className="font-mono text-xs text-[#5C5C66] opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="font-mono text-xs text-[var(--muted-2)] opacity-0 group-hover:opacity-100 transition-opacity">
                     {skill.count.toLocaleString()}
                   </div>
                 </div>
                 {/* Demand bar — brightens on row hover via group class */}
-                <div className="mt-2 w-full h-1 bg-[#26262E] rounded-full overflow-hidden">
+                <div className="mt-2 w-full h-1 bg-[var(--border)] rounded-full overflow-hidden">
                   <motion.div
                     initial={barInit}
                     animate={barAnim}
@@ -84,7 +84,7 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
                 </div>
               </div>
 
-              <div className="w-32 hidden md:block font-mono text-sm text-[#9A9AA6] text-right">
+              <div className="w-32 hidden md:block font-mono text-sm text-[var(--muted)] text-right">
                 {skill.remoteCount.toLocaleString()}
               </div>
 
@@ -103,8 +103,8 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
                   transition={SNAPPY_SPRING}
                   className={`p-2 rounded-full transition-colors ${
                     isTracked
-                      ? "text-[#EB0029] bg-[#EB0029]/10"
-                      : "text-[#5C5C66] hover:text-[#F4F4F6] hover:bg-[#26262E]"
+                      ? "text-[var(--accent)] bg-[#EB0029]/10"
+                      : "text-[var(--muted-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
                   }`}
                 >
                   <StarIcon filled={isTracked} className="w-4 h-4" />

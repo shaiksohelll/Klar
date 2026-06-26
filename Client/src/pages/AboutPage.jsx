@@ -27,13 +27,13 @@ export default function AboutPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-10 relative z-10">
       <section className="space-y-4">
-        <div className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold">
+        <div className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold">
           The Method
         </div>
-        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-white">
+        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-[var(--text)]">
           How <Brand /> reads the market
         </h1>
-        <p className="text-lg text-[#9A9AA6] font-medium">
+        <p className="text-lg text-[var(--muted)] font-medium">
           <Brand /> is descriptive, not predictive. We don't guess where the market
           is going. We show you what employers are hiring for right now.
         </p>
@@ -43,16 +43,16 @@ export default function AboutPage() {
         {STEPS.map((step) => (
           <div
             key={step.n}
-            className="flex gap-5 border border-[#26262E] rounded-2xl p-6 bg-[#121216]/50"
+            className="flex gap-5 border border-[var(--border)] rounded-2xl p-6 bg-[var(--panel)]/50"
           >
-            <div className="font-mono text-[#EB0029] text-sm font-bold pt-1">
+            <div className="font-mono text-[var(--accent)] text-sm font-bold pt-1">
               {step.n}
             </div>
             <div className="space-y-1">
-              <div className="font-space font-bold text-lg text-white">
+              <div className="font-space font-bold text-lg text-[var(--text)]">
                 {step.t}
               </div>
-              <div className="text-[#9A9AA6] text-sm leading-relaxed">
+              <div className="text-[var(--muted)] text-sm leading-relaxed">
                 {step.d}
               </div>
             </div>
@@ -60,8 +60,8 @@ export default function AboutPage() {
         ))}
       </section>
 
-      <section className="border-t border-[#26262E] pt-6">
-        <p className="font-mono text-xs text-[#5C5C66] uppercase tracking-wider leading-relaxed">
+      <section className="border-t border-[var(--border)] pt-6">
+        <p className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider leading-relaxed">
           A snapshot of current demand, not a prediction. Always verify against
           your own research before making career decisions.
         </p>

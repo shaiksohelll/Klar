@@ -10,8 +10,11 @@ import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.j
 import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
+import { getAtlas } from "./aggregations/atlas.js";
+import { relocationRoi, currencyForCountry } from "./lib/costOfLiving.js";
 import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
-import { makeDedupeKey } from "./lib/dedupe.js";
+import { makeDedupeKey, normalizeLocation } from "./lib/dedupe.js";
+import { geocodeCity, geocodeById, searchCities } from "./lib/geocode.js";
 import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
@@ -205,6 +208,41 @@ app.post("/api/admin/backfill-dedupe", async (req, res, next) => {
   }
 });
 
+// ── Backfill geo (admin) ─────────────────────────────────────────
+// Resolves geo + geoConfidence onto every existing Job doc using geocodeCity().
+// Mirrors /api/admin/backfill-dedupe: streamed cursor + bulkWrite(ordered:false).
+// countryHint is inferred from the stored salary currency (best available
+// signal for an existing row). Safe to call repeatedly (idempotent $set).
+app.post("/api/admin/backfill-geo", async (req, res, next) => {
+  if (!isValidIngestSecret(req)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  try {
+    // Map stored salary currency -> ISO-2 country hint for geocodeCity().
+    const CURRENCY_HINT = { INR: "in", USD: "us", GBP: "gb", CAD: "ca", AUD: "au" };
+    const cursor = Job.find({}).select("location salaryRange.currency").lean().cursor();
+    const ops = [];
+    for await (const job of cursor) {
+      const hint = CURRENCY_HINT[job.salaryRange?.currency] || undefined;
+      const g = geocodeCity(normalizeLocation(job.location || ""), hint);
+      ops.push({
+        updateOne: {
+          filter: { _id: job._id },
+          update: { $set: { geo: g.value, geoConfidence: g.confidence } },
+        },
+      });
+    }
+    let updated = 0;
+    if (ops.length > 0) {
+      const result = await Job.bulkWrite(ops, { ordered: false });
+      updated = result.modifiedCount || 0;
+    }
+    res.json({ ok: true, processed: ops.length, updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Trending skills ────────────────────────────────────────────────────────
 app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
   try {
@@ -321,6 +359,211 @@ app.get("/api/salary", readLimiter, async (req, res, next) => {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const data = await getSalaryInsights({ skill, role, months });
     res.json({ ok: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Atlas — public Opportunity Map ───────────────────────────────────
+// Public, read-only. Per-VERIFIED-city demand, disclosed avg salary, and
+// 30-day momentum. Optional ?role= ?skill= ?months= (clamped 1-24, default 12).
+app.get("/api/atlas", readLimiter, async (req, res, next) => {
+  try {
+    let role, skill;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+    if (req.query.skill != null && String(req.query.skill).trim() !== "") {
+      skill = resolveSkill(req.query.skill);
+      if (!skill) {
+        return res.status(400).json({ ok: false, error: "Unknown skill — see /api/skills/all for valid values." });
+      }
+    }
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
+    const data = await getAtlas({ role, skill, months });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Relocation ROI (public) ──────────────────────────────────────────
+// Converts a nominal salary's purchasing power between two places.
+// Query: from, to (city token OR 2-letter country code), salary (number),
+// currency (INR/USD/GBP/CAD/AUD), optional targetSalary. Pure compute (no DB).
+const RELO_CURRENCIES = new Set(["INR", "USD", "GBP", "CAD", "AUD"]);
+const MAX_SALARY = 1_000_000_000; // sane upper bound (covers any currency)
+
+// Supported countries for the relocation feature + the suggest endpoint.
+// Each entry exposes the ISO-2 code and a human-readable name.
+const SUPPORTED_COUNTRIES = [
+  { code: "in", name: "India" },
+  { code: "us", name: "United States" },
+  { code: "gb", name: "United Kingdom" },
+  { code: "ca", name: "Canada" },
+  { code: "au", name: "Australia" },
+];
+
+// Human-readable name for a supported ISO-2 country code, or the uppercased
+// code as a fallback for any country not in the supported list.
+function countryName(code) {
+  const key = String(code || "").toLowerCase();
+  const found = SUPPORTED_COUNTRIES.find((c) => c.code === key);
+  return found ? found.name : key.toUpperCase();
+}
+
+// admin1 is only meaningful to show when it is an alphabetic code/name
+// (e.g. US "CA"); some gazetteer rows store numeric admin1 codes (e.g. India
+// "19") which are noise in a label, so we omit those.
+function isAlphaAdmin1(admin1) {
+  return typeof admin1 === "string" && admin1.trim() !== "" && /[A-Za-z]/.test(admin1) && !/^\d+$/.test(admin1);
+}
+
+// Build a city label from a gazetteer record, using the city NAME (never the
+// geonameId). Includes admin1 only when alphabetic: "San Francisco, CA, US"
+// vs "Bengaluru, IN".
+function cityDisplayName(rec) {
+  const parts = [rec.city];
+  if (isAlphaAdmin1(rec.admin1)) parts.push(rec.admin1);
+  parts.push((rec.country || "").toUpperCase());
+  return parts.join(", ");
+}
+
+// Resolve a `from`/`to` param to a rich descriptor including display info.
+// A numeric token is treated as a geonameId and resolved deterministically
+// against the gazetteer (no fuzzy matching). A bare 2-letter token is treated
+// as a country code (no city multiplier); anything else is geocoded to a
+// verified city by name. Returns null on no match.
+//
+// Shape: { country, geonameId?, city?, admin1?, displayName }.
+function resolvePlace(raw) {
+  const token = String(raw || "").trim();
+  if (!token) return null;
+  if (/^\d+$/.test(token)) {
+    const rec = geocodeById(token);
+    if (!rec) return null;
+    return {
+      country: rec.country,
+      geonameId: rec.geonameId,
+      city: rec.city,
+      admin1: isAlphaAdmin1(rec.admin1) ? rec.admin1 : undefined,
+      displayName: cityDisplayName(rec),
+    };
+  }
+  if (/^[A-Za-z]{2}$/.test(token)) {
+    const country = token.toLowerCase();
+    return { country, geonameId: undefined, displayName: countryName(country) };
+  }
+  const g = geocodeCity(normalizeLocation(token));
+  if (!g.value) return null;
+  return {
+    country: g.value.country,
+    geonameId: g.value.geonameId,
+    city: g.value.city,
+    admin1: isAlphaAdmin1(g.value.admin1) ? g.value.admin1 : undefined,
+    displayName: cityDisplayName(g.value),
+  };
+}
+
+// ── Places suggest (typeahead) ───────────────────────────────────────
+// Public, read-only. Returns up to `limit` verified-city matches PLUS any
+// supported country whose name or ISO-2 code matches the query. Cities carry
+// a geonameId token; countries carry an iso2 token. The frontend stores the
+// token and submits it to /api/relocation for deterministic resolution.
+app.get("/api/places/suggest", readLimiter, (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    if (!q) {
+      return res.status(400).json({ ok: false, error: "`q` is required." });
+    }
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 8, 1), 15);
+
+    const cities = searchCities(q, limit).map((c) => ({
+      type: "city",
+      // Use the city NAME and omit numeric admin1 codes:
+      // "San Francisco, CA, US" vs "Bengaluru, IN".
+      label: cityDisplayName(c),
+      token: String(c.geonameId),
+      geonameId: c.geonameId,
+      country: c.country,
+    }));
+
+    const ql = q.toLowerCase();
+    const countries = SUPPORTED_COUNTRIES.filter(
+      (c) => c.code === ql || c.name.toLowerCase().includes(ql),
+    ).map((c) => ({
+      type: "country",
+      label: c.name,
+      token: c.code,
+      country: c.code,
+    }));
+
+    res.json({ suggestions: [...cities, ...countries] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/api/relocation", readLimiter, (req, res, next) => {
+  try {
+    const { from: fromRaw, to: toRaw } = req.query;
+    if (!fromRaw || !toRaw) {
+      return res.status(400).json({ ok: false, error: "`from` and `to` are required (city name or 2-letter country code)." });
+    }
+
+    const currency = String(req.query.currency || "").toUpperCase();
+    if (!RELO_CURRENCIES.has(currency)) {
+      return res.status(400).json({ ok: false, error: `Unknown currency. Valid: ${[...RELO_CURRENCIES].join(", ")}` });
+    }
+
+    const salary = Number(req.query.salary);
+    if (!Number.isFinite(salary) || salary <= 0) {
+      return res.status(400).json({ ok: false, error: "`salary` must be a positive number." });
+    }
+    const clampedSalary = Math.min(salary, MAX_SALARY);
+
+    let targetSalary;
+    if (req.query.targetSalary != null && String(req.query.targetSalary).trim() !== "") {
+      const t = Number(req.query.targetSalary);
+      if (!Number.isFinite(t) || t <= 0) {
+        return res.status(400).json({ ok: false, error: "`targetSalary` must be a positive number." });
+      }
+      targetSalary = Math.min(t, MAX_SALARY);
+    }
+
+    const from = resolvePlace(fromRaw);
+    const to = resolvePlace(toRaw);
+    if (!from) {
+      return res.status(400).json({ ok: false, error: `Couldn't resolve \`from\`: "${fromRaw}". Use a known city or 2-letter country code.` });
+    }
+    if (!to) {
+      return res.status(400).json({ ok: false, error: `Couldn't resolve \`to\`: "${toRaw}". Use a known city or 2-letter country code.` });
+    }
+
+    const result = relocationRoi({
+      salary: clampedSalary,
+      currency,
+      fromCountry: from.country,
+      fromGeonameId: from.geonameId,
+      toCountry: to.country,
+      toGeonameId: to.geonameId,
+      targetSalary,
+    });
+
+    res.json({
+      ok: true,
+      from: { ...from, input: fromRaw, currency: currencyForCountry(from.country) },
+      to: { ...to, input: toRaw, currency: currencyForCountry(to.country) },
+      // `from`/`to` above already carry { geonameId?, city?, admin1?, country,
+      // displayName }; `currency` is appended for the destination symbol.
+      salary: clampedSalary,
+      currency,
+      targetSalary: targetSalary ?? null,
+      ...result,
+    });
   } catch (err) {
     next(err);
   }

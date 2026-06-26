@@ -23,6 +23,8 @@ const { default: app } = await import("./app.js");
 const { default: request } = await import("supertest");
 const { ingestAdzuna } = await import("./ingest/adzuna.js");
 const { ingestJSearch } = await import("./ingest/jsearch.js");
+const { searchCities } = await import("./lib/geocode.js");
+const { relocationRoi } = await import("./lib/costOfLiving.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -98,5 +100,225 @@ describe("POST /api/resume-gap", () => {
       .send("hi");
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ ok: false, error: "text is required" });
+  });
+});
+
+describe("GET /api/relocation", () => {
+  it("returns 200 with an ROI payload on the happy path", async () => {
+    // Country-level US -> IN. Pure compute (no DB), so no mocks required.
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "us", to: "in", salary: 100000, currency: "USD" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.fromPriceLevel).toBe(100);
+    expect(typeof res.body.nominalUSD).toBe("number");
+    expect(typeof res.body.equivalentInTarget).toBe("number");
+    expect(res.body.confidence).toBe("high");
+  });
+
+  it("returns 400 when from/to are missing", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ salary: 100000, currency: "USD" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("returns 400 on a non-positive salary", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "us", to: "in", salary: -5, currency: "USD" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("returns 400 on an unknown currency", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "us", to: "in", salary: 100000, currency: "ZZZ" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("resolves a numeric geonameId for `from`", async () => {
+    // Resolve a real geonameId via the alias-aware search, then feed it back
+    // to /api/relocation as a numeric token (deterministic resolution).
+    const [city] = searchCities("bangalore", 1);
+    expect(city).toBeTruthy();
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: String(city.geonameId), to: "us", salary: 2500000, currency: "INR" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // The numeric token resolved to the same verified place.
+    expect(res.body.from.geonameId).toBe(city.geonameId);
+    expect(res.body.from.country).toBe(city.country);
+  });
+
+  it("returns resolved displayName containing the city NAME, not a geonameId", async () => {
+    const [city] = searchCities("bangalore", 1); // Bengaluru (India)
+    expect(city).toBeTruthy();
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: String(city.geonameId), to: "us", salary: 2500000, currency: "INR" });
+    expect(res.status).toBe(200);
+    const dn = res.body.from.displayName;
+    expect(typeof dn).toBe("string");
+    // The label uses the city NAME, never the bare numeric geonameId.
+    expect(dn).toContain(city.city);
+    expect(dn).not.toBe(String(city.geonameId));
+    expect(/^\d+$/.test(dn)).toBe(false);
+  });
+
+  it("omits a numeric admin1 from displayName (e.g. India), keeps alphabetic", async () => {
+    const [india] = searchCities("bangalore", 1); // Bengaluru, admin1 "19"
+    expect(india).toBeTruthy();
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: String(india.geonameId), to: "us", salary: 2500000, currency: "INR" });
+    expect(res.status).toBe(200);
+    // Numeric admin1 must NOT leak into the label or the resolved field.
+    expect(res.body.from.displayName).not.toMatch(/\b\d+\b/);
+    expect(res.body.from.admin1).toBeUndefined();
+
+    // A US city should keep its alphabetic admin1 (e.g. "CA").
+    const usCity = searchCities("san francisco", 5).find(
+      (c) => c.country === "us" && typeof c.admin1 === "string" && /[A-Za-z]/.test(c.admin1),
+    );
+    if (usCity) {
+      const res2 = await request(app)
+        .get("/api/relocation")
+        .query({ from: String(usCity.geonameId), to: "in", salary: 150000, currency: "USD" });
+      expect(res2.status).toBe(200);
+      expect(res2.body.from.admin1).toBe(usCity.admin1);
+      expect(res2.body.from.displayName).toContain(usCity.admin1);
+    }
+  });
+
+  it("uses the country name as displayName for a 2-letter country code", async () => {
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "in", to: "us", salary: 100000, currency: "USD" });
+    expect(res.status).toBe(200);
+    expect(res.body.from.displayName).toBe("India");
+    expect(res.body.to.displayName).toBe("United States");
+  });
+
+  it("returns offer fields (realValueTarget, roiPct, breakEvenTarget) with targetSalary", async () => {
+    // First resolve the break-even (equivalent) without an offer.
+    const base = await request(app)
+      .get("/api/relocation")
+      .query({ from: "in", to: "us", salary: 2500000, currency: "INR" });
+    expect(base.status).toBe(200);
+    const breakEven = base.body.equivalentInTarget;
+    expect(typeof breakEven).toBe("number");
+
+    // An offer ABOVE break-even (destination currency = USD).
+    const res = await request(app)
+      .get("/api/relocation")
+      .query({ from: "in", to: "us", salary: 2500000, currency: "INR", targetSalary: breakEven + 20000 });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.realValueTarget).toBe("number");
+    expect(typeof res.body.roiPct).toBe("number");
+    expect(res.body.breakEvenTarget).toBe(breakEven);
+    expect(res.body.offerVsBreakEvenPct).toBeGreaterThan(0);
+    expect(res.body.roiPct).toBeGreaterThan(0);
+  });
+});
+
+describe("relocationRoi offer mode", () => {
+  // Break-even = equivalentInTarget (the offer that preserves real lifestyle).
+  const baseArgs = {
+    salary: 2500000,
+    currency: "INR",
+    fromCountry: "in",
+    toCountry: "us",
+  };
+
+  it("yields a positive roiPct for an offer ABOVE break-even (real raise)", () => {
+    const { equivalentInTarget } = relocationRoi(baseArgs);
+    expect(equivalentInTarget).toBeGreaterThan(0);
+    const r = relocationRoi({ ...baseArgs, targetSalary: equivalentInTarget * 1.2 });
+    expect(r.roiPct).toBeGreaterThan(0);
+    expect(r.offerVsBreakEvenPct).toBeGreaterThan(0);
+    expect(r.breakEvenTarget).toBe(equivalentInTarget);
+  });
+
+  it("yields a negative roiPct for an offer BELOW break-even (real cut)", () => {
+    const { equivalentInTarget } = relocationRoi(baseArgs);
+    const r = relocationRoi({ ...baseArgs, targetSalary: equivalentInTarget * 0.8 });
+    expect(r.roiPct).toBeLessThan(0);
+    expect(r.offerVsBreakEvenPct).toBeLessThan(0);
+  });
+
+  it("guards divide-by-zero: no targetSalary -> null offer fields, no throw", () => {
+    const r = relocationRoi(baseArgs);
+    expect(r.realValueTarget).toBeNull();
+    expect(r.roiPct).toBeNull();
+    expect(r.breakEvenTarget).toBeNull();
+    expect(r.offerVsBreakEvenPct).toBeNull();
+  });
+
+  it("does not throw on a zero salary (guarded null fields)", () => {
+    expect(() =>
+      relocationRoi({ ...baseArgs, salary: 0, targetSalary: 100000 }),
+    ).not.toThrow();
+  });
+});
+
+describe("searchCities", () => {
+  it("ranks results by population (desc)", () => {
+    const results = searchCities("a", 15);
+    expect(results.length).toBeGreaterThan(1);
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1].population).toBeGreaterThanOrEqual(results[i].population);
+    }
+  });
+
+  it("resolves an alias to its canonical city (bangalore -> Bengaluru)", () => {
+    const results = searchCities("bangalore", 8);
+    const match = results.find((c) => c.city.toLowerCase() === "bengaluru");
+    expect(match).toBeTruthy();
+    expect(Number.isFinite(match.geonameId)).toBe(true);
+    expect(match.country).toBe("in");
+  });
+
+  it("returns [] for an empty query", () => {
+    expect(searchCities("")).toEqual([]);
+  });
+});
+
+describe("GET /api/places/suggest", () => {
+  it("returns 400 when q is missing", async () => {
+    const res = await request(app).get("/api/places/suggest");
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("returns 200 with the documented suggestion shape", async () => {
+    const res = await request(app)
+      .get("/api/places/suggest")
+      .query({ q: "bangalore", limit: 5 });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.suggestions)).toBe(true);
+    expect(res.body.suggestions.length).toBeGreaterThan(0);
+    const city = res.body.suggestions.find((s) => s.type === "city");
+    expect(city).toBeTruthy();
+    expect(typeof city.label).toBe("string");
+    expect(typeof city.token).toBe("string");
+    expect(Number.isFinite(city.geonameId)).toBe(true);
+    expect(typeof city.country).toBe("string");
+  });
+
+  it("includes a supported country whose name matches q", async () => {
+    const res = await request(app)
+      .get("/api/places/suggest")
+      .query({ q: "united states" });
+    expect(res.status).toBe(200);
+    const country = res.body.suggestions.find((s) => s.type === "country");
+    expect(country).toBeTruthy();
+    expect(country.token).toBe("us");
+    expect(country.country).toBe("us");
   });
 });

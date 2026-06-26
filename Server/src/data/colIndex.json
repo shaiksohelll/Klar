@@ -1,0 +1,24 @@
+{
+  "base": "US",
+  "generatedAt": "2024-01-01T00:00:00.000Z",
+  "countries": {
+    "us": { "currency": "USD", "fx": 1, "priceLevel": 100 },
+    "in": { "currency": "INR", "fx": 83.0, "priceLevel": 25.0 },
+    "gb": { "currency": "GBP", "fx": 0.78, "priceLevel": 98.0 },
+    "ca": { "currency": "CAD", "fx": 1.35, "priceLevel": 92.0 },
+    "au": { "currency": "AUD", "fx": 1.49, "priceLevel": 95.0 }
+  },
+  "cityMultipliers": {
+    "1277333": 0.95,
+    "1275339": 1.15,
+    "1273294": 1.05,
+    "1269843": 0.92,
+    "1259229": 0.98,
+    "5391959": 1.55,
+    "5128581": 1.45,
+    "5809844": 1.25,
+    "2643743": 1.30,
+    "6167865": 1.15,
+    "2147714": 1.20
+  }
+}

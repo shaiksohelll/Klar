@@ -1,11 +1,13 @@
 import Job from "../models/Job.js";
 import { extractSkills, normalizeRole } from "../lib/skills.js";
-import { makeDedupeKey } from "../lib/dedupe.js";
+import { makeDedupeKey, normalizeLocation } from "../lib/dedupe.js";
+import { geocodeCity } from "../lib/geocode.js";
 import { clearTrendingCaches } from "../aggregations/trendingSkills.js";
 import { clearPairsCache } from "../aggregations/skillPairs.js";
 import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
+import { clearAtlasCache } from "../aggregations/atlas.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
 //
@@ -91,6 +93,10 @@ function mapJob(item, roleQuery) {
     Boolean,
   );
 
+  // Resolve to a VERIFIED GeoNames place. countryHint = ISO-2 from job_country.
+  const countryHint = (item.job_country || "").toLowerCase();
+  const g = geocodeCity(normalizeLocation(locationParts.join(", ")), countryHint);
+
   return {
     externalId: `jsearch:${item.job_id}`,
     source: "jsearch",
@@ -113,6 +119,8 @@ function mapJob(item, roleQuery) {
       ? new Date(item.job_posted_at_datetime_utc)
       : new Date(),
     dedupeKey: makeDedupeKey(companyName, title, locationParts.join(", ")),
+    geo: g.value,
+    geoConfidence: g.confidence,
   };
 }
 
@@ -211,6 +219,7 @@ export async function ingestJSearch({
   clearDetailCache();
   clearCompaniesCache();
   clearSalaryCache();
+  clearAtlasCache();
 
   const summary = {
     requested: queries.length,

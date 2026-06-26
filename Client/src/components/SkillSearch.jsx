@@ -113,7 +113,7 @@ export function SkillSearch({ onSelect, months = 12 }) {
         <div className="relative flex-1 min-w-0">
           {/* Magnifier icon */}
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5C5C66] pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-2)] pointer-events-none"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -130,7 +130,7 @@ export function SkillSearch({ onSelect, months = 12 }) {
             onChange={handleQueryChange}
             placeholder="Search skills…"
             aria-label="Search skills"
-            className="w-full bg-[#0E0E12] border border-[#26262E] rounded-lg pl-9 pr-4 py-2.5 font-mono text-sm text-[#F4F4F6] placeholder-[#5C5C66] focus:outline-none focus:border-[#EB0029] transition-colors"
+            className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg pl-9 pr-4 py-2.5 font-mono text-sm text-[var(--text)] placeholder-[var(--muted-2)] focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
 
@@ -141,19 +141,19 @@ export function SkillSearch({ onSelect, months = 12 }) {
           aria-pressed={remoteOnly}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-mono text-xs uppercase tracking-wider transition-colors shrink-0 ${
             remoteOnly
-              ? "border-[#EB0029] bg-[#EB0029]/10 text-[#FF2740]"
-              : "border-[#26262E] bg-[#0E0E12] text-[#9A9AA6] hover:border-[#5C5C66] hover:text-[#F4F4F6]"
+              ? "border-[var(--accent)] bg-[#EB0029]/10 text-[var(--accent-hover)]"
+              : "border-[var(--border)] bg-[var(--bg)] text-[var(--muted)] hover:border-[var(--muted-2)] hover:text-[var(--text)]"
           }`}
         >
           <span
-            className={`w-2 h-2 rounded-full ${remoteOnly ? "bg-[#EB0029]" : "bg-[#5C5C66]"}`}
+            className={`w-2 h-2 rounded-full ${remoteOnly ? "bg-[var(--accent)]" : "bg-[var(--muted-2)]"}`}
           />
           Remote
         </button>
 
         {/* Sort segmented control */}
         <div
-          className="flex bg-[#0E0E12] border border-[#26262E] rounded-lg p-0.5 shrink-0"
+          className="flex bg-[var(--bg)] border border-[var(--border)] rounded-lg p-0.5 shrink-0"
           role="group"
           aria-label="Sort order"
         >
@@ -165,8 +165,8 @@ export function SkillSearch({ onSelect, months = 12 }) {
               aria-pressed={sort === opt.key}
               className={`relative px-3 py-2 rounded-md font-mono text-xs uppercase tracking-wider transition-colors ${
                 sort === opt.key
-                  ? "bg-[#EB0029] text-white"
-                  : "text-[#5C5C66] hover:text-[#9A9AA6]"
+                  ? "bg-[var(--accent)] text-white"
+                  : "text-[var(--muted-2)] hover:text-[var(--muted)]"
               }`}
             >
               {opt.label}
@@ -176,7 +176,7 @@ export function SkillSearch({ onSelect, months = 12 }) {
       </div>
 
       {/* ── Result count line ── */}
-      <div className="font-mono text-[10px] uppercase tracking-widest text-[#5C5C66] mb-3 px-1">
+      <div className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted-2)] mb-3 px-1">
         {fetchState === "done"
           ? `${filtered.length.toLocaleString()} skill${filtered.length !== 1 ? "s" : ""}${
               query.trim() || remoteOnly ? " matched" : " total"
@@ -187,7 +187,7 @@ export function SkillSearch({ onSelect, months = 12 }) {
       {/* ── States ── */}
       {fetchState === "loading" && (
         <div
-          className="py-8 text-center font-mono text-xs uppercase tracking-widest text-[#5C5C66] animate-pulse"
+          className="py-8 text-center font-mono text-xs uppercase tracking-widest text-[var(--muted-2)] animate-pulse"
           aria-live="polite"
         >
           Loading skills…
@@ -195,14 +195,14 @@ export function SkillSearch({ onSelect, months = 12 }) {
       )}
 
       {fetchState === "error" && (
-        <div className="py-8 text-center font-mono text-xs text-[#EB0029]" role="alert">
+        <div className="py-8 text-center font-mono text-xs text-[var(--accent)]" role="alert">
           Couldn't load skill list. Please try again shortly.
         </div>
       )}
 
       {fetchState === "done" && filtered.length === 0 && (
         <div
-          className="py-8 text-center font-mono text-xs text-[#5C5C66] uppercase tracking-widest"
+          className="py-8 text-center font-mono text-xs text-[var(--muted-2)] uppercase tracking-widest"
           aria-live="polite"
         >
           No skills match
@@ -213,7 +213,7 @@ export function SkillSearch({ onSelect, months = 12 }) {
       {fetchState === "done" && filtered.length > 0 && (
         <div className="space-y-0.5">
           {/* Header */}
-          <div className="flex items-center px-4 py-2 text-[10px] font-mono text-[#5C5C66] uppercase tracking-wider border-b border-[#26262E] mb-1">
+          <div className="flex items-center px-4 py-2 text-[10px] font-mono text-[var(--muted-2)] uppercase tracking-wider border-b border-[var(--border)] mb-1">
             <div className="w-10">Rank</div>
             <div className="flex-1">Skill</div>
             <div className="w-24 text-right">Demand</div>
@@ -237,29 +237,29 @@ export function SkillSearch({ onSelect, months = 12 }) {
               className="w-full flex items-center px-4 py-2.5 rounded-lg cursor-pointer group text-left"
             >
               {/* Rank */}
-              <div className="w-10 font-mono text-xs text-[#5C5C66] group-hover:text-white transition-colors shrink-0">
+              <div className="w-10 font-mono text-xs text-[var(--muted-2)] group-hover:text-[var(--text)] transition-colors shrink-0">
                 {String(i + 1).padStart(2, "0")}
               </div>
 
               {/* Name */}
-              <div className="flex-1 font-sans text-sm font-medium text-[#F4F4F6] group-hover:text-white transition-colors truncate pr-3">
+              <div className="flex-1 font-sans text-sm font-medium text-[var(--text)] group-hover:text-[var(--text)] transition-colors truncate pr-3">
                 {displayName(s.skill)}
               </div>
 
               {/* Demand */}
-              <div className="w-24 font-mono text-sm tabular-nums text-[#9A9AA6] text-right shrink-0">
+              <div className="w-24 font-mono text-sm tabular-nums text-[var(--muted)] text-right shrink-0">
                 {s.demand.toLocaleString()}
               </div>
 
               {/* Remote % */}
-              <div className="w-16 font-mono text-xs tabular-nums text-[#9A9AA6] text-right shrink-0">
+              <div className="w-16 font-mono text-xs tabular-nums text-[var(--muted)] text-right shrink-0">
                 {pct(s.remoteShare)}
               </div>
             </motion.button>
           ))}
 
           {filtered.length > 100 && (
-            <div className="px-4 py-3 font-mono text-[10px] text-[#5C5C66] uppercase tracking-wider text-center">
+            <div className="px-4 py-3 font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-wider text-center">
               Showing 100 of {filtered.length.toLocaleString()}. Refine your search to see more.
             </div>
           )}

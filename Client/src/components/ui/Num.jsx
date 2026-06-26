@@ -1,28 +1,44 @@
-/**
- * Num — inline numeric formatter.
- *
- * Wraps a numeral in a <span> with tabular-nums so digits don't jiggle
- * during count updates, and applies locale-aware formatting (commas etc.)
- * when the value is a plain number.
- *
- * Usage:
- *   <Num>{42}</Num>            → "42"
- *   <Num>{1500}</Num>          → "1,500"
- *   <Num className="…">72</Num>
- */
-export default function Num({ children, className = "" }) {
-  const raw = children;
+// <Num> — the single gateway for every numeral the product renders.
+//
+// Klar's whole story is that nominal numbers resolve into sharp, mono truth,
+// so every salary, %, currency, percentile, count and score flows through
+// here: JetBrains Mono + tabular-nums for a stable baseline, optional verdict
+// coloring, and right-alignment when used inside a table cell.
+//
+// It is presentational only — formatting stays with the caller so locale and
+// currency logic are never duplicated here.
+//
+// When `children` is a plain number and no custom formatting is needed,
+// toLocaleString() is applied automatically so e.g. 1500 renders as "1,500".
+
+export default function Num({
+  children,
+  cell = false,   // right-align for tabular columns
+  verdict,        // "pos" | "neg" | "neutral" | undefined
+  as: Tag = "span",
+  className = "",
+  ...rest
+}) {
+  const verdictColor =
+    verdict === "pos"
+      ? "text-[var(--pos)]"
+      : verdict === "neg"
+        ? "text-[var(--neg)]"
+        : verdict === "neutral"
+          ? "text-[var(--neutral)]"
+          : "";
+
+  // Auto-format plain numbers for display consistency (e.g. 1500 → "1,500").
   const formatted =
-    typeof raw === "number"
-      ? raw.toLocaleString()
-      : String(raw ?? "");
+    typeof children === "number" ? children.toLocaleString() : children;
+
+  const classes = ["num", cell ? "num-cell" : "", verdictColor, className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <span
-      className={`tabular-nums ${className}`.trim()}
-      aria-label={formatted}
-    >
+    <Tag className={classes} aria-label={String(formatted ?? "")} {...rest}>
       {formatted}
-    </span>
+    </Tag>
   );
 }

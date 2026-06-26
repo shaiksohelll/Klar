@@ -28,26 +28,26 @@ export class ErrorBoundary extends Component {
     if (this.props.fallback) return this.props.fallback;
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-6">
-        <div className="font-mono text-xs uppercase tracking-widest text-[#EB0029] mb-3">
+        <div className="font-mono text-xs uppercase tracking-widest text-[var(--accent)] mb-3">
           Something went wrong
         </div>
-        <h2 className="font-space text-2xl font-bold text-white mb-2">
+        <h2 className="font-space text-2xl font-bold text-[var(--text)] mb-2">
           This view hit an unexpected error
         </h2>
-        <p className="text-sm text-[#9A9AA6] max-w-md mb-6">
+        <p className="text-sm text-[var(--muted)] max-w-md mb-6">
           The rest of Klar is still working. Try again, or reload the page if
           the problem persists.
         </p>
         <div className="flex items-center gap-3">
           <button
             onClick={this.handleRetry}
-            className="bg-[#EB0029] hover:bg-[#FF2740] text-white px-5 py-2 rounded-full font-medium text-sm transition-all"
+            className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-5 py-2 rounded-full font-medium text-sm transition-all"
           >
             Try again
           </button>
           <button
             onClick={() => window.location.reload()}
-            className="font-mono text-xs uppercase tracking-widest text-[#9A9AA6] hover:text-white transition-colors"
+            className="font-mono text-xs uppercase tracking-widest text-[var(--muted)] hover:text-[var(--text)] transition-colors"
           >
             Reload page
           </button>

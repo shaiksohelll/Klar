@@ -1,7 +1,31 @@
 import { useMemo } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { RankingList } from "../components/RankingList";
 import { SkillGap } from "../components/SkillGap";
+import Button from "../components/ui/Button";
+
+// Loading skeleton — mirrors the ranking-list rows so the layout doesn't
+// shift when the real list arrives.
+function WatchlistSkeleton() {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label="Loading your watchlist">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--panel)]"
+        >
+          <div className="skeleton h-3.5 w-7 shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <div className="skeleton h-3.5 w-3/4" />
+            <div className="skeleton h-1.5 w-full" />
+          </div>
+          <div className="skeleton h-3 w-12 shrink-0" />
+          <div className="skeleton h-6 w-6 rounded-full shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 
@@ -30,35 +54,53 @@ export default function WatchlistPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-12 relative z-10">
       <section className="text-center max-w-2xl mx-auto space-y-4">
-        <div className="font-mono text-[#EB0029] text-xs uppercase tracking-[0.2em] font-bold">
+        <div className="font-mono text-[var(--accent)] text-xs uppercase tracking-[0.2em] font-bold">
           Your Watchlist
         </div>
-        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-white">
+        <h1 className="font-space font-bold text-4xl md:text-6xl leading-[1.05] tracking-tight text-[var(--text)]">
           Skills you're tracking.
         </h1>
-        <p className="text-base md:text-lg text-[#9A9AA6] font-medium">
+        <p className="text-base md:text-lg text-[var(--muted)] font-medium">
           The skills you starred, ranked by current market demand.
         </p>
       </section>
 
       {loading ? (
-        <div className="text-center py-20 font-mono text-sm text-[#5C5C66] uppercase tracking-widest animate-pulse">
-          Loading…
-        </div>
+        <WatchlistSkeleton />
       ) : watched.length === 0 && watchlistError ? (
-        <div className="text-center py-20 font-mono text-sm text-[#9A9AA6] space-y-4">
-          <p>{watchlistError}</p>
-          <button
-            onClick={retryWatchlist}
-            className="underline hover:text-white transition-colors"
-          >
-            Try again
-          </button>
+        /* ERROR — what happened, why, and the next step. Not color-only. */
+        <div
+          role="alert"
+          className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-6 text-center"
+        >
+          <h2 className="font-space text-lg font-bold text-[var(--text)]">
+            We couldn't load your watchlist
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            The connection dropped before your tracked skills came back. Your
+            saved skills are safe — this is just a display hiccup.
+          </p>
+          <div className="mt-5 flex justify-center">
+            <Button variant="secondary" onClick={retryWatchlist}>
+              Try again
+            </Button>
+          </div>
         </div>
       ) : watched.length === 0 ? (
-        <div className="text-center py-20 font-mono text-sm text-[#5C5C66] leading-relaxed">
-          No tracked skills yet. Tap the star on any skill in the Demand report
-          to add it here.
+        /* EMPTY — onboarding: one-line value prop + a single next action. */
+        <div className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--panel)] p-8 text-center">
+          <h2 className="font-space text-xl font-bold text-[var(--text)]">
+            Track the skills that matter to you
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">
+            Star any skill and Klar keeps its live demand right here, so you can
+            watch where the market is heading at a glance.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Link to="/">
+              <Button variant="primary">Browse the Demand report</Button>
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="space-y-10">
