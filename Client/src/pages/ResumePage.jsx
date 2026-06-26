@@ -185,7 +185,7 @@ function EmptyState({ onAnalyze }) {
       <p className="text-base text-(--muted) font-medium max-w-sm leading-relaxed">
         Paste or upload your resume above, then hit{" "}
         <span className="text-(--text) font-semibold">Analyze</span> to
-        see exactly which top-40 in-demand skills are missing — sourced from
+        see exactly which top-40 in-demand skills are missing, sourced from
         live job postings, not guesswork.
       </p>
 
@@ -312,7 +312,7 @@ export default function ResumePage() {
   const totalConsidered = result?.totalConsidered ?? 0;
   const matchScore = result?.matchScore ?? 0;
   const dialAriaLabel = result
-    ? `Match score ${matchScore} of 100 — you cover ${matchedCount} of the top ${totalConsidered} in-demand skills.`
+    ? `Match score ${matchScore} of 100. You cover ${matchedCount} of the top ${totalConsidered} in-demand skills.`
     : "Match score dial";
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -344,7 +344,7 @@ export default function ResumePage() {
           className="text-lg text-(--muted) font-medium"
         >
           Paste your resume or upload a file. We compare it against the current top-40
-          in-demand skills from live job postings — no AI, no estimates.
+          in-demand skills from live job postings. No AI, no estimates.
         </motion.p>
       </section>
 
@@ -571,17 +571,17 @@ export default function ResumePage() {
                       const considered = result?.totalConsidered
                         ?? ((result?.matched?.length ?? 0) + (result?.missing?.length ?? 0));
                       if (considered === 0) {
-                        return "Not enough market data yet — try again once more jobs have been ingested.";
+                        return "Not enough market data yet. Try again once more jobs have been ingested.";
                       }
                       return (result?.missing ?? []).length === 0
-                        ? "You've got every skill in the top 40 — impressive."
+                        ? "You've got every skill in the top 40. Impressive."
                         : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your resume.`;
                     })()}
                   </p>
 
                   {/* Methodology note — no fake confidence % */}
                   <p className="font-mono text-[10px] text-(--muted-2) leading-relaxed mt-1">
-                    Exact count of matched ÷ top-N from live postings — not an AI estimate.
+                    Exact count of matched vs the top-N in-demand skills from live postings. Not an AI estimate.
                   </p>
                 </div>
               </div>

@@ -114,7 +114,7 @@ export default function HiringPage() {
           className="text-lg text-[#9A9AA6] max-w-2xl mx-auto font-medium"
         >
           Top hiring companies ranked by active postings, with the skills each
-          one asks for most. Pure counts from real listings — no predictions.
+          one asks for most. Pure counts from real listings. No predictions.
         </motion.p>
       </section>
 

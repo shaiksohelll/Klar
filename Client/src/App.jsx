@@ -233,7 +233,7 @@ export default function App() {
         if (!token) {
           // Clerk is still initialising; keep whatever list is in memory.
           if (!cancelled && watchlistSeqRef.current === seq)
-            setWatchlistError("Watchlist unavailable — retry");
+            setWatchlistError("Watchlist unavailable. Retry.");
           return;
         }
         const res = await axios.get(`${API}/api/watchlist`, {
@@ -249,7 +249,7 @@ export default function App() {
       } catch {
         // Network or auth error. Keep existing items; surface a retry prompt.
         if (!cancelled && watchlistSeqRef.current === seq)
-          setWatchlistError("Watchlist unavailable — retry");
+          setWatchlistError("Watchlist unavailable. Retry.");
       }
     })();
     return () => {

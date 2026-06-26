@@ -260,7 +260,7 @@ export function SkillSearch({ onSelect, months = 12 }) {
 
           {filtered.length > 100 && (
             <div className="px-4 py-3 font-mono text-[10px] text-[#5C5C66] uppercase tracking-wider text-center">
-              Showing 100 of {filtered.length.toLocaleString()} — refine your search to see more
+              Showing 100 of {filtered.length.toLocaleString()}. Refine your search to see more.
             </div>
           )}
         </div>

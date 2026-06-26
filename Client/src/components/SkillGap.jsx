@@ -77,7 +77,7 @@ export function SkillGap({ getToken, trackedSkills, onSelect, months = 12 }) {
           What to Learn Next
         </div>
         <p className="font-mono text-[11px] text-[#5C5C66] leading-relaxed">
-          Skills that show up most often alongside what you track — ranked by
+          Skills that show up most often alongside what you track, ranked by
           co-occurrence, with current demand.
         </p>
       </div>
