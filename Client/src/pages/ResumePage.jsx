@@ -171,10 +171,9 @@ function ResultsSkeleton() {
 
 // ── Onboarding empty state ───────────────────────────────────────────────────
 
-function EmptyState({ onAnalyze }) {
+function EmptyState({ onScrollToInput }) {
   return (
     <motion.div
-      key="empty"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -189,12 +188,12 @@ function EmptyState({ onAnalyze }) {
         live job postings, not guesswork.
       </p>
 
-      {/* Single CTA */}
+      {/* Single CTA — scrolls to and focuses the input area */}
       <button
-        onClick={onAnalyze}
+        onClick={onScrollToInput}
         className="px-8 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
       >
-        Analyze Resume
+        Get Started
       </button>
     </motion.div>
   );
@@ -221,6 +220,7 @@ export default function ResumePage() {
   const [hasRun, setHasRun] = useState(false);
 
   const fileInputRef = useRef(null);
+  const inputCardRef = useRef(null);
   const reqIdRef = useRef(0);
   const parseIdRef = useRef(0);
 
@@ -307,6 +307,16 @@ export default function ResumePage() {
     setSelectedSkill({ id: skill, name: skill, role: "General" });
   };
 
+  // ── EmptyState CTA: scroll + focus the input card ─────────────────────────
+  const handleScrollToInput = () => {
+    inputCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Small delay lets smooth-scroll settle before focusing the textarea
+    setTimeout(() => {
+      const ta = inputCardRef.current?.querySelector("#resume-textarea");
+      ta?.focus();
+    }, 350);
+  };
+
   // Aria label for the accessible dial wrapper
   const matchedCount = (result?.matched ?? []).length;
   const totalConsidered = result?.totalConsidered ?? 0;
@@ -350,6 +360,7 @@ export default function ResumePage() {
 
       {/* ── Input card ───────────────────────────────────────────────────── */}
       <motion.div
+        ref={inputCardRef}
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6, ease: EASE }}
@@ -373,7 +384,7 @@ export default function ResumePage() {
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors focus:outline-none focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
             isDragging
-              ? "border-[var(--accent)] bg-[#EB0029]/5"
+              ? "border-[var(--accent)] bg-[var(--accent)]/5"
               : "border-[var(--border)] hover:border-[var(--muted-2)]"
           }`}
         >
@@ -516,7 +527,7 @@ export default function ResumePage() {
 
         {/* Onboarding empty state — before first run, no text, no error */}
         {!loading && !result && !apiError && !hasRun && (
-          <EmptyState onAnalyze={handleAnalyze} />
+          <EmptyState key="empty" onScrollToInput={handleScrollToInput} />
         )}
 
         {/* Results — shown after a successful analysis */}
