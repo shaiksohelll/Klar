@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import ThemeToggle from "../ThemeToggle";
+import Brand from "../Brand";
 
 // Nav — the liquid-glass chrome that frames every screen. Presentational: all
 // auth state and freshness data are passed in from App so no data logic lives
@@ -63,11 +64,7 @@ export default function Nav({
           className="flex items-baseline font-space text-xl font-bold tracking-tight text-[var(--text)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)] rounded-[var(--radius-xs)]"
           aria-label="Klar home"
         >
-          Klar
-          <span
-            aria-hidden="true"
-            className="ml-1 inline-block h-2 w-2 rounded-full bg-[var(--accent)]"
-          />
+          <Brand />
         </NavLink>
 
         {/* Desktop link rail. */}
