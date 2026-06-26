@@ -5,6 +5,7 @@ import { useOutletContext } from "react-router-dom";
 import { extractTextFromFile } from "../lib/parseResume";
 import { displayName } from "../lib/displayName";
 import Brand from "../components/Brand";
+import Num from "../components/ui/Num";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const MAX_CHARS = 50_000;
@@ -35,7 +36,7 @@ function ScoreDial({ score }) {
       width="120"
       height="120"
       viewBox="0 0 100 100"
-      className="rotate-[-90deg]"
+      className="-rotate-90"
       aria-hidden="true"
     >
       <circle
@@ -63,6 +64,143 @@ function ScoreDial({ score }) {
   );
 }
 
+// ── Inline SVG icons (token-colored, no emoji) ──────────────────────────────
+
+/** Upload / document icon — neutral muted colour */
+function IconDocument() {
+  return (
+    <svg
+      width="32"
+      height="32"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--muted-2)"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
+  );
+}
+
+/** Check-circle icon — var(--pos) green */
+function IconCheck() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--pos)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="9 12 11 14 15 10" />
+    </svg>
+  );
+}
+
+/** Dot / circle icon — var(--accent) red for missing skills */
+function IconMissing() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="var(--accent)"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+    </svg>
+  );
+}
+
+// ── Loading skeleton ─────────────────────────────────────────────────────────
+
+function ResultsSkeleton() {
+  return (
+    <div
+      aria-label="Analyzing your resume…"
+      aria-busy="true"
+      className="space-y-8"
+    >
+      {/* Overview card skeleton */}
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 md:p-8">
+        <div className="flex flex-col sm:flex-row items-center gap-8">
+          {/* Dial placeholder */}
+          <div className="skeleton shrink-0 w-[120px] h-[120px] rounded-full" />
+          {/* Copy placeholders */}
+          <div className="flex-1 space-y-3 w-full">
+            <div className="skeleton h-3 w-24 rounded" />
+            <div className="skeleton h-7 w-3/4 rounded" />
+            <div className="skeleton h-4 w-1/2 rounded" />
+          </div>
+        </div>
+      </div>
+
+      {/* Chip section skeletons */}
+      {[6, 8].map((count, si) => (
+        <div key={si} className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="skeleton w-5 h-5 rounded-full" />
+            <div className="skeleton h-3 w-40 rounded" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: count }).map((_, i) => (
+              <div
+                key={i}
+                className="skeleton h-7 rounded-full"
+                style={{ width: `${60 + (i % 3) * 20}px` }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Onboarding empty state ───────────────────────────────────────────────────
+
+function EmptyState({ onScrollToInput }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.4, ease: EASE }}
+      className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel)] p-10 flex flex-col items-center gap-5 text-center"
+    >
+      {/* Value prop */}
+      <p className="text-base text-[var(--muted)] font-medium max-w-sm leading-relaxed">
+        Paste or upload your resume above, then hit{" "}
+        <span className="text-[var(--text)] font-semibold">Analyze</span> to
+        see exactly which top-40 in-demand skills are missing, sourced from
+        live job postings, not guesswork.
+      </p>
+
+      {/* Single CTA — scrolls to and focuses the input area */}
+      <button
+        onClick={onScrollToInput}
+        className="px-8 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-mono text-sm uppercase tracking-widest font-medium transition-all shadow-[0_0_20px_rgba(235,0,41,0.2)] hover:shadow-[0_0_30px_rgba(255,39,64,0.4)] hover:-translate-y-0.5"
+      >
+        Get Started
+      </button>
+    </motion.div>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
+
 export default function ResumePage() {
   // Grab setSelectedSkill from the outlet context so missing chips can open
   // the existing SkillDrawer exactly like chips elsewhere in the app do.
@@ -78,7 +216,11 @@ export default function ResumePage() {
   const [result, setResult] = useState(null);
   const [parsing, setParsing] = useState(false);
 
+  // Track whether the user has ever triggered an analysis (to show empty state)
+  const [hasRun, setHasRun] = useState(false);
+
   const fileInputRef = useRef(null);
+  const inputCardRef = useRef(null);
   const reqIdRef = useRef(0);
   const parseIdRef = useRef(0);
 
@@ -134,6 +276,7 @@ export default function ResumePage() {
     setLoading(true);
     setApiError(null);
     setResult(null);
+    setHasRun(true);
     const myReqId = ++reqIdRef.current;
     try {
       const res = await axios.post(`${API}/api/resume-gap`, { text: payload });
@@ -156,12 +299,31 @@ export default function ResumePage() {
     setApiError(null);
     setLoading(false);
     setParsing(false);
+    setHasRun(false);
   };
 
   // ── Chip click → SkillDrawer ───────────────────────────────────────────────
   const openSkill = (skill) => {
     setSelectedSkill({ id: skill, name: skill, role: "General" });
   };
+
+  // ── EmptyState CTA: scroll + focus the input card ─────────────────────────
+  const handleScrollToInput = () => {
+    inputCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Small delay lets smooth-scroll settle before focusing the textarea
+    setTimeout(() => {
+      const ta = inputCardRef.current?.querySelector("#resume-textarea");
+      ta?.focus();
+    }, 350);
+  };
+
+  // Aria label for the accessible dial wrapper
+  const matchedCount = (result?.matched ?? []).length;
+  const totalConsidered = result?.totalConsidered ?? 0;
+  const matchScore = result?.matchScore ?? 0;
+  const dialAriaLabel = result
+    ? `Match score ${matchScore} of 100. You cover ${matchedCount} of the top ${totalConsidered} in-demand skills.`
+    : "Match score dial";
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -192,12 +354,13 @@ export default function ResumePage() {
           className="text-lg text-[var(--muted)] font-medium"
         >
           Paste your resume or upload a file. We compare it against the current top-40
-          in-demand skills from live job postings — no AI, no estimates.
+          in-demand skills from live job postings. No AI, no estimates.
         </motion.p>
       </section>
 
       {/* ── Input card ───────────────────────────────────────────────────── */}
       <motion.div
+        ref={inputCardRef}
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6, ease: EASE }}
@@ -221,7 +384,7 @@ export default function ResumePage() {
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors focus:outline-none focus-visible:border-[var(--accent)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
             isDragging
-              ? "border-[var(--accent)] bg-[#EB0029]/5"
+              ? "border-[var(--accent)] bg-[var(--accent)]/5"
               : "border-[var(--border)] hover:border-[var(--muted-2)]"
           }`}
         >
@@ -234,7 +397,8 @@ export default function ResumePage() {
             id="resume-file-input"
             aria-label="Upload resume file"
           />
-          <div className="text-3xl select-none">📄</div>
+          {/* Inline SVG replaces the 📄 emoji */}
+          <IconDocument />
           <div className="text-center">
             <p className="text-sm text-[var(--text)] font-medium">
               {fileName ? (
@@ -286,8 +450,9 @@ export default function ResumePage() {
             className="w-full rounded-xl bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none text-[var(--text)] placeholder-[var(--muted-2)] text-sm p-4 resize-y transition-colors font-mono leading-relaxed"
             aria-label="Resume text"
           />
+          {/* Char counter — Num wraps both numerals */}
           <div className="absolute bottom-3 right-3 font-mono text-[10px] text-[var(--muted-2)]">
-            {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+            <Num>{text.length}</Num> / <Num>{MAX_CHARS}</Num>
           </div>
         </div>
 
@@ -344,9 +509,29 @@ export default function ResumePage() {
         )}
       </motion.div>
 
-      {/* ── Results ──────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {result && (
+      {/* ── Results / skeleton / empty state ─────────────────────────────── */}
+      <AnimatePresence mode="wait">
+
+        {/* Loading skeleton — shown during analysis */}
+        {loading && (
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ResultsSkeleton />
+          </motion.div>
+        )}
+
+        {/* Onboarding empty state — before first run, no text, no error */}
+        {!loading && !result && !apiError && !hasRun && (
+          <EmptyState key="empty" onScrollToInput={handleScrollToInput} />
+        )}
+
+        {/* Results — shown after a successful analysis */}
+        {result && !loading && (
           <motion.div
             key="results"
             variants={containerVariants}
@@ -361,12 +546,17 @@ export default function ResumePage() {
               className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 md:p-8"
             >
               <div className="flex flex-col sm:flex-row items-center gap-8">
-                {/* Score dial */}
-                <div className="relative shrink-0 flex items-center justify-center">
-                  <ScoreDial score={result?.matchScore ?? 0} />
+                {/* Score dial — accessible wrapper */}
+                <div
+                  role="img"
+                  aria-label={dialAriaLabel}
+                  className="relative shrink-0 flex items-center justify-center"
+                >
+                  <ScoreDial score={matchScore} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="font-space font-bold text-3xl text-[var(--text)] leading-none">
-                      {result?.matchScore ?? 0}
+                      {/* match score numeral */}
+                      <Num>{matchScore}</Num>
                     </span>
                     <span className="font-mono text-[10px] text-[var(--muted-2)] uppercase tracking-widest mt-0.5">
                       %
@@ -381,9 +571,10 @@ export default function ResumePage() {
                   </div>
                   <p className="text-xl md:text-2xl font-space font-bold text-[var(--text)] leading-snug">
                     You cover{" "}
-                    <span className="text-[var(--accent)]">{(result?.matched ?? []).length}</span>{" "}
+                    {/* "cover X of top N" counts */}
+                    <span className="text-[var(--accent)]"><Num>{matchedCount}</Num></span>{" "}
                     of the top{" "}
-                    <span className="text-[var(--accent)]">{result?.totalConsidered ?? 0}</span>{" "}
+                    <span className="text-[var(--accent)]"><Num>{totalConsidered}</Num></span>{" "}
                     in-demand skills.
                   </p>
                   <p className="text-sm text-[var(--muted)]">
@@ -391,28 +582,35 @@ export default function ResumePage() {
                       const considered = result?.totalConsidered
                         ?? ((result?.matched?.length ?? 0) + (result?.missing?.length ?? 0));
                       if (considered === 0) {
-                        return "Not enough market data yet — try again once more jobs have been ingested.";
+                        return "Not enough market data yet. Try again once more jobs have been ingested.";
                       }
                       return (result?.missing ?? []).length === 0
-                        ? "You've got every skill in the top 40 — impressive."
+                        ? "You've got every skill in the top 40. Impressive."
                         : `${(result?.missing ?? []).length} skill${(result?.missing ?? []).length > 1 ? "s" : ""} from the market's top ${result?.totalConsidered ?? 0} are missing from your resume.`;
                     })()}
+                  </p>
+
+                  {/* Methodology note — no fake confidence % */}
+                  <p className="font-mono text-[10px] text-[var(--muted-2)] leading-relaxed mt-1">
+                    Exact count of matched vs the top-N in-demand skills from live postings. Not an AI estimate.
                   </p>
                 </div>
               </div>
             </motion.div>
 
             {/* Matched skills */}
-            {(result?.matched ?? []).length > 0 && (
+            {matchedCount > 0 && (
               <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-lg" aria-hidden="true">✅</span>
+                  {/* Inline SVG replaces ✅ emoji */}
+                  <IconCheck />
                   <div>
                     <div className="font-mono text-xs uppercase tracking-widest text-[var(--muted-2)]">
                       Skills you have that the market wants
                     </div>
                     <div className="font-mono text-[10px] text-[var(--muted-2)] mt-0.5">
-                      {(result?.matched ?? []).length} skill{(result?.matched ?? []).length !== 1 ? "s" : ""} matched
+                      {/* "N skills matched" count */}
+                      <Num>{matchedCount}</Num> skill{matchedCount !== 1 ? "s" : ""} matched
                     </div>
                   </div>
                 </div>
@@ -425,7 +623,8 @@ export default function ResumePage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[#22c55e] font-mono text-xs"
                     >
                       {displayName(skill)}
-                      <span className="text-[#22c55e] opacity-60 text-[10px]">{count}</span>
+                      {/* matched chip count */}
+                      <span className="text-[#22c55e] opacity-60 text-[10px]"><Num>{count}</Num></span>
                     </motion.span>
                   ))}
                 </div>
@@ -436,7 +635,8 @@ export default function ResumePage() {
             {(result?.missing ?? []).length > 0 && (
               <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-lg" aria-hidden="true">🔴</span>
+                  {/* Inline SVG dot replaces 🔴 emoji */}
+                  <IconMissing />
                   <div>
                     <div className="font-mono text-xs uppercase tracking-widest text-[var(--muted-2)]">
                       In-demand skills you&apos;re missing
@@ -456,7 +656,8 @@ export default function ResumePage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--accent)] hover:bg-[#1A0508] font-mono text-xs transition-colors cursor-pointer"
                     >
                       {displayName(skill)}
-                      <span className="text-[var(--muted-2)] text-[10px]">{count}</span>
+                      {/* missing chip count */}
+                      <span className="text-[var(--muted-2)] text-[10px]"><Num>{count}</Num></span>
                     </motion.button>
                   ))}
                 </div>
@@ -484,7 +685,7 @@ export default function ResumePage() {
                 </div>
                 <p className="font-mono text-[10px] text-[var(--muted-2)] leading-relaxed">
                   Only skills from our market taxonomy are detected. The comparison is
-                  against the top {result?.totalConsidered ?? 0} by current job-posting demand.
+                  against the top <Num>{totalConsidered}</Num> by current job-posting demand.
                 </p>
               </motion.div>
             )}

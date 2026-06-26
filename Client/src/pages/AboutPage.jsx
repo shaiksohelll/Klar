@@ -4,7 +4,7 @@ const STEPS = [
   {
     n: "01",
     t: "Real postings",
-    d: "We pull live job listings from Adzuna across seven engineering roles — frontend, backend, full-stack, DevOps, data, mobile, and general software.",
+    d: "We pull live job listings from Adzuna across seven engineering roles: frontend, backend, full-stack, DevOps, data, mobile, and general software.",
   },
   {
     n: "02",
@@ -14,12 +14,12 @@ const STEPS = [
   {
     n: "03",
     t: "Demand ranking",
-    d: "We count how often each skill appears across active postings in your selected role and time window — that frequency is the demand signal.",
+    d: "We count how often each skill appears across active postings in your selected role and time window. That frequency is the demand signal.",
   },
   {
     n: "04",
     t: "Always fresh",
-    d: "The dataset refreshes automatically every few hours and stale postings are pruned, so what you see reflects the current market — not last year's.",
+    d: "The dataset refreshes automatically every few hours and stale postings are pruned, so what you see reflects the current market, not last year's.",
   },
 ];
 
@@ -35,7 +35,7 @@ export default function AboutPage() {
         </h1>
         <p className="text-lg text-[var(--muted)] font-medium">
           <Brand /> is descriptive, not predictive. We don't guess where the market
-          is going — we show you what employers are hiring for right now.
+          is going. We show you what employers are hiring for right now.
         </p>
       </section>
 

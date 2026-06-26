@@ -35,7 +35,7 @@ function currencySymbol(code) {
 
 // Format a salary number: e.g. 1500000 → "15L", 75000 → "75K"
 function fmtSalary(n, currency) {
-  if (n == null || !isFinite(n)) return "—";
+  if (n == null || !isFinite(n)) return "N/A";
   // INR: use lakhs
   if (currency === "INR") {
     const l = n / 100_000;
@@ -415,7 +415,7 @@ export function SkillDrawer({
                         <span className="text-[var(--muted)]">{salary.totalCount.toLocaleString()}</span>
                         {" postings ("}
                         {Math.round((salary.disclosureRate ?? 0) * 100)}%
-                        {" disclosure rate). Employer-disclosed only — no estimates."}
+                        {" disclosure rate). Employer-disclosed only. No estimates."}
                       </div>
                     </div>
                   ) : (
@@ -489,7 +489,7 @@ export function SkillDrawer({
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-1 font-mono text-xs text-[var(--muted-2)]">
-                            <span className="truncate">{j.company || "—"}</span>
+                            <span className="truncate">{j.company || "N/A"}</span>
                             {j.isRemote && (
                               <span className="px-1.5 py-0.5 rounded bg-[rgba(235,0,41,0.15)] text-[#FF2740]">
                                 Remote
@@ -587,7 +587,7 @@ export function SkillDrawer({
                 <p className="text-[var(--text)] leading-relaxed">
                   {`${name} shows ${
                     demandVal != null ? demandVal.toLocaleString() : "…"
-                  } active postings in this window — about ${share}% of all jobs analyzed, ${remoteShare}% of them remote. A live read on current demand, not a forecast.`}
+                  } active postings in this window, about ${share}% of all jobs analyzed, ${remoteShare}% of them remote. A live read on current demand, not a forecast.`}
                 </p>
               </div>
             </div>

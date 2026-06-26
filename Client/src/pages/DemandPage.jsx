@@ -260,7 +260,7 @@ export default function DemandPage() {
               </div>
               <div className="font-mono text-[10px] text-[var(--muted-2)] mb-4 px-4 min-h-[1em]">
                 {!velocityReady
-                  ? "📊 Trend tracking just started — velocity unlocks in a few days."
+                  ? "📊 Trend tracking just started. Velocity unlocks in a few days."
                   : velocityBasisDays !== null
                     ? `Velocity vs ~${velocityBasisDays}d ago`
                     : null}
