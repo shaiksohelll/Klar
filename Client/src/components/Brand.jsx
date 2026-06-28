@@ -4,7 +4,7 @@
 export default function Brand() {
   return (
     <>
-      Klar<span className="text-[var(--accent)]">.</span>
+      Klar<span className="text-[var(--accent)] -ml-[0.06em]">.</span>
     </>
   );
 }
