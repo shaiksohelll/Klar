@@ -4,9 +4,9 @@ import Brand from "../Brand";
 
 // Nav — the liquid-glass chrome that frames every screen. Presentational: all
 // auth state and freshness data are passed in from App so no data logic lives
-// here. The brand is the Klar wordmark with a precise 8px red dot; the active
-// route is marked with the accent. On mobile the link rail collapses into a
-// glass Sheet (rendered by App) toggled by the menu button.
+// here. The brand renders the shared <Brand /> wordmark (Klar + accent period);
+// the active route is marked with the accent. On mobile the link rail collapses
+// into a glass Sheet (rendered by App) toggled by the menu button.
 //
 // Routes are listed in a fixed order and never reordered.
 const ROUTES = [
@@ -58,7 +58,7 @@ export default function Nav({
   return (
     <nav className="glass sticky top-0 z-40 border-b border-[var(--glass-border)]">
       <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6">
-        {/* Brand: wordmark + precise 8px red dot, optically nudged off the baseline. */}
+        {/* Brand: shared <Brand /> wordmark (Klar + accent period). */}
         <NavLink
           to="/"
           className="flex items-baseline font-space text-xl font-bold tracking-tight text-[var(--text)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)] rounded-[var(--radius-xs)]"
