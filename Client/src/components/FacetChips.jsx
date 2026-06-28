@@ -11,6 +11,7 @@ export default function FacetChips({ chips, clearFilter, clearAll }) {
         <button
           key={chip.key}
           onClick={() => clearFilter(chip.key)}
+          aria-label={`Remove ${chip.label} filter`}
           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] px-3 py-1 font-mono text-xs uppercase tracking-wider text-[var(--muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--text)]"
         >
           {chip.label}

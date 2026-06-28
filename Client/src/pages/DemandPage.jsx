@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { TiltCard } from "../components/TiltCard";
@@ -58,17 +58,16 @@ export default function DemandPage() {
     else if (key === "disclosed") setDisclosed(!!value);
   };
 
-  // Hydrate App.jsx from URL on mount (e.g. user lands on ?role=frontend).
-  const hydrated = useRef(false);
+  // Keep App.jsx state in sync with URL filter changes (chip removal,
+  // "Clear all", browser back/forward). Only sets when values differ to
+  // avoid redundant renders.
   useEffect(() => {
-    if (hydrated.current) return;
-    hydrated.current = true;
     if (filters.role !== activeRole) setActiveRole(filters.role);
     if (filters.window !== activeWindow) setActiveWindow(filters.window);
     if (filters.remote !== remote) setRemote(filters.remote);
     if (filters.disclosed !== disclosed) setDisclosed(filters.disclosed);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot hydration
-  }, []);
+  }, [filters, activeRole, activeWindow, remote, disclosed,
+      setActiveRole, setActiveWindow, setRemote, setDisclosed]);
 
   // Count-up for the hero stat, re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);

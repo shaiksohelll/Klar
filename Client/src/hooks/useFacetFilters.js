@@ -91,7 +91,15 @@ export default function useFacetFilters() {
 
   // ── Clear every filter ──────────────────────────────────────────────────
   const clearAll = useCallback(
-    () => setSearchParams({}, { replace: true }),
+    () =>
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("role");
+        next.delete("w");
+        next.delete("remote");
+        next.delete("disclosed");
+        return next;
+      }, { replace: true }),
     [setSearchParams],
   );
 

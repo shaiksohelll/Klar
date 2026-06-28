@@ -29,6 +29,7 @@ export default function FilterBar({ filters, setFilter, layoutPrefix = "" }) {
           <button
             key={r}
             onClick={() => setFilter("role", r)}
+            aria-pressed={role === r}
             className={`relative px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
               role === r
                 ? "text-white"
@@ -55,6 +56,7 @@ export default function FilterBar({ filters, setFilter, layoutPrefix = "" }) {
             <button
               key={w}
               onClick={() => setFilter("window", w)}
+              aria-pressed={win === w}
               className={`relative px-4 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
                 win === w
                   ? "text-white"
@@ -79,6 +81,7 @@ export default function FilterBar({ filters, setFilter, layoutPrefix = "" }) {
             <button
               key={opt.label}
               onClick={() => setFilter("remote", opt.value)}
+              aria-pressed={remote === opt.value}
               className={`relative px-3 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
                 remote === opt.value
                   ? "text-white"
@@ -100,6 +103,7 @@ export default function FilterBar({ filters, setFilter, layoutPrefix = "" }) {
         {/* Salary-disclosed toggle */}
         <button
           onClick={() => setFilter("disclosed", disclosed ? null : true)}
+          aria-pressed={disclosed}
           className={`px-3 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider border transition-colors ${
             disclosed
               ? "border-[var(--accent)] text-[var(--accent)] bg-[var(--accent)]/10"

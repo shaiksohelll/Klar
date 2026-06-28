@@ -262,11 +262,11 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
       }
       remote = r;
     }
-    // disclosed: pass "1" or "true" to show only salary-disclosed postings (omit = all)
+    // disclosed: pass "1" to show only salary-disclosed postings (omit = all)
     let disclosed;
     if (req.query.disclosed != null && String(req.query.disclosed).trim() !== "") {
       const d = String(req.query.disclosed).trim();
-      if (d !== "1" && d !== "true") {
+      if (d !== "1") {
         return res.status(400).json({ ok: false, error: "Invalid disclosed filter. Pass disclosed=1 to filter." });
       }
       disclosed = true;
@@ -409,11 +409,11 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
       }
       remote = r;
     }
-    // disclosed: pass "1" or "true" to show only salary-disclosed postings (omit = all)
+    // disclosed: pass "1" to show only salary-disclosed postings (omit = all)
     let disclosed;
     if (req.query.disclosed != null && String(req.query.disclosed).trim() !== "") {
       const d = String(req.query.disclosed).trim();
-      if (d !== "1" && d !== "true") {
+      if (d !== "1") {
         return res.status(400).json({ ok: false, error: "Invalid disclosed filter. Pass disclosed=1 to filter." });
       }
       disclosed = true;

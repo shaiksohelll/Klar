@@ -408,12 +408,12 @@ describe("GET /api/skills/trending (facet filters)", () => {
     expect(res.body.ok).toBe(true);
   });
 
-  it("accepts disclosed=true", async () => {
+  it("rejects disclosed=true (only disclosed=1 is valid)", async () => {
     const res = await request(app)
       .get("/api/skills/trending")
       .query({ disclosed: "true" });
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
   });
 
   it("rejects invalid disclosed value with 400", async () => {
@@ -483,7 +483,7 @@ describe("GET /api/atlas (facet filters)", () => {
     getAtlas.mockClear();
     await request(app)
       .get("/api/atlas")
-      .query({ remote: "onsite", disclosed: "true" });
+      .query({ remote: "onsite", disclosed: "1" });
     expect(getAtlas).toHaveBeenCalledWith(
       expect.objectContaining({
         remote: "onsite",
