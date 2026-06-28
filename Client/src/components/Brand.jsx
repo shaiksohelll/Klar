@@ -1,10 +1,10 @@
-// Reusable "Klar." wordmark with the brand-accent red dot (#EB0029),
-// matching the logo in App.jsx. Rendered wherever the visible UI text
-// "Klar" appears so the red dot is consistent everywhere.
+// Reusable "Klar." wordmark: the word "Klar" followed by an accent-colored
+// period (var(--accent)). Rendered wherever the UI shows "Klar" so the
+// punctuation mark is consistent across every context.
 export default function Brand() {
   return (
     <>
-      Klar<span className="text-[#EB0029]">.</span>
+      Klar<span className="text-[var(--accent)]">.</span>
     </>
   );
 }
