@@ -83,8 +83,8 @@ export async function getAllSkills({ months = 12 } = {}) {
   return skills;
 }
 
-export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
-  const cacheKey = `${role || "all"}:${months}:${limit}`;
+export async function getTrendingSkills({ role, months = 12, limit = 25, remote, disclosed }) {
+  const cacheKey = `${role || "all"}:${months}:${limit}:${remote || "any"}:${disclosed ? "yes" : "no"}`;
   const hit = TRENDING_CACHE.get(cacheKey);
   if (hit) return hit;
 
@@ -94,6 +94,9 @@ export async function getTrendingSkills({ role, months = 12, limit = 25 }) {
 
   const match = { postedAt: { $gte: since } };
   if (role) match.normalizedRole = role; // e.g. "backend", "frontend"
+  if (remote === "remote") match.isRemote = true;
+  else if (remote === "onsite") match.isRemote = false;
+  if (disclosed) match.salaryDisclosed = true;
 
   // Single round-trip: $facet runs totalJobs count and the skills aggregation
   // together so MongoDB only scans the collection once.

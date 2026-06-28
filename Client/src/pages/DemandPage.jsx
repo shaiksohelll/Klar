@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { TiltCard } from "../components/TiltCard";
@@ -6,22 +7,11 @@ import { RankingList } from "../components/RankingList";
 import { SkillSearch } from "../components/SkillSearch";
 import { useCountUp } from "../hooks/useCountUp";
 import Num from "../components/ui/Num";
+import useFacetFilters, { WINDOW_MONTHS } from "../hooks/useFacetFilters";
+import FilterBar from "../components/FilterBar";
+import FacetChips from "../components/FacetChips";
 
-const ROLES = [
-  "All",
-  "Frontend",
-  "Backend",
-  "Fullstack",
-  "DevOps",
-  "Data",
-  "Mobile",
-];
-const WINDOWS = ["3M", "6M", "12M"];
-const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const EASE = [0.16, 1, 0.3, 1];
-
-// Sliding pill springs — stiffness 180, damping 22 (UI spring)
-const pillSpring = { type: "spring", stiffness: 180, damping: 22 };
 
 const heroEyebrowInit = { opacity: 0 };
 const heroShow = { opacity: 1 };
@@ -42,6 +32,10 @@ export default function DemandPage() {
     setActiveRole,
     activeWindow,
     setActiveWindow,
+    remote,
+    setRemote,
+    disclosed,
+    setDisclosed,
     trackedSkills,
     handleTrack,
     setSelectedSkill,
@@ -51,7 +45,31 @@ export default function DemandPage() {
     velocityBasisDays,
   } = ctx;
 
-  // Count-up for the hero stat — re-triggers on totalJobs change (filter change)
+  // URL-backed filter state (shareable, refresh-safe).
+  const { filters, setFilter: setUrlFilter, clearFilter, clearAll, activeChips } =
+    useFacetFilters();
+
+  // Wrapper: update both the URL (shareable) AND App.jsx's state (data fetch).
+  const setFilter = (key, value) => {
+    setUrlFilter(key, value);
+    if (key === "role") setActiveRole(value || "All");
+    else if (key === "window") setActiveWindow(value || "12M");
+    else if (key === "remote") setRemote(value);
+    else if (key === "disclosed") setDisclosed(!!value);
+  };
+
+  // Keep App.jsx state in sync with URL filter changes (chip removal,
+  // "Clear all", browser back/forward). Only sets when values differ to
+  // avoid redundant renders.
+  useEffect(() => {
+    const nextDisclosed = !!filters.disclosed;
+    if (filters.role !== activeRole) setActiveRole(filters.role);
+    if (filters.window !== activeWindow) setActiveWindow(filters.window);
+    if (filters.remote !== remote) setRemote(filters.remote);
+    if (nextDisclosed !== disclosed) setDisclosed(nextDisclosed);
+  }, [filters, activeRole, activeWindow, remote, disclosed,
+      setActiveRole, setActiveWindow, setRemote, setDisclosed]);
+  // Count-up for the hero stat, re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);
 
   const visibleSkills = sorted;
@@ -107,55 +125,13 @@ export default function DemandPage() {
         </p>
       </section>
 
-      <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[var(--border)] pb-6">
-        {/* Role segmented control — sliding red pill */}
-        <div className="flex flex-wrap justify-center gap-2">
-          {ROLES.map((role) => (
-            <button
-              key={role}
-              onClick={() => setActiveRole(role)}
-              className={`relative px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
-                activeRole === role
-                  ? "text-white"
-                  : "text-[var(--muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              {activeRole === role && (
-                <motion.div
-                  layoutId="activeRole"
-                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
-                  transition={pillSpring}
-                />
-              )}
-              {role}
-            </button>
-          ))}
-        </div>
+      <FilterBar
+        filters={filters}
+        setFilter={setFilter}
+        layoutPrefix="demand"
+      />
 
-        {/* Window segmented control — sliding red pill (was grey, now red per spec) */}
-        <div className="flex bg-[var(--panel)] border border-[var(--border)] rounded-full p-1">
-          {WINDOWS.map((w) => (
-            <button
-              key={w}
-              onClick={() => setActiveWindow(w)}
-              className={`relative px-4 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
-                activeWindow === w
-                  ? "text-white"
-                  : "text-[var(--muted-2)] hover:text-[var(--muted)]"
-              }`}
-            >
-              {activeWindow === w && (
-                <motion.div
-                  layoutId="activeWindow"
-                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
-                  transition={pillSpring}
-                />
-              )}
-              {w}
-            </button>
-          ))}
-        </div>
-      </section>
+      <FacetChips chips={activeChips} clearFilter={clearFilter} clearAll={clearAll} />
 
       {error ? (
         /* ERROR — adaptive recovery: what/why/next, retry not color-only. */
@@ -214,10 +190,12 @@ export default function DemandPage() {
             This role and window don't have enough postings to rank yet. Widen
             the window or view every role.
           </p>
-          <button
+        <button
             onClick={() => {
-              setActiveRole("All");
-              setActiveWindow("12M");
+              setFilter("role", "All");
+              setFilter("window", "12M");
+              setFilter("remote", null);
+              setFilter("disclosed", null);
             }}
             className="mt-6 inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
@@ -246,7 +224,7 @@ export default function DemandPage() {
                   (and thus re-run entrance animations) on filter changes.
                 */}
                 <BarChart
-                  key={`${activeRole}|${activeWindow}`}
+                  key={`${activeRole}|${activeWindow}|${remote}|${disclosed}`}
                   skills={visibleSkills.slice(0, 12)}
                   maxCount={maxCount}
                   onSelect={setSelectedSkill}

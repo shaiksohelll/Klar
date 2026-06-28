@@ -18,6 +18,48 @@ vi.mock("@clerk/express", () => ({
   requireAuth: () => (req, res, next) => next(),
 }));
 
+// ── Mock Job model so tests don't need a live Mongo connection ─────────────
+vi.mock("./models/Job.js", () => ({
+  default: {
+    findOne: vi.fn(() => ({
+      sort: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockResolvedValue({ updatedAt: "2024-01-01T00:00:00Z" }),
+    })),
+    find: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockReturnThis(),
+      cursor: vi.fn(() => ({
+        [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true }) }),
+      })),
+    })),
+    bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
+    aggregate: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+// ── Mock aggregation modules (avoids real DB pipeline execution) ──────────
+vi.mock("./aggregations/trendingSkills.js", () => ({
+  getTrendingSkills: vi.fn().mockResolvedValue({
+    totalJobs: 100,
+    role: "all",
+    months: 12,
+    skills: [{ skill: "react", demand: 50, avgSalary: 80000, remoteCount: 20, velocity: 5, trend: "up" }],
+    velocityReady: true,
+    velocityBasisDays: 7,
+  }),
+  getAllSkills: vi.fn().mockResolvedValue([]),
+  clearTrendingCaches: vi.fn(),
+}));
+vi.mock("./aggregations/atlas.js", () => ({
+  getAtlas: vi.fn().mockResolvedValue({
+    cities: [],
+    totalCities: 0,
+    totalJobs: 0,
+  }),
+  clearAtlasCache: vi.fn(),
+}));
+
 // ── Import AFTER env + mocks are set ───────────────────────────────────────
 const { default: app } = await import("./app.js");
 const { default: request } = await import("supertest");
@@ -25,6 +67,8 @@ const { ingestAdzuna } = await import("./ingest/adzuna.js");
 const { ingestJSearch } = await import("./ingest/jsearch.js");
 const { searchCities } = await import("./lib/geocode.js");
 const { relocationRoi } = await import("./lib/costOfLiving.js");
+const { getTrendingSkills } = await import("./aggregations/trendingSkills.js");
+const { getAtlas } = await import("./aggregations/atlas.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -320,5 +364,131 @@ describe("GET /api/places/suggest", () => {
     expect(country).toBeTruthy();
     expect(country.token).toBe("us");
     expect(country.country).toBe("us");
+  });
+});
+
+// ── Facet filter tests for /api/skills/trending ───────────────────────────
+describe("GET /api/skills/trending (facet filters)", () => {
+  it("returns 200 with no filters (backward compat)", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(typeof res.body.totalJobs).toBe("number");
+  });
+
+  it("accepts remote=remote", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ remote: "remote" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("accepts remote=onsite", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ remote: "onsite" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("rejects invalid remote value with 400", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ remote: "hybrid" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("accepts disclosed=1", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ disclosed: "1" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("rejects disclosed=true (only disclosed=1 is valid)", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ disclosed: "true" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("rejects invalid disclosed value with 400", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ disclosed: "no" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("passes remote + disclosed through to getTrendingSkills", async () => {
+    getTrendingSkills.mockClear();
+    await request(app)
+      .get("/api/skills/trending")
+      .query({ remote: "remote", disclosed: "1", role: "frontend" });
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remote: "remote",
+        disclosed: true,
+        role: "frontend",
+      }),
+    );
+  });
+});
+
+// ── Facet filter tests for /api/atlas ───────────────────────────────────
+describe("GET /api/atlas (facet filters)", () => {
+  it("returns 200 with no filters (backward compat)", async () => {
+    const res = await request(app).get("/api/atlas");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("accepts remote=remote", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ remote: "remote" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("rejects invalid remote value with 400", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ remote: "hybrid" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("accepts disclosed=1", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ disclosed: "1" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("rejects invalid disclosed value with 400", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ disclosed: "no" });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("passes remote + disclosed through to getAtlas", async () => {
+    getAtlas.mockClear();
+    await request(app)
+      .get("/api/atlas")
+      .query({ remote: "onsite", disclosed: "1" });
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remote: "onsite",
+        disclosed: true,
+      }),
+    );
   });
 });
