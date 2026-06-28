@@ -40,10 +40,12 @@ function timeAgo(iso) {
 }
 
 // Fetch + shape trending data for a role/window. Pure helper, reused for prefetch.
-async function fetchTrending(role, win) {
+async function fetchTrending(role, win, remoteFilter, disclosedFilter) {
   const months = WINDOW_MONTHS[win];
   const params = { months, limit: 25 };
   if (role !== "All") params.role = role.toLowerCase();
+  if (remoteFilter) params.remote = remoteFilter;
+  if (disclosedFilter) params.disclosed = "1";
   const res = await axios.get(`${API}/api/skills/trending`, { params });
   const total = res.data.totalJobs || 0;
   const lastUpdated = res.data.lastUpdated || null;
@@ -76,6 +78,8 @@ export default function App() {
   const [velocityBasisDays, setVelocityBasisDays] = useState(null);
   const [activeRole, setActiveRole] = useState("All");
   const [activeWindow, setActiveWindow] = useState("12M");
+  const [remote, setRemote] = useState(null);
+  const [disclosed, setDisclosed] = useState(false);
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
   // Which userId the current trackedSkills were fetched for. null means the
@@ -129,7 +133,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    const key = `${activeRole}|${activeWindow}`;
+    const key = `${activeRole}|${activeWindow}|${remote || "any"}|${disclosed ? "yes" : "no"}`;
     let cancelled = false;
     const cached = cacheRef.current.get(key);
 
@@ -149,7 +153,7 @@ export default function App() {
 
     (async () => {
       try {
-        const data = await fetchTrending(activeRole, activeWindow);
+        const data = await fetchTrending(activeRole, activeWindow, remote, disclosed);
         if (cancelled) return;
         cacheRef.current.set(key, data);
         setSkills(data.skills);
@@ -168,9 +172,9 @@ export default function App() {
       // Quietly prefetch the other windows for this role in the background.
       if (!cancelled) {
         for (const win of ALL_WINDOWS) {
-          const k = `${activeRole}|${win}`;
+          const k = `${activeRole}|${win}|${remote || "any"}|${disclosed ? "yes" : "no"}`;
           if (!cacheRef.current.has(k)) {
-            fetchTrending(activeRole, win)
+            fetchTrending(activeRole, win, remote, disclosed)
               .then((d) => cacheRef.current.set(k, d))
               .catch(() => {});
           }
@@ -181,7 +185,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, activeWindow]);
+  }, [activeRole, activeWindow, remote, disclosed]);
 
   const sorted = useMemo(
     () => [...skills].sort((a, b) => b.count - a.count),
@@ -317,6 +321,10 @@ export default function App() {
     setActiveRole,
     activeWindow,
     setActiveWindow,
+    remote,
+    setRemote,
+    disclosed,
+    setDisclosed,
     trackedSkills: effectiveTrackedSkills,
     handleTrack,
     setSelectedSkill,

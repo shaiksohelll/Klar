@@ -34,9 +34,9 @@ export function clearAtlasCache() {
  * @param {{ role?: string, skill?: string, months?: number }} opts
  * @returns {Promise<{ cities: object[], totalCities: number, totalJobs: number }>}
  */
-export async function getAtlas({ role, skill, months = 12 } = {}) {
-  // Cache key MUST include role + skill + months.
-  const cacheKey = `${role || "all"}:${skill || "all"}:${months}`;
+export async function getAtlas({ role, skill, months = 12, remote, disclosed } = {}) {
+  // Cache key MUST include role + skill + months + facet filters.
+  const cacheKey = `${role || "all"}:${skill || "all"}:${months}:${remote || "any"}:${disclosed ? "yes" : "no"}`;
   const hit = ATLAS_CACHE.get(cacheKey);
   if (hit) return hit;
 
@@ -50,6 +50,9 @@ export async function getAtlas({ role, skill, months = 12 } = {}) {
   const match = { postedAt: { $gte: since }, "geo.geonameId": { $ne: null } };
   if (role) match.normalizedRole = role;
   if (skill) match.requiredSkills = skill;
+  if (remote === "remote") match.isRemote = true;
+  else if (remote === "onsite") match.isRemote = false;
+  if (disclosed) match.salaryDisclosed = true;
 
   const pipeline = [
     { $match: match },
