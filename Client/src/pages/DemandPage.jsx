@@ -62,13 +62,13 @@ export default function DemandPage() {
   // "Clear all", browser back/forward). Only sets when values differ to
   // avoid redundant renders.
   useEffect(() => {
+    const nextDisclosed = !!filters.disclosed;
     if (filters.role !== activeRole) setActiveRole(filters.role);
     if (filters.window !== activeWindow) setActiveWindow(filters.window);
     if (filters.remote !== remote) setRemote(filters.remote);
-    if (filters.disclosed !== disclosed) setDisclosed(filters.disclosed);
+    if (nextDisclosed !== disclosed) setDisclosed(nextDisclosed);
   }, [filters, activeRole, activeWindow, remote, disclosed,
       setActiveRole, setActiveWindow, setRemote, setDisclosed]);
-
   // Count-up for the hero stat, re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);
 
