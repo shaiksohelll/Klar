@@ -230,12 +230,7 @@ export default function AtlasPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                setFilter("role", "All");
-                setFilter("window", "12M");
-                setFilter("remote", null);
-                setFilter("disclosed", null);
-              }}
+              onClick={() => clearAll()}
               className="inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
             >
               Reset the view
@@ -257,12 +252,7 @@ export default function AtlasPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                setFilter("role", "All");
-                setFilter("window", "12M");
-                setFilter("remote", null);
-                setFilter("disclosed", null);
-              }}
+              onClick={() => clearAll()}
               className="inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
             >
               Show all cities

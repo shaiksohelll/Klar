@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { TiltCard } from "../components/TiltCard";
@@ -50,13 +50,16 @@ export default function DemandPage() {
     useFacetFilters();
 
   // Wrapper: update both the URL (shareable) AND App.jsx's state (data fetch).
-  const setFilter = (key, value) => {
-    setUrlFilter(key, value);
-    if (key === "role") setActiveRole(value || "All");
-    else if (key === "window") setActiveWindow(value || "12M");
-    else if (key === "remote") setRemote(value);
-    else if (key === "disclosed") setDisclosed(!!value);
-  };
+  const setFilter = useCallback(
+    (key, value) => {
+      setUrlFilter(key, value);
+      if (key === "role") setActiveRole(value || "All");
+      else if (key === "window") setActiveWindow(value || "12M");
+      else if (key === "remote") setRemote(value);
+      else if (key === "disclosed") setDisclosed(!!value);
+    },
+    [setUrlFilter, setActiveRole, setActiveWindow, setRemote, setDisclosed],
+  );
 
   // Keep App.jsx state in sync with URL filter changes (chip removal,
   // "Clear all", browser back/forward). Only sets when values differ to
@@ -191,12 +194,7 @@ export default function DemandPage() {
             the window or view every role.
           </p>
         <button
-            onClick={() => {
-              setFilter("role", "All");
-              setFilter("window", "12M");
-              setFilter("remote", null);
-              setFilter("disclosed", null);
-            }}
+            onClick={() => clearAll()}
             className="mt-6 inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
             Show all skills

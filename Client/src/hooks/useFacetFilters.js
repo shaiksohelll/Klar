@@ -16,13 +16,13 @@ export const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const REMOTE_VALUES = new Set(["remote", "onsite"]);
 
 // ── Normalizers ──────────────────────────────────────────────────────────────
-function normalizeRole(raw) {
+export function normalizeRole(raw) {
   if (!raw) return "All";
   const match = ROLES.find((r) => r.toLowerCase() === raw.toLowerCase());
   return match || "All";
 }
 
-function normalizeWindow(raw) {
+export function normalizeWindow(raw) {
   if (!raw) return "12M";
   const mapped = { 3: "3M", 6: "6M", 12: "12M" };
   const upper = String(raw).toUpperCase();
@@ -78,7 +78,7 @@ export default function useFacetFilters() {
           next.set(paramKey, urlValue);
         }
         return next;
-      }, { replace: true });
+      });
     },
     [setSearchParams],
   );
@@ -99,7 +99,7 @@ export default function useFacetFilters() {
         next.delete("remote");
         next.delete("disclosed");
         return next;
-      }, { replace: true }),
+      }),
     [setSearchParams],
   );
 
