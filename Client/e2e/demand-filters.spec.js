@@ -82,13 +82,17 @@ async function setupMocks(page) {
     });
   });
 
-  /** Find the last request matching a given months value. */
-  function findReqByMonths(months) {
-    const matches = trendingRequests.filter((u) => new URL(u).searchParams.get("months") === String(months));
-    return matches.length ? matches[matches.length - 1] : null;
+  /** Find the last request matching the active facet tuple. */
+  function findReq(expectedParams) {
+    return [...trendingRequests].reverse().find((u) => {
+      const url = new URL(u);
+      return Object.entries(expectedParams).every(
+        ([key, value]) => url.searchParams.get(key) === String(value),
+      );
+    }) ?? null;
   }
 
-  return { trendingRequests, findReqByMonths };
+  return { trendingRequests, findReq };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -137,7 +141,7 @@ test.describe("Demand page filter URL-sync", () => {
 
   // ─── 1. Apply all four filters ─────────────────────────────────────────────
   test("1: apply filters sequentially -> URL, chips, request match", async ({ page }) => {
-    const { findReqByMonths } = await setupMocks(page);
+    const { findReq } = await setupMocks(page);
     await page.goto(DEMAND);
     await waitForSkill(page, "React");
 
@@ -172,7 +176,7 @@ test.describe("Demand page filter URL-sync", () => {
     expect(chips).toContain("SALARY DISCLOSED");
 
     // API params — find the request for months=6 (the active window)
-    const reqUrl = new URL(findReqByMonths(6));
+    const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1" }));
     expect(reqUrl.searchParams.get("role")).toBe("frontend");
     expect(reqUrl.searchParams.get("months")).toBe("6");
     expect(reqUrl.searchParams.get("remote")).toBe("remote");
@@ -248,7 +252,7 @@ test.describe("Demand page filter URL-sync", () => {
 
   // ─── 5. Deep-link: URL params -> state restored on first paint ─────────────
   test("5: deep-link restores state on first paint", async ({ page }) => {
-    const { findReqByMonths } = await setupMocks(page);
+    const { findReq } = await setupMocks(page);
 
     await page.goto(`${DEMAND}?role=frontend&w=6&remote=remote&disclosed=1`);
     await waitForSkill(page, "Angular");
@@ -260,7 +264,7 @@ test.describe("Demand page filter URL-sync", () => {
     expect(chips).toContain("SALARY DISCLOSED");
 
     // Find the request for the active window (months=6)
-    const reqUrl = new URL(findReqByMonths(6));
+    const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1" }));
     expect(reqUrl.searchParams.get("role")).toBe("frontend");
     expect(reqUrl.searchParams.get("months")).toBe("6");
     expect(reqUrl.searchParams.get("remote")).toBe("remote");
