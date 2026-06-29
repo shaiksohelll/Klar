@@ -31,11 +31,13 @@ export function normalizeWindow(raw) {
 }
 
 export function normalizeRemote(raw) {
-  return raw && REMOTE_VALUES.has(raw) ? raw : null;
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase();
+  return REMOTE_VALUES.has(cleaned) ? cleaned : null;
 }
 
 export function normalizeDisclosed(raw) {
-  return raw === "1";
+  return !!raw && raw.trim() === "1";
 }
 
 /**
