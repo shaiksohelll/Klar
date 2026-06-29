@@ -43,6 +43,12 @@ function parseDisclosedFilter(query) {
   return { disclosed: true };
 }
 
+/** Parse the optional `country` query param (ISO-2 code). Unknown → ignored. */
+function parseCountryFilter(query) {
+  if (query.country == null || String(query.country).trim() === "") return {};
+  return { country: String(query.country).trim().toLowerCase() };
+}
+
 // ── Ingest secret (read at module load) ────────────────────────────────────
 const INGEST_SECRET = process.env.INGEST_SECRET;
 
@@ -280,10 +286,11 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     if (rp.error) return res.status(400).json({ ok: false, error: rp.error });
     const dp = parseDisclosedFilter(req.query);
     if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
+    const cp = parseCountryFilter(req.query);
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
-    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed });
+    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country });
     // Most recently touched job = how fresh the dataset is.
     const newest = await Job.findOne()
       .sort({ updatedAt: -1 })
@@ -391,6 +398,22 @@ app.get("/api/salary", readLimiter, async (req, res, next) => {
   }
 });
 
+// ── Distinct countries endpoint (lightweight) ───────────────────────────
+// Returns unique geo.country values with job counts for the country dropdown.
+app.get("/api/places/countries", readLimiter, async (_req, res, next) => {
+  try {
+    const countries = await Job.aggregate([
+      { $match: { "geo.country": { $ne: null } } },
+      { $group: { _id: "$geo.country", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $project: { _id: 0, code: "$_id", count: 1 } },
+    ]);
+    res.json({ ok: true, countries });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Atlas — public Opportunity Map ───────────────────────────────────
 // Public, read-only. Per-VERIFIED-city demand, disclosed avg salary, and
 // 30-day momentum. Optional ?role= ?skill= ?months= (clamped 1-24, default 12).
@@ -414,8 +437,9 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
     if (rp.error) return res.status(400).json({ ok: false, error: rp.error });
     const dp = parseDisclosedFilter(req.query);
     if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
+    const cp = parseCountryFilter(req.query);
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
-    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed });
+    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed, country: cp.country });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);

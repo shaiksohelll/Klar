@@ -40,6 +40,12 @@ export function normalizeDisclosed(raw) {
   return !!raw && raw.trim() === "1";
 }
 
+export function normalizeCountry(raw) {
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase();
+  return cleaned || null;
+}
+
 /**
  * URL-backed faceted-filter state. Reads/writes role, w (window), remote,
  * and disclosed query params so filters survive refresh and are shareable.
@@ -56,6 +62,7 @@ export default function useFacetFilters() {
       window: normalizeWindow(searchParams.get("w")),
       remote: normalizeRemote(searchParams.get("remote")),
       disclosed: normalizeDisclosed(searchParams.get("disclosed")),
+      country: normalizeCountry(searchParams.get("country")),
     };
   }, [searchParams]);
 
@@ -71,7 +78,8 @@ export default function useFacetFilters() {
           (key === "role" && (!value || value === "All")) ||
           (key === "window" && (!value || value === "12M")) ||
           (key === "remote" && !value) ||
-          (key === "disclosed" && !value);
+          (key === "disclosed" && !value) ||
+          (key === "country" && !value);
 
         if (isDefault) {
           next.delete(paramKey);
@@ -107,6 +115,7 @@ export default function useFacetFilters() {
         next.delete("w");
         next.delete("remote");
         next.delete("disclosed");
+        next.delete("country");
         return next;
       }),
     [setSearchParams],
@@ -126,6 +135,8 @@ export default function useFacetFilters() {
       });
     if (filters.disclosed)
       chips.push({ key: "disclosed", label: "Salary disclosed" });
+    if (filters.country)
+      chips.push({ key: "country", label: filters.country.toUpperCase() });
     return chips;
   }, [filters]);
 

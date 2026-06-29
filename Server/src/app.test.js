@@ -492,3 +492,85 @@ describe("GET /api/atlas (facet filters)", () => {
     );
   });
 });
+
+// ── Country filter tests for /api/skills/trending ─────────────────────────
+describe("GET /api/skills/trending (country filter)", () => {
+  it("accepts country=in", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "in" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("ignores unknown country (no 400)", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "zz" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("ignores empty country", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("passes country through to getTrendingSkills", async () => {
+    getTrendingSkills.mockClear();
+    await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "us", role: "backend" });
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        country: "us",
+        role: "backend",
+      }),
+    );
+  });
+});
+
+// ── Country filter tests for /api/atlas ───────────────────────────────────
+describe("GET /api/atlas (country filter)", () => {
+  it("accepts country=in", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ country: "in" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("ignores unknown country (no 400)", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ country: "zz" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("passes country through to getAtlas", async () => {
+    getAtlas.mockClear();
+    await request(app)
+      .get("/api/atlas")
+      .query({ country: "gb", disclosed: "1" });
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.objectContaining({
+        country: "gb",
+        disclosed: true,
+      }),
+    );
+  });
+});
+
+// ── /api/places/countries endpoint ────────────────────────────────────────
+describe("GET /api/places/countries", () => {
+  it("returns 200 with countries array", async () => {
+    const res = await request(app).get("/api/places/countries");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.countries)).toBe(true);
+  });
+});

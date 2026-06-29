@@ -14,7 +14,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import Nav, { NavRoutes } from "./components/ui/Nav";
 import Sheet from "./components/ui/Sheet";
 import { getInitialTheme, applyTheme } from "./lib/theme";
-import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed } from "./hooks/useFacetFilters";
+import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed, normalizeCountry } from "./hooks/useFacetFilters";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
 const PageLoader = () => (
@@ -34,6 +34,7 @@ function readUrlFilters() {
     window: normalizeWindow(sp.get("w")),
     remote: normalizeRemote(sp.get("remote")),
     disclosed: normalizeDisclosed(sp.get("disclosed")),
+    country: normalizeCountry(sp.get("country")),
   };
 }
 
@@ -51,12 +52,13 @@ function timeAgo(iso) {
 }
 
 // Fetch + shape trending data for a role/window. Pure helper, reused for prefetch.
-async function fetchTrending(role, win, remoteFilter, disclosedFilter) {
+async function fetchTrending(role, win, remoteFilter, disclosedFilter, countryFilter) {
   const months = WINDOW_MONTHS[win];
   const params = { months, limit: 25 };
   if (role !== "All") params.role = role.toLowerCase();
   if (remoteFilter) params.remote = remoteFilter;
   if (disclosedFilter) params.disclosed = "1";
+  if (countryFilter) params.country = countryFilter;
   const res = await axios.get(`${API}/api/skills/trending`, { params });
   const total = res.data.totalJobs || 0;
   const lastUpdated = res.data.lastUpdated || null;
@@ -92,6 +94,8 @@ export default function App() {
   const [activeWindow, setActiveWindow] = useState(initialFilters.window);
   const [remote, setRemote] = useState(initialFilters.remote);
   const [disclosed, setDisclosed] = useState(initialFilters.disclosed);
+  const [country, setCountry] = useState(initialFilters.country);
+  const [countries, setCountries] = useState([]);
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
   // Which userId the current trackedSkills were fetched for. null means the
@@ -145,7 +149,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    const key = `${activeRole}|${activeWindow}|${remote || "any"}|${disclosed ? "yes" : "no"}`;
+    const key = `${activeRole}|${activeWindow}|${remote || "any"}|${disclosed ? "yes" : "no"}|${country || "any"}`;
     let cancelled = false;
     const cached = cacheRef.current.get(key);
 
@@ -165,7 +169,7 @@ export default function App() {
 
     (async () => {
       try {
-        const data = await fetchTrending(activeRole, activeWindow, remote, disclosed);
+        const data = await fetchTrending(activeRole, activeWindow, remote, disclosed, country);
         if (cancelled) return;
         cacheRef.current.set(key, data);
         setSkills(data.skills);
@@ -184,9 +188,9 @@ export default function App() {
       // Quietly prefetch the other windows for this role in the background.
       if (!cancelled) {
         for (const win of ALL_WINDOWS) {
-          const k = `${activeRole}|${win}|${remote || "any"}|${disclosed ? "yes" : "no"}`;
+          const k = `${activeRole}|${win}|${remote || "any"}|${disclosed ? "yes" : "no"}|${country || "any"}`;
           if (!cacheRef.current.has(k)) {
-            fetchTrending(activeRole, win, remote, disclosed)
+            fetchTrending(activeRole, win, remote, disclosed, country)
               .then((d) => cacheRef.current.set(k, d))
               .catch(() => {});
           }
@@ -197,7 +201,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, activeWindow, remote, disclosed]);
+  }, [activeRole, activeWindow, remote, disclosed, country]);
 
   const sorted = useMemo(
     () => [...skills].sort((a, b) => b.count - a.count),
@@ -208,6 +212,18 @@ export default function App() {
     () => (sorted.length ? Math.max(...sorted.map((s) => s.count)) : 1),
     [sorted],
   );
+
+  // Fetch distinct countries for the FilterBar dropdown (fire-and-forget, once).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/api/places/countries`);
+        if (!cancelled) setCountries(res.data.countries || []);
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Derive what the UI should display. When the user is signed out (or Clerk
   // is still resolving), return a stable empty array so child components never
@@ -337,6 +353,9 @@ export default function App() {
     setRemote,
     disclosed,
     setDisclosed,
+    country,
+    setCountry,
+    countries,
     trackedSkills: effectiveTrackedSkills,
     handleTrack,
     setSelectedSkill,
