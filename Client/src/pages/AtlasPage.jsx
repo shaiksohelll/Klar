@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
+import { useOutletContext } from "react-router-dom";
 import useFacetFilters, { WINDOW_MONTHS } from "../hooks/useFacetFilters";
 import FilterBar from "../components/FilterBar";
 import FacetChips from "../components/FacetChips";
@@ -66,7 +67,7 @@ function popupHtml(c) {
 export default function AtlasPage() {
   const { filters, setFilter, clearFilter, clearAll, activeChips } =
     useFacetFilters();
-  const { role, window: win, remote, disclosed } = filters;
+  const { role, window: win, remote, disclosed, country } = filters;
 
   const [cities, setCities] = useState([]);
   const [totalCities, setTotalCities] = useState(0);
@@ -74,6 +75,9 @@ export default function AtlasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+
+  // Countries list for the FilterBar dropdown — shared from App.jsx.
+  const { countries } = useOutletContext();
 
   // Reset filters AND force a refetch — works even when filters are already
   // at defaults (where clearAll alone would be a no-op).
@@ -123,6 +127,7 @@ export default function AtlasPage() {
         if (role !== "All") params.role = role.toLowerCase();
         if (remote) params.remote = remote;
         if (disclosed) params.disclosed = "1";
+        if (country) params.country = country;
         const res = await axios.get(`${API}/api/atlas`, { params });
         if (cancelled) return;
         setCities(res.data.cities || []);
@@ -137,7 +142,7 @@ export default function AtlasPage() {
     return () => {
       cancelled = true;
     };
-  }, [role, win, remote, disclosed, retryCount]);
+  }, [role, win, remote, disclosed, country, retryCount]);
 
   // ── Render markers whenever cities change (and the map is ready) ─────────
   useEffect(() => {
@@ -210,6 +215,7 @@ export default function AtlasPage() {
       <FilterBar
         filters={filters}
         setFilter={setFilter}
+        countries={countries}
         layoutPrefix="atlas"
       />
 

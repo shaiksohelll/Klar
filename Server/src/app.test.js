@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
 // ── Set dummy env BEFORE importing app (module-load closures) ──────────────
 process.env.MONGODB_URI = "mongodb://localhost:27017/test";
@@ -61,7 +61,7 @@ vi.mock("./aggregations/atlas.js", () => ({
 }));
 
 // ── Import AFTER env + mocks are set ───────────────────────────────────────
-const { default: app } = await import("./app.js");
+const { default: app, clearCountriesCache } = await import("./app.js");
 const { default: request } = await import("supertest");
 const { ingestAdzuna } = await import("./ingest/adzuna.js");
 const { ingestJSearch } = await import("./ingest/jsearch.js");
@@ -69,6 +69,7 @@ const { searchCities } = await import("./lib/geocode.js");
 const { relocationRoi } = await import("./lib/costOfLiving.js");
 const { getTrendingSkills } = await import("./aggregations/trendingSkills.js");
 const { getAtlas } = await import("./aggregations/atlas.js");
+const { default: Job } = await import("./models/Job.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -490,5 +491,161 @@ describe("GET /api/atlas (facet filters)", () => {
         disclosed: true,
       }),
     );
+  });
+});
+
+// ── Country filter tests for /api/skills/trending ─────────────────────────
+describe("GET /api/skills/trending (country filter)", () => {
+  it("accepts country=in", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "in" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("forwards an unknown country as a filter (no 400)", async () => {
+    getTrendingSkills.mockClear();
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "zz" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.objectContaining({ country: "zz" }),
+    );
+  });
+
+  it("ignores empty country", async () => {
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("passes country through to getTrendingSkills", async () => {
+    getTrendingSkills.mockClear();
+    await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "us", role: "backend" });
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        country: "us",
+        role: "backend",
+      }),
+    );
+  });
+
+  it("drops malformed country (>2 chars) — no country filter applied", async () => {
+    getTrendingSkills.mockClear();
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ country: "zzzz" });
+    expect(res.status).toBe(200);
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.not.objectContaining({ country: expect.anything() }),
+    );
+  });
+});
+
+// ── Country filter tests for /api/atlas ───────────────────────────────────
+describe("GET /api/atlas (country filter)", () => {
+  it("accepts country=in", async () => {
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ country: "in" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it("forwards an unknown country as a filter (no 400)", async () => {
+    getAtlas.mockClear();
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ country: "zz" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.objectContaining({ country: "zz" }),
+    );
+  });
+
+  it("passes country through to getAtlas", async () => {
+    getAtlas.mockClear();
+    await request(app)
+      .get("/api/atlas")
+      .query({ country: "gb", disclosed: "1" });
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.objectContaining({
+        country: "gb",
+        disclosed: true,
+      }),
+    );
+  });
+
+  it("drops malformed country (>2 chars) — no country filter applied", async () => {
+    getAtlas.mockClear();
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ country: "abcdef" });
+    expect(res.status).toBe(200);
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.not.objectContaining({ country: expect.anything() }),
+    );
+  });
+});
+
+// ── /api/places/countries endpoint ────────────────────────────────────────
+describe("GET /api/places/countries", () => {
+  beforeEach(() => clearCountriesCache());
+  it("returns 200 with countries array of { code, count } objects", async () => {
+    // Provide raw aggregate rows to exercise the canonicalization logic.
+    Job.aggregate.mockResolvedValueOnce([
+      { _id: "in", count: 100 },
+      { _id: "us", count: 50 },
+    ]);
+    const res = await request(app).get("/api/places/countries");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.countries)).toBe(true);
+    for (const c of res.body.countries) {
+      expect(c).toHaveProperty("code");
+      expect(c).toHaveProperty("count");
+      expect(c.code).toMatch(/^[a-z]{2}$/);
+      expect(typeof c.count).toBe("number");
+    }
+  });
+
+  it("collapses mixed-case duplicate rows into one lowercase code with summed count", async () => {
+    Job.aggregate.mockResolvedValueOnce([
+      { _id: "IN", count: 40 },
+      { _id: "in", count: 60 },
+      { _id: " In ", count: 10 },
+    ]);
+    const res = await request(app).get("/api/places/countries");
+    expect(res.status).toBe(200);
+    const inEntry = res.body.countries.find((c) => c.code === "in");
+    expect(inEntry).toBeDefined();
+    expect(inEntry.count).toBe(110);
+    // Should be only one "in" entry, not three.
+    expect(res.body.countries.filter((c) => c.code === "in")).toHaveLength(1);
+  });
+
+  it("excludes non-ISO-2 codes from the response", async () => {
+    Job.aggregate.mockResolvedValueOnce([
+      { _id: "us", count: 200 },
+      { _id: "usa", count: 30 },
+      { _id: "u.k", count: 15 },
+      { _id: "in", count: 100 },
+    ]);
+    const res = await request(app).get("/api/places/countries");
+    expect(res.status).toBe(200);
+    expect(res.body.countries).toHaveLength(2);
+    for (const c of res.body.countries) {
+      expect(c.code).toMatch(/^[a-z]{2}$/);
+    }
+    expect(res.body.countries.find((c) => c.code === "us")).toBeDefined();
+    expect(res.body.countries.find((c) => c.code === "in")).toBeDefined();
   });
 });

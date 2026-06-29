@@ -43,6 +43,22 @@ function parseDisclosedFilter(query) {
   return { disclosed: true };
 }
 
+/**
+ * Parse the optional `country` query param (ISO-2 code).
+ * A non-blank value is trimmed + lowercased and forwarded as an exact
+ * geo.country match; codes with no matching data simply yield empty results.
+ * Values that are not exactly two ASCII letters are treated as unset (no
+ * filter) to bound the cache-key space and ignore malformed input.
+ * The frontend dropdown only ever emits codes returned by /api/places/countries,
+ * so in practice every value maps to real data.
+ */
+function parseCountryFilter(query) {
+  if (query.country == null || String(query.country).trim() === "") return {};
+  const c = String(query.country).trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(c)) return {};
+  return { country: c };
+}
+
 // ── Ingest secret (read at module load) ────────────────────────────────────
 const INGEST_SECRET = process.env.INGEST_SECRET;
 
@@ -280,10 +296,11 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     if (rp.error) return res.status(400).json({ ok: false, error: rp.error });
     const dp = parseDisclosedFilter(req.query);
     if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
+    const cp = parseCountryFilter(req.query);
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
-    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed });
+    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country });
     // Most recently touched job = how fresh the dataset is.
     const newest = await Job.findOne()
       .sort({ updatedAt: -1 })
@@ -391,6 +408,47 @@ app.get("/api/salary", readLimiter, async (req, res, next) => {
   }
 });
 
+// ── Distinct countries endpoint (lightweight, cached) ────────────────────
+// Returns unique geo.country values with job counts for the country dropdown.
+// Codes are trim + lowercased and duplicates that collapse to the same key
+// are merged (summed). Response: { ok, countries: [{ code, count }] }.
+let _countriesCache = null;
+let _countriesCacheExpiry = 0;
+const COUNTRIES_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/** Clear the countries cache. Exported for test isolation. */
+export function clearCountriesCache() {
+  _countriesCache = null;
+  _countriesCacheExpiry = 0;
+}
+
+app.get("/api/places/countries", readLimiter, async (_req, res, next) => {
+  try {
+    if (_countriesCache && Date.now() < _countriesCacheExpiry) {
+      return res.json({ ok: true, countries: _countriesCache });
+    }
+    const raw = await Job.aggregate([
+      { $match: { "geo.country": { $ne: null } } },
+      { $group: { _id: "$geo.country", count: { $sum: 1 } } },
+    ]);
+    // Canonicalize: trim+lowercase, merge duplicates, drop blanks.
+    const merged = new Map();
+    for (const row of raw) {
+      const code = String(row._id).trim().toLowerCase();
+      if (!/^[a-z]{2}$/.test(code)) continue;
+      merged.set(code, (merged.get(code) || 0) + row.count);
+    }
+    const countries = [...merged.entries()]
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count);
+    _countriesCache = countries;
+    _countriesCacheExpiry = Date.now() + COUNTRIES_TTL_MS;
+    res.json({ ok: true, countries });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Atlas — public Opportunity Map ───────────────────────────────────
 // Public, read-only. Per-VERIFIED-city demand, disclosed avg salary, and
 // 30-day momentum. Optional ?role= ?skill= ?months= (clamped 1-24, default 12).
@@ -414,8 +472,9 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
     if (rp.error) return res.status(400).json({ ok: false, error: rp.error });
     const dp = parseDisclosedFilter(req.query);
     if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
+    const cp = parseCountryFilter(req.query);
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
-    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed });
+    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed, country: cp.country });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);

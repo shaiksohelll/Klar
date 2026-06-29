@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { ROLES, WINDOWS } from "../hooks/useFacetFilters";
+import { countryLabel } from "../utils/countryLabel";
 
 // Sliding pill spring — stiffness 180, damping 22 (matches existing UI spring)
 const pillSpring = { type: "spring", stiffness: 180, damping: 22 };
@@ -18,8 +19,8 @@ const REMOTE_OPTIONS = [
  * @param {Function} props.setFilter    - Setter from useFacetFilters (or wrapper).
  * @param {string}   [props.layoutPrefix] - Unique string to scope Framer layoutIds.
  */
-export default function FilterBar({ filters, setFilter, layoutPrefix = "" }) {
-  const { role, window: win, remote, disclosed } = filters;
+export default function FilterBar({ filters, setFilter, countries = [], layoutPrefix = "" }) {
+  const { role, window: win, remote, disclosed, country } = filters;
 
   return (
     <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[var(--border)] pb-6">
@@ -112,6 +113,22 @@ export default function FilterBar({ filters, setFilter, layoutPrefix = "" }) {
         >
           Salary disclosed
         </button>
+
+        {/* Country dropdown */}
+        <select
+          value={country || ""}
+          onChange={(e) => setFilter("country", e.target.value || null)}
+          aria-label="Filter by country"
+          className="h-[34px] rounded-full border border-[var(--border)] bg-[var(--panel)] px-3 font-mono text-xs uppercase tracking-wider text-[var(--muted-2)] transition-colors hover:border-[var(--muted-2)] hover:text-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)] appearance-none cursor-pointer pr-6"
+          style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239A9AA6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}
+        >
+          <option value="">All countries</option>
+          {countries.map((c) => (
+            <option key={c.code} value={c.code}>
+              {countryLabel(c.code)}
+            </option>
+          ))}
+        </select>
       </div>
     </section>
   );

@@ -31,6 +31,9 @@ const FIXTURES = {
   frontend_6_remote_disclosed: makeTrending({ totalJobs: 350, role: "frontend", months: 6, skills: [
     { skill: "Angular", demand: 120, avgSalary: 95000, remoteCount: 120, velocity: 1, trend: "up" },
   ]}),
+  frontend_6_remote_disclosed_in: makeTrending({ totalJobs: 150, role: "frontend", months: 6, skills: [
+    { skill: "Remix", demand: 60, avgSalary: 70000, remoteCount: 60, velocity: 10, trend: "up" },
+  ]}),
   frontend_6_disclosed: makeTrending({ totalJobs: 900, role: "frontend", months: 6, skills: [
     { skill: "Tailwind", demand: 220, avgSalary: 72000, remoteCount: 0, velocity: 4, trend: "up" },
   ]}),
@@ -43,7 +46,10 @@ function fixtureForParams(urlStr) {
   const months = url.searchParams.get("months") || "12";
   const remote = url.searchParams.get("remote") || "";
   const disclosed = url.searchParams.get("disclosed") || "";
+  const country = url.searchParams.get("country") || "";
 
+  if (role === "frontend" && months === "6" && remote === "remote" && disclosed === "1" && country === "in")
+    return FIXTURES.frontend_6_remote_disclosed_in;
   if (role === "frontend" && months === "6" && remote === "remote" && disclosed === "1")
     return FIXTURES.frontend_6_remote_disclosed;
   if (role === "frontend" && months === "6" && remote === "remote")
@@ -79,6 +85,13 @@ async function setupMocks(page) {
     await route.fulfill({
       status: 200, contentType: "application/json",
       body: JSON.stringify({ ok: true, skills: [] }),
+    });
+  });
+
+  await page.route("**/api/places/countries*", async (route) => {
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ ok: true, countries: [{ code: "in", count: 500 }, { code: "us", count: 300 }] }),
     });
   });
 
@@ -161,26 +174,33 @@ test.describe("Demand page filter URL-sync", () => {
     await pill(page, "Salary Disclosed").click();
     await waitForSkill(page, "Angular");
 
+    // Country — select India from the dropdown
+    await page.locator("select[aria-label='Filter by country']").selectOption("in");
+    await waitForSkill(page, "Remix");
+
     // URL
     const url = new URL(page.url());
     expect(url.searchParams.get("role")).toBe("frontend");
     expect(url.searchParams.get("w")).toBe("6");
     expect(url.searchParams.get("remote")).toBe("remote");
     expect(url.searchParams.get("disclosed")).toBe("1");
+    expect(url.searchParams.get("country")).toBe("in");
 
-    // Chips (4 total)
-    const chips = await getChipLabels(page, 4);
+    // Chips (5 total)
+    const chips = await getChipLabels(page, 5);
     expect(chips).toContain("FRONTEND");
     expect(chips).toContain("6M");
     expect(chips).toContain("REMOTE");
     expect(chips).toContain("SALARY DISCLOSED");
+    expect(chips).toContain("INDIA");
 
-    // API params — find the request for months=6 (the active window)
-    const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1" }));
+    // API params
+    const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1", country: "in" }));
     expect(reqUrl.searchParams.get("role")).toBe("frontend");
     expect(reqUrl.searchParams.get("months")).toBe("6");
     expect(reqUrl.searchParams.get("remote")).toBe("remote");
     expect(reqUrl.searchParams.get("disclosed")).toBe("1");
+    expect(reqUrl.searchParams.get("country")).toBe("in");
   });
 
   // ─── 2. Remove one chip -> param drops, ranking updates ────────────────────
@@ -217,10 +237,14 @@ test.describe("Demand page filter URL-sync", () => {
     expect(url.searchParams.has("w")).toBe(false);
     expect(url.searchParams.has("remote")).toBe(false);
     expect(url.searchParams.has("disclosed")).toBe(false);
+    expect(url.searchParams.has("country")).toBe(false);
     expect(url.searchParams.get("foo")).toBe("bar");
 
     const chips = await getChipLabels(page, 0);
     expect(chips.length).toBe(0);
+
+    // Country dropdown should reset to "All countries" (empty value).
+    await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("");
   });
 
   // ─── 4. Browser back/forward -> chips and ranking sync ─────────────────────
@@ -265,23 +289,43 @@ test.describe("Demand page filter URL-sync", () => {
   test("5: deep-link restores state on first paint", async ({ page }) => {
     const { findReq } = await setupMocks(page);
 
-    await page.goto(`${DEMAND}?role=frontend&w=6&remote=remote&disclosed=1`);
-    await waitForSkill(page, "Angular");
+    await page.goto(`${DEMAND}?role=frontend&w=6&remote=remote&disclosed=1&country=in`);
+    await waitForSkill(page, "Remix");
 
-    const chips = await getChipLabels(page, 4);
+    const chips = await getChipLabels(page, 5);
     expect(chips).toContain("FRONTEND");
     expect(chips).toContain("6M");
     expect(chips).toContain("REMOTE");
     expect(chips).toContain("SALARY DISCLOSED");
+    expect(chips).toContain("INDIA");
 
     // Find the request for the active window (months=6)
-    const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1" }));
+    const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1", country: "in" }));
     expect(reqUrl.searchParams.get("role")).toBe("frontend");
     expect(reqUrl.searchParams.get("months")).toBe("6");
     expect(reqUrl.searchParams.get("remote")).toBe("remote");
     expect(reqUrl.searchParams.get("disclosed")).toBe("1");
+    expect(reqUrl.searchParams.get("country")).toBe("in");
 
     await expect(pill(page, "Frontend")).toHaveAttribute("aria-pressed", "true");
     await expect(pill(page, "Salary Disclosed")).toHaveAttribute("aria-pressed", "true");
+
+    // Country dropdown should restore to the deep-linked value.
+    await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("in");
+  });
+
+  // ─── 6. Malformed country deep-link → ignored ──────────────────────────────
+  test("6: malformed country in deep-link is ignored", async ({ page }) => {
+    await setupMocks(page);
+
+    await page.goto(`${DEMAND}?role=frontend&country=zzzz`);
+    await waitForSkill(page, "Next.js");
+
+    // Only role chip, no country chip.
+    const chips = await getChipLabels(page, 1);
+    expect(chips).toContain("FRONTEND");
+
+    // Country dropdown should be unset.
+    await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("");
   });
 });
