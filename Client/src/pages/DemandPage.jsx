@@ -61,6 +61,17 @@ export default function DemandPage() {
     [setUrlFilter, setActiveRole, setActiveWindow, setRemote, setDisclosed],
   );
 
+  // Reset every filter AND mirror the defaults into App.jsx state so
+  // downstream consumers (SkillSearch, BarChart key, fetch) see the
+  // cleared values on this render — not one render later via the sync effect.
+  const clearAllFilters = useCallback(() => {
+    clearAll();
+    setActiveRole("All");
+    setActiveWindow("12M");
+    setRemote(null);
+    setDisclosed(false);
+  }, [clearAll, setActiveRole, setActiveWindow, setRemote, setDisclosed]);
+
   // Keep App.jsx state in sync with URL filter changes (chip removal,
   // "Clear all", browser back/forward). Only sets when values differ to
   // avoid redundant renders.
@@ -134,7 +145,7 @@ export default function DemandPage() {
         layoutPrefix="demand"
       />
 
-      <FacetChips chips={activeChips} clearFilter={clearFilter} clearAll={clearAll} />
+      <FacetChips chips={activeChips} clearFilter={clearFilter} clearAll={clearAllFilters} />
 
       {error ? (
         /* ERROR — adaptive recovery: what/why/next, retry not color-only. */
@@ -194,7 +205,7 @@ export default function DemandPage() {
             the window or view every role.
           </p>
         <button
-            onClick={() => clearAll()}
+            onClick={() => clearAllFilters()}
             className="mt-6 inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
             Show all skills

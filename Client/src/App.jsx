@@ -14,7 +14,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import Nav, { NavRoutes } from "./components/ui/Nav";
 import Sheet from "./components/ui/Sheet";
 import { getInitialTheme, applyTheme } from "./lib/theme";
-import { WINDOW_MONTHS, normalizeRole, normalizeWindow } from "./hooks/useFacetFilters";
+import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed } from "./hooks/useFacetFilters";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
 const PageLoader = () => (
@@ -29,12 +29,11 @@ const ALL_WINDOWS = ["3M", "6M", "12M"];
 // Seed fetch state from the URL so deep-linked pages don't double-fetch.
 function readUrlFilters() {
   const sp = new URLSearchParams(window.location.search);
-  const rawRemote = sp.get("remote");
   return {
     role: normalizeRole(sp.get("role")),
     window: normalizeWindow(sp.get("w")),
-    remote: rawRemote === "remote" || rawRemote === "onsite" ? rawRemote : null,
-    disclosed: sp.get("disclosed") === "1",
+    remote: normalizeRemote(sp.get("remote")),
+    disclosed: normalizeDisclosed(sp.get("disclosed")),
   };
 }
 
@@ -88,10 +87,11 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [velocityReady, setVelocityReady] = useState(false);
   const [velocityBasisDays, setVelocityBasisDays] = useState(null);
-  const [activeRole, setActiveRole] = useState(() => readUrlFilters().role);
-  const [activeWindow, setActiveWindow] = useState(() => readUrlFilters().window);
-  const [remote, setRemote] = useState(() => readUrlFilters().remote);
-  const [disclosed, setDisclosed] = useState(() => readUrlFilters().disclosed);
+  const [initialFilters] = useState(readUrlFilters);
+  const [activeRole, setActiveRole] = useState(initialFilters.role);
+  const [activeWindow, setActiveWindow] = useState(initialFilters.window);
+  const [remote, setRemote] = useState(initialFilters.remote);
+  const [disclosed, setDisclosed] = useState(initialFilters.disclosed);
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
   // Which userId the current trackedSkills were fetched for. null means the

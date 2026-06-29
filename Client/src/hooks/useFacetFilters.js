@@ -30,6 +30,14 @@ export function normalizeWindow(raw) {
   return mapped[raw] || "12M";
 }
 
+export function normalizeRemote(raw) {
+  return raw && REMOTE_VALUES.has(raw) ? raw : null;
+}
+
+export function normalizeDisclosed(raw) {
+  return raw === "1";
+}
+
 /**
  * URL-backed faceted-filter state. Reads/writes role, w (window), remote,
  * and disclosed query params so filters survive refresh and are shareable.
@@ -41,12 +49,11 @@ export default function useFacetFilters() {
 
   // ── Derive filter values from the current URL ───────────────────────────
   const filters = useMemo(() => {
-    const rawRemote = searchParams.get("remote");
     return {
       role: normalizeRole(searchParams.get("role")),
       window: normalizeWindow(searchParams.get("w")),
-      remote: rawRemote && REMOTE_VALUES.has(rawRemote) ? rawRemote : null,
-      disclosed: searchParams.get("disclosed") === "1",
+      remote: normalizeRemote(searchParams.get("remote")),
+      disclosed: normalizeDisclosed(searchParams.get("disclosed")),
     };
   }, [searchParams]);
 
