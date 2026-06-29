@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { useCallback, useMemo } from "react";
+import { countryLabel } from "../utils/countryLabel";
 
 // ── Shared constants ─────────────────────────────────────────────────────────
 export const ROLES = [
@@ -136,7 +137,7 @@ export default function useFacetFilters() {
     if (filters.disclosed)
       chips.push({ key: "disclosed", label: "Salary disclosed" });
     if (filters.country)
-      chips.push({ key: "country", label: filters.country.toUpperCase() });
+      chips.push({ key: "country", label: countryLabel(filters.country) });
     return chips;
   }, [filters]);
 

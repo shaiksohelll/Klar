@@ -192,7 +192,7 @@ test.describe("Demand page filter URL-sync", () => {
     expect(chips).toContain("6M");
     expect(chips).toContain("REMOTE");
     expect(chips).toContain("SALARY DISCLOSED");
-    expect(chips).toContain("IN");
+    expect(chips).toContain("INDIA");
 
     // API params
     const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1", country: "in" }));
@@ -242,6 +242,9 @@ test.describe("Demand page filter URL-sync", () => {
 
     const chips = await getChipLabels(page, 0);
     expect(chips.length).toBe(0);
+
+    // Country dropdown should reset to "All countries" (empty value).
+    await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("");
   });
 
   // ─── 4. Browser back/forward -> chips and ranking sync ─────────────────────
@@ -294,7 +297,7 @@ test.describe("Demand page filter URL-sync", () => {
     expect(chips).toContain("6M");
     expect(chips).toContain("REMOTE");
     expect(chips).toContain("SALARY DISCLOSED");
-    expect(chips).toContain("IN");
+    expect(chips).toContain("INDIA");
 
     // Find the request for the active window (months=6)
     const reqUrl = new URL(findReq({ role: "frontend", months: 6, remote: "remote", disclosed: "1", country: "in" }));
@@ -306,5 +309,8 @@ test.describe("Demand page filter URL-sync", () => {
 
     await expect(pill(page, "Frontend")).toHaveAttribute("aria-pressed", "true");
     await expect(pill(page, "Salary Disclosed")).toHaveAttribute("aria-pressed", "true");
+
+    // Country dropdown should restore to the deep-linked value.
+    await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("in");
   });
 });

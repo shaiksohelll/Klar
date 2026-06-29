@@ -47,12 +47,16 @@ function parseDisclosedFilter(query) {
  * Parse the optional `country` query param (ISO-2 code).
  * A non-blank value is trimmed + lowercased and forwarded as an exact
  * geo.country match; codes with no matching data simply yield empty results.
+ * Values that are not exactly two ASCII letters are treated as unset (no
+ * filter) to bound the cache-key space and ignore malformed input.
  * The frontend dropdown only ever emits codes returned by /api/places/countries,
  * so in practice every value maps to real data.
  */
 function parseCountryFilter(query) {
   if (query.country == null || String(query.country).trim() === "") return {};
-  return { country: String(query.country).trim().toLowerCase() };
+  const c = String(query.country).trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(c)) return {};
+  return { country: c };
 }
 
 // ── Ingest secret (read at module load) ────────────────────────────────────
@@ -404,16 +408,41 @@ app.get("/api/salary", readLimiter, async (req, res, next) => {
   }
 });
 
-// ── Distinct countries endpoint (lightweight) ───────────────────────────
+// ── Distinct countries endpoint (lightweight, cached) ────────────────────
 // Returns unique geo.country values with job counts for the country dropdown.
+// Codes are trim + lowercased and duplicates that collapse to the same key
+// are merged (summed). Response: { ok, countries: [{ code, count }] }.
+let _countriesCache = null;
+let _countriesCacheExpiry = 0;
+const COUNTRIES_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/** Clear the countries cache. Exported for test isolation. */
+export function clearCountriesCache() {
+  _countriesCache = null;
+  _countriesCacheExpiry = 0;
+}
+
 app.get("/api/places/countries", readLimiter, async (_req, res, next) => {
   try {
-    const countries = await Job.aggregate([
+    if (_countriesCache && Date.now() < _countriesCacheExpiry) {
+      return res.json({ ok: true, countries: _countriesCache });
+    }
+    const raw = await Job.aggregate([
       { $match: { "geo.country": { $ne: null } } },
       { $group: { _id: "$geo.country", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $project: { _id: 0, code: "$_id", count: 1 } },
     ]);
+    // Canonicalize: trim+lowercase, merge duplicates, drop blanks.
+    const merged = new Map();
+    for (const row of raw) {
+      const code = String(row._id).trim().toLowerCase();
+      if (!code) continue;
+      merged.set(code, (merged.get(code) || 0) + row.count);
+    }
+    const countries = [...merged.entries()]
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count);
+    _countriesCache = countries;
+    _countriesCacheExpiry = Date.now() + COUNTRIES_TTL_MS;
     res.json({ ok: true, countries });
   } catch (err) {
     next(err);

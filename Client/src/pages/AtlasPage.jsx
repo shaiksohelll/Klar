@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
+import { useOutletContext } from "react-router-dom";
 import useFacetFilters, { WINDOW_MONTHS } from "../hooks/useFacetFilters";
 import FilterBar from "../components/FilterBar";
 import FacetChips from "../components/FacetChips";
@@ -74,19 +75,9 @@ export default function AtlasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [countries, setCountries] = useState([]);
 
-  // Fetch distinct countries for the FilterBar dropdown (once).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await axios.get(`${API}/api/places/countries`);
-        if (!cancelled) setCountries(res.data.countries || []);
-      } catch { /* non-fatal */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // Countries list for the FilterBar dropdown — shared from App.jsx.
+  const { countries } = useOutletContext();
 
   // Reset filters AND force a refetch — works even when filters are already
   // at defaults (where clearAll alone would be a no-op).

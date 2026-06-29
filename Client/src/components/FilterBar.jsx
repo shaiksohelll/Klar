@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { ROLES, WINDOWS } from "../hooks/useFacetFilters";
+import { countryLabel } from "../utils/countryLabel";
 
 // Sliding pill spring — stiffness 180, damping 22 (matches existing UI spring)
 const pillSpring = { type: "spring", stiffness: 180, damping: 22 };
@@ -9,18 +10,6 @@ const REMOTE_OPTIONS = [
   { value: "remote", label: "Remote" },
   { value: "onsite", label: "On-site" },
 ];
-
-// Lazily created — fallback to uppercased ISO code if Intl is unavailable.
-let _regionNames;
-function countryLabel(code) {
-  if (!code) return "";
-  try {
-    if (!_regionNames) _regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-    return _regionNames.of(code.toUpperCase()) || code.toUpperCase();
-  } catch {
-    return code.toUpperCase();
-  }
-}
 
 /**
  * Shared role / window / remote / disclosed filter bar.
