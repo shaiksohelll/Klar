@@ -167,6 +167,10 @@ Trigger one ingest to seed data (use your own secret), then open `http://localho
 - [ ] CI pipeline + test coverage
 - [ ] Public, documented API
 
+## Known Limitations
+
+- **Salary bands apply to disclosed INR roles only.** The salary band facet filters on `salaryRange.currency === "INR"` and `salaryDisclosed === true`. Jobs denominated in USD, GBP, CAD, or AUD — or jobs where the salary was predicted rather than disclosed — are excluded from salary-band results. Cross-currency normalization is on the roadmap.
+
 ## Contributing
 
 Klar is built in the open. If this resonates with you:

@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { useCallback, useMemo } from "react";
 import { countryLabel } from "../utils/countryLabel";
+import { SALARY_BAND_IDS, salaryBandLabel } from "../utils/salaryBands";
 
 // ── Shared constants ─────────────────────────────────────────────────────────
 export const ROLES = [
@@ -47,6 +48,12 @@ export function normalizeCountry(raw) {
   return /^[a-z]{2}$/.test(cleaned) ? cleaned : null;
 }
 
+export function normalizeSalaryBand(raw) {
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase();
+  return SALARY_BAND_IDS.includes(cleaned) ? cleaned : null;
+}
+
 /**
  * URL-backed faceted-filter state. Reads/writes role, w (window), remote,
  * and disclosed query params so filters survive refresh and are shareable.
@@ -64,6 +71,7 @@ export default function useFacetFilters() {
       remote: normalizeRemote(searchParams.get("remote")),
       disclosed: normalizeDisclosed(searchParams.get("disclosed")),
       country: normalizeCountry(searchParams.get("country")),
+      salary: normalizeSalaryBand(searchParams.get("salary")),
     };
   }, [searchParams]);
 
@@ -80,7 +88,8 @@ export default function useFacetFilters() {
           (key === "window" && (!value || value === "12M")) ||
           (key === "remote" && !value) ||
           (key === "disclosed" && !value) ||
-          (key === "country" && !value);
+          (key === "country" && !value) ||
+          (key === "salary" && !value);
 
         if (isDefault) {
           next.delete(paramKey);
@@ -117,6 +126,7 @@ export default function useFacetFilters() {
         next.delete("remote");
         next.delete("disclosed");
         next.delete("country");
+        next.delete("salary");
         return next;
       }),
     [setSearchParams],
@@ -138,6 +148,8 @@ export default function useFacetFilters() {
       chips.push({ key: "disclosed", label: "Salary disclosed" });
     if (filters.country)
       chips.push({ key: "country", label: countryLabel(filters.country) });
+    if (filters.salary)
+      chips.push({ key: "salary", label: salaryBandLabel(filters.salary) });
     return chips;
   }, [filters]);
 

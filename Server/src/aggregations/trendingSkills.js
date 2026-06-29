@@ -2,6 +2,7 @@ import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
+import { salaryBandMatch } from "../lib/salaryBands.js";
 
 // ── In-memory TTL cache for getAllSkills ────────────────────────────────────
 // Key: months (number). Value: { data, expiresAt }.
@@ -83,8 +84,8 @@ export async function getAllSkills({ months = 12 } = {}) {
   return skills;
 }
 
-export async function getTrendingSkills({ role, months = 12, limit = 25, remote, disclosed, country }) {
-  const cacheKey = `${role || "all"}:${months}:${limit}:${remote || "any"}:${disclosed ? "yes" : "no"}:${country || "any"}`;
+export async function getTrendingSkills({ role, months = 12, limit = 25, remote, disclosed, country, salary }) {
+  const cacheKey = `${role || "all"}:${months}:${limit}:${remote || "any"}:${disclosed ? "yes" : "no"}:${country || "any"}:${salary || "any"}`;
   const hit = TRENDING_CACHE.get(cacheKey);
   if (hit) return hit;
 
@@ -98,6 +99,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
   else if (remote === "onsite") match.isRemote = false;
   if (disclosed) match.salaryDisclosed = true;
   if (country) match["geo.country"] = country;
+  if (salary) Object.assign(match, salaryBandMatch(salary));
 
   // Single round-trip: $facet runs totalJobs count and the skills aggregation
   // together so MongoDB only scans the collection once.
