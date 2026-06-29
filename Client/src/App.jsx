@@ -14,6 +14,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import Nav, { NavRoutes } from "./components/ui/Nav";
 import Sheet from "./components/ui/Sheet";
 import { getInitialTheme, applyTheme } from "./lib/theme";
+import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed } from "./hooks/useFacetFilters";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
 const PageLoader = () => (
@@ -23,8 +24,18 @@ const PageLoader = () => (
 );
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const ALL_WINDOWS = ["3M", "6M", "12M"];
+
+// Seed fetch state from the URL so deep-linked pages don't double-fetch.
+function readUrlFilters() {
+  const sp = new URLSearchParams(window.location.search);
+  return {
+    role: normalizeRole(sp.get("role")),
+    window: normalizeWindow(sp.get("w")),
+    remote: normalizeRemote(sp.get("remote")),
+    disclosed: normalizeDisclosed(sp.get("disclosed")),
+  };
+}
 
 // Turn an ISO timestamp into a short "Xh ago" string.
 function timeAgo(iso) {
@@ -76,10 +87,11 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [velocityReady, setVelocityReady] = useState(false);
   const [velocityBasisDays, setVelocityBasisDays] = useState(null);
-  const [activeRole, setActiveRole] = useState("All");
-  const [activeWindow, setActiveWindow] = useState("12M");
-  const [remote, setRemote] = useState(null);
-  const [disclosed, setDisclosed] = useState(false);
+  const [initialFilters] = useState(readUrlFilters);
+  const [activeRole, setActiveRole] = useState(initialFilters.role);
+  const [activeWindow, setActiveWindow] = useState(initialFilters.window);
+  const [remote, setRemote] = useState(initialFilters.remote);
+  const [disclosed, setDisclosed] = useState(initialFilters.disclosed);
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
   // Which userId the current trackedSkills were fetched for. null means the

@@ -16,18 +16,28 @@ export const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const REMOTE_VALUES = new Set(["remote", "onsite"]);
 
 // ── Normalizers ──────────────────────────────────────────────────────────────
-function normalizeRole(raw) {
+export function normalizeRole(raw) {
   if (!raw) return "All";
   const match = ROLES.find((r) => r.toLowerCase() === raw.toLowerCase());
   return match || "All";
 }
 
-function normalizeWindow(raw) {
+export function normalizeWindow(raw) {
   if (!raw) return "12M";
   const mapped = { 3: "3M", 6: "6M", 12: "12M" };
   const upper = String(raw).toUpperCase();
   if (WINDOWS.includes(upper)) return upper;
   return mapped[raw] || "12M";
+}
+
+export function normalizeRemote(raw) {
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase();
+  return REMOTE_VALUES.has(cleaned) ? cleaned : null;
+}
+
+export function normalizeDisclosed(raw) {
+  return !!raw && raw.trim() === "1";
 }
 
 /**
@@ -41,12 +51,11 @@ export default function useFacetFilters() {
 
   // ── Derive filter values from the current URL ───────────────────────────
   const filters = useMemo(() => {
-    const rawRemote = searchParams.get("remote");
     return {
       role: normalizeRole(searchParams.get("role")),
       window: normalizeWindow(searchParams.get("w")),
-      remote: rawRemote && REMOTE_VALUES.has(rawRemote) ? rawRemote : null,
-      disclosed: searchParams.get("disclosed") === "1",
+      remote: normalizeRemote(searchParams.get("remote")),
+      disclosed: normalizeDisclosed(searchParams.get("disclosed")),
     };
   }, [searchParams]);
 
@@ -78,7 +87,7 @@ export default function useFacetFilters() {
           next.set(paramKey, urlValue);
         }
         return next;
-      }, { replace: true });
+      });
     },
     [setSearchParams],
   );
@@ -99,7 +108,7 @@ export default function useFacetFilters() {
         next.delete("remote");
         next.delete("disclosed");
         return next;
-      }, { replace: true }),
+      }),
     [setSearchParams],
   );
 

@@ -21,6 +21,28 @@ import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
 import Watchlist from "./models/Watchlist.js";
 
+// ── Shared query-param parsers ─────────────────────────────────────────────
+
+/** Parse and validate the `remote` query param. Returns { remote, error }. */
+function parseRemoteFilter(query) {
+  if (query.remote == null || String(query.remote).trim() === "") return {};
+  const r = String(query.remote).trim().toLowerCase();
+  if (r !== "remote" && r !== "onsite") {
+    return { error: "Invalid remote filter. Valid: remote, onsite" };
+  }
+  return { remote: r };
+}
+
+/** Parse and validate the `disclosed` query param. Returns { disclosed, error }. */
+function parseDisclosedFilter(query) {
+  if (query.disclosed == null || String(query.disclosed).trim() === "") return {};
+  const d = String(query.disclosed).trim();
+  if (d !== "1") {
+    return { error: "Invalid disclosed filter. Pass disclosed=1 to filter." };
+  }
+  return { disclosed: true };
+}
+
 // ── Ingest secret (read at module load) ────────────────────────────────────
 const INGEST_SECRET = process.env.INGEST_SECRET;
 
@@ -253,28 +275,15 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
         return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
       }
     }
-    // remote: "remote" or "onsite" (omit = any)
-    let remote;
-    if (req.query.remote != null && String(req.query.remote).trim() !== "") {
-      const r = String(req.query.remote).trim().toLowerCase();
-      if (r !== "remote" && r !== "onsite") {
-        return res.status(400).json({ ok: false, error: "Invalid remote filter. Valid: remote, onsite" });
-      }
-      remote = r;
-    }
-    // disclosed: pass "1" to show only salary-disclosed postings (omit = all)
-    let disclosed;
-    if (req.query.disclosed != null && String(req.query.disclosed).trim() !== "") {
-      const d = String(req.query.disclosed).trim();
-      if (d !== "1") {
-        return res.status(400).json({ ok: false, error: "Invalid disclosed filter. Pass disclosed=1 to filter." });
-      }
-      disclosed = true;
-    }
+    // remote / disclosed
+    const rp = parseRemoteFilter(req.query);
+    if (rp.error) return res.status(400).json({ ok: false, error: rp.error });
+    const dp = parseDisclosedFilter(req.query);
+    if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
-    const result = await getTrendingSkills({ role, months, limit, remote, disclosed });
+    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed });
     // Most recently touched job = how fresh the dataset is.
     const newest = await Job.findOne()
       .sort({ updatedAt: -1 })
@@ -400,26 +409,13 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
         return res.status(400).json({ ok: false, error: "Unknown skill — see /api/skills/all for valid values." });
       }
     }
-    // remote: "remote" or "onsite" (omit = any)
-    let remote;
-    if (req.query.remote != null && String(req.query.remote).trim() !== "") {
-      const r = String(req.query.remote).trim().toLowerCase();
-      if (r !== "remote" && r !== "onsite") {
-        return res.status(400).json({ ok: false, error: "Invalid remote filter. Valid: remote, onsite" });
-      }
-      remote = r;
-    }
-    // disclosed: pass "1" to show only salary-disclosed postings (omit = all)
-    let disclosed;
-    if (req.query.disclosed != null && String(req.query.disclosed).trim() !== "") {
-      const d = String(req.query.disclosed).trim();
-      if (d !== "1") {
-        return res.status(400).json({ ok: false, error: "Invalid disclosed filter. Pass disclosed=1 to filter." });
-      }
-      disclosed = true;
-    }
+    // remote / disclosed
+    const rp = parseRemoteFilter(req.query);
+    if (rp.error) return res.status(400).json({ ok: false, error: rp.error });
+    const dp = parseDisclosedFilter(req.query);
+    if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
-    const data = await getAtlas({ role, skill, months, remote, disclosed });
+    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);

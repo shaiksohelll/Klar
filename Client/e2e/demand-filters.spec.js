@@ -229,25 +229,36 @@ test.describe("Demand page filter URL-sync", () => {
     await page.goto(DEMAND);
     await waitForSkill(page, "React");
 
+    // Push entry 1: Frontend (role=frontend, window=12M)
     await pill(page, "Frontend").click();
     await waitForSkill(page, "Next.js");
+
+    // Push entry 2: 6M (role=frontend, window=6M)
     await pill(page, "6M").click();
     await waitForSkill(page, "Vue");
 
-    // Back
+    // Back → should land on entry 1: role=frontend, no w param (12M default)
     await page.goBack();
-    await expect(page.getByText("Vue").first()).not.toBeVisible({ timeout: 5000 });
+    await waitForSkill(page, "Next.js");
 
-    // Forward
+    const backUrl = new URL(page.url());
+    expect(backUrl.searchParams.get("role")).toBe("frontend");
+    expect(backUrl.searchParams.has("w")).toBe(false);
+
+    const backChips = await getChipLabels(page, 1);
+    expect(backChips).toContain("FRONTEND");
+
+    // Forward → should restore entry 2: role=frontend, w=6
     await page.goForward();
     await waitForSkill(page, "Vue");
-    const url = new URL(page.url());
-    expect(url.searchParams.get("role")).toBe("frontend");
-    expect(url.searchParams.get("w")).toBe("6");
 
-    const chips = await getChipLabels(page, 2);
-    expect(chips).toContain("FRONTEND");
-    expect(chips).toContain("6M");
+    const fwdUrl = new URL(page.url());
+    expect(fwdUrl.searchParams.get("role")).toBe("frontend");
+    expect(fwdUrl.searchParams.get("w")).toBe("6");
+
+    const fwdChips = await getChipLabels(page, 2);
+    expect(fwdChips).toContain("FRONTEND");
+    expect(fwdChips).toContain("6M");
   });
 
   // ─── 5. Deep-link: URL params -> state restored on first paint ─────────────

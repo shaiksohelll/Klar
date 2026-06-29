@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
@@ -73,6 +73,14 @@ export default function AtlasPage() {
   const [totalJobs, setTotalJobs] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Reset filters AND force a refetch — works even when filters are already
+  // at defaults (where clearAll alone would be a no-op).
+  const retryAtlas = useCallback(() => {
+    clearAll();
+    setRetryCount((c) => c + 1);
+  }, [clearAll]);
 
   // ── Map lifecycle ──────────────────────────────────────────────
   const mapContainerRef = useRef(null);
@@ -129,7 +137,7 @@ export default function AtlasPage() {
     return () => {
       cancelled = true;
     };
-  }, [role, win, remote, disclosed]);
+  }, [role, win, remote, disclosed, retryCount]);
 
   // ── Render markers whenever cities change (and the map is ready) ─────────
   useEffect(() => {
@@ -230,12 +238,7 @@ export default function AtlasPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                setFilter("role", "All");
-                setFilter("window", "12M");
-                setFilter("remote", null);
-                setFilter("disclosed", null);
-              }}
+              onClick={() => retryAtlas()}
               className="inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
             >
               Reset the view
@@ -257,12 +260,7 @@ export default function AtlasPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                setFilter("role", "All");
-                setFilter("window", "12M");
-                setFilter("remote", null);
-                setFilter("disclosed", null);
-              }}
+              onClick={() => retryAtlas()}
               className="inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
             >
               Show all cities
