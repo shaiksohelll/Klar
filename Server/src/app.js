@@ -435,7 +435,7 @@ app.get("/api/places/countries", readLimiter, async (_req, res, next) => {
     const merged = new Map();
     for (const row of raw) {
       const code = String(row._id).trim().toLowerCase();
-      if (!code) continue;
+      if (!/^[a-z]{2}$/.test(code)) continue;
       merged.set(code, (merged.get(code) || 0) + row.count);
     }
     const countries = [...merged.entries()]

@@ -631,4 +631,21 @@ describe("GET /api/places/countries", () => {
     // Should be only one "in" entry, not three.
     expect(res.body.countries.filter((c) => c.code === "in")).toHaveLength(1);
   });
+
+  it("excludes non-ISO-2 codes from the response", async () => {
+    Job.aggregate.mockResolvedValueOnce([
+      { _id: "us", count: 200 },
+      { _id: "usa", count: 30 },
+      { _id: "u.k", count: 15 },
+      { _id: "in", count: 100 },
+    ]);
+    const res = await request(app).get("/api/places/countries");
+    expect(res.status).toBe(200);
+    expect(res.body.countries).toHaveLength(2);
+    for (const c of res.body.countries) {
+      expect(c.code).toMatch(/^[a-z]{2}$/);
+    }
+    expect(res.body.countries.find((c) => c.code === "us")).toBeDefined();
+    expect(res.body.countries.find((c) => c.code === "in")).toBeDefined();
+  });
 });
