@@ -313,4 +313,19 @@ test.describe("Demand page filter URL-sync", () => {
     // Country dropdown should restore to the deep-linked value.
     await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("in");
   });
+
+  // ─── 6. Malformed country deep-link → ignored ──────────────────────────────
+  test("6: malformed country in deep-link is ignored", async ({ page }) => {
+    await setupMocks(page);
+
+    await page.goto(`${DEMAND}?role=frontend&country=zzzz`);
+    await waitForSkill(page, "Next.js");
+
+    // Only role chip, no country chip.
+    const chips = await getChipLabels(page, 1);
+    expect(chips).toContain("FRONTEND");
+
+    // Country dropdown should be unset.
+    await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("");
+  });
 });

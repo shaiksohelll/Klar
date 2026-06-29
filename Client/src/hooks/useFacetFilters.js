@@ -44,7 +44,7 @@ export function normalizeDisclosed(raw) {
 export function normalizeCountry(raw) {
   if (!raw) return null;
   const cleaned = raw.trim().toLowerCase();
-  return cleaned || null;
+  return /^[a-z]{2}$/.test(cleaned) ? cleaned : null;
 }
 
 /**
