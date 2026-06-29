@@ -37,6 +37,15 @@ const FIXTURES = {
   frontend_6_disclosed: makeTrending({ totalJobs: 900, role: "frontend", months: 6, skills: [
     { skill: "Tailwind", demand: 220, avgSalary: 72000, remoteCount: 0, velocity: 4, trend: "up" },
   ]}),
+  // Salary band fixtures (default role, default window)
+  salary_10to25: makeTrending({ totalJobs: 2200, skills: [
+    { skill: "Node.js", demand: 440, avgSalary: 1800000, remoteCount: 100, velocity: 3, trend: "up" },
+  ]}),
+  // Combined: role=frontend + salary=10to25 — unique skill so test 8 can
+  // detect if the app stops forwarding salary when another facet is also active.
+  frontend_salary_10to25: makeTrending({ totalJobs: 850, role: "frontend", skills: [
+    { skill: "Gatsby", demand: 170, avgSalary: 1600000, remoteCount: 50, velocity: 2, trend: "up" },
+  ]}),
 };
 
 /** Pick fixture based on query params. Most specific combos first. */
@@ -47,7 +56,14 @@ function fixtureForParams(urlStr) {
   const remote = url.searchParams.get("remote") || "";
   const disclosed = url.searchParams.get("disclosed") || "";
   const country = url.searchParams.get("country") || "";
+  const salary = url.searchParams.get("salary") || "";
 
+  // Salary-aware branch FIRST: if salary is present with role=frontend, return
+  // the combined fixture regardless of the window. This ensures salary is never
+  // shadowed by a months-specific branch (e.g. role=frontend&months=6&salary=10to25
+  // previously hit frontend_6 before reaching this check).
+  if (role === "frontend" && salary === "10to25")
+    return FIXTURES.frontend_salary_10to25;
   if (role === "frontend" && months === "6" && remote === "remote" && disclosed === "1" && country === "in")
     return FIXTURES.frontend_6_remote_disclosed_in;
   if (role === "frontend" && months === "6" && remote === "remote" && disclosed === "1")
@@ -60,6 +76,9 @@ function fixtureForParams(urlStr) {
     return FIXTURES.frontend_6;
   if (role === "frontend")
     return FIXTURES.frontend;
+  // Salary band fixtures (all-role, 12M)
+  if (salary === "10to25" && role === "all")
+    return FIXTURES.salary_10to25;
   return FIXTURES.default;
 }
 
@@ -327,5 +346,75 @@ test.describe("Demand page filter URL-sync", () => {
 
     // Country dropdown should be unset.
     await expect(page.locator("select[aria-label='Filter by country']")).toHaveValue("");
+  });
+
+  // ─── 7. Select salary band → URL + chip + filtered ─────────────────────────
+  test("7: select salary band → URL, chip, and filtered content", async ({ page }) => {
+    const { findReq } = await setupMocks(page);
+    await page.goto(DEMAND);
+    await waitForSkill(page, "React");
+
+    // Select the ₹10–25L band from the salary dropdown.
+    await page.locator("select[aria-label='Filter by salary band']").selectOption("10to25");
+    await waitForSkill(page, "Node.js");
+
+    // URL should contain salary=10to25.
+    const url = new URL(page.url());
+    expect(url.searchParams.get("salary")).toBe("10to25");
+
+    // Chip for the salary band should appear.
+    const chips = await getChipLabels(page, 1);
+    expect(chips).toContain("₹10–25L");
+
+    // API request should include salary=10to25.
+    const reqUrl = new URL(findReq({ salary: "10to25" }));
+    expect(reqUrl.searchParams.get("salary")).toBe("10to25");
+  });
+
+  // ─── 8. Clear-all resets salary dropdown ────────────────────────────────────
+  // "Clear all" only renders when ≥ 2 chips are active, so we deep-link with
+  // role + salary. The combined fixture (frontend_salary_10to25 → "Gatsby") is
+  // distinct from the role-only fixture (frontend → "Next.js"), so if the app
+  // ever stops forwarding salary when another facet is active the waitForSkill
+  // assertion will fail immediately.
+  test("8: clear-all resets the salary dropdown", async ({ page }) => {
+    const { findReq } = await setupMocks(page);
+    await page.goto(`${DEMAND}?role=frontend&salary=10to25`);
+    await waitForSkill(page, "Gatsby"); // unique to the combined fixture
+
+    // Verify the initial request carried BOTH params.
+    const initialReq = new URL(findReq({ role: "frontend", salary: "10to25" }));
+    expect(initialReq.searchParams.get("role")).toBe("frontend");
+    expect(initialReq.searchParams.get("salary")).toBe("10to25");
+
+    // Two chips visible → Clear all button appears.
+    await page.getByText("Clear all").click();
+    await waitForSkill(page, "React");
+
+    // URL should not have salary param.
+    const url = new URL(page.url());
+    expect(url.searchParams.has("salary")).toBe(false);
+    expect(url.searchParams.has("role")).toBe(false);
+
+    // No chips.
+    const chips = await getChipLabels(page, 0);
+    expect(chips.length).toBe(0);
+
+    // Salary dropdown should reset to default (empty).
+    await expect(page.locator("select[aria-label='Filter by salary band']")).toHaveValue("");
+  });
+
+  // ─── 9. Deep-link ?salary=10to25 restores dropdown + chip ──────────────────
+  test("9: deep-link with salary restores dropdown + chip", async ({ page }) => {
+    await setupMocks(page);
+    await page.goto(`${DEMAND}?salary=10to25`);
+    await waitForSkill(page, "Node.js");
+
+    // Chip present.
+    const chips = await getChipLabels(page, 1);
+    expect(chips).toContain("₹10–25L");
+
+    // Salary dropdown restored to the deep-linked value.
+    await expect(page.locator("select[aria-label='Filter by salary band']")).toHaveValue("10to25");
   });
 });

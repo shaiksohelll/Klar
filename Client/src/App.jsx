@@ -14,7 +14,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import Nav, { NavRoutes } from "./components/ui/Nav";
 import Sheet from "./components/ui/Sheet";
 import { getInitialTheme, applyTheme } from "./lib/theme";
-import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed, normalizeCountry } from "./hooks/useFacetFilters";
+import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed, normalizeCountry, normalizeSalaryBand } from "./hooks/useFacetFilters";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
 const PageLoader = () => (
@@ -35,6 +35,7 @@ function readUrlFilters() {
     remote: normalizeRemote(sp.get("remote")),
     disclosed: normalizeDisclosed(sp.get("disclosed")),
     country: normalizeCountry(sp.get("country")),
+    salary: normalizeSalaryBand(sp.get("salary")),
   };
 }
 
@@ -52,13 +53,14 @@ function timeAgo(iso) {
 }
 
 // Fetch + shape trending data for a role/window. Pure helper, reused for prefetch.
-async function fetchTrending(role, win, remoteFilter, disclosedFilter, countryFilter) {
+async function fetchTrending(role, win, remoteFilter, disclosedFilter, countryFilter, salaryFilter) {
   const months = WINDOW_MONTHS[win];
   const params = { months, limit: 25 };
   if (role !== "All") params.role = role.toLowerCase();
   if (remoteFilter) params.remote = remoteFilter;
   if (disclosedFilter) params.disclosed = "1";
   if (countryFilter) params.country = countryFilter;
+  if (salaryFilter) params.salary = salaryFilter;
   const res = await axios.get(`${API}/api/skills/trending`, { params });
   const total = res.data.totalJobs || 0;
   const lastUpdated = res.data.lastUpdated || null;
@@ -95,6 +97,7 @@ export default function App() {
   const [remote, setRemote] = useState(initialFilters.remote);
   const [disclosed, setDisclosed] = useState(initialFilters.disclosed);
   const [country, setCountry] = useState(initialFilters.country);
+  const [salary, setSalary] = useState(initialFilters.salary);
   const [countries, setCountries] = useState([]);
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
@@ -149,7 +152,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    const key = `${activeRole}|${activeWindow}|${remote || "any"}|${disclosed ? "yes" : "no"}|${country || "any"}`;
+    const key = `${activeRole}|${activeWindow}|${remote || "any"}|${disclosed ? "yes" : "no"}|${country || "any"}|${salary || "any"}`;
     let cancelled = false;
     const cached = cacheRef.current.get(key);
 
@@ -169,7 +172,7 @@ export default function App() {
 
     (async () => {
       try {
-        const data = await fetchTrending(activeRole, activeWindow, remote, disclosed, country);
+        const data = await fetchTrending(activeRole, activeWindow, remote, disclosed, country, salary);
         if (cancelled) return;
         cacheRef.current.set(key, data);
         setSkills(data.skills);
@@ -188,9 +191,9 @@ export default function App() {
       // Quietly prefetch the other windows for this role in the background.
       if (!cancelled) {
         for (const win of ALL_WINDOWS) {
-          const k = `${activeRole}|${win}|${remote || "any"}|${disclosed ? "yes" : "no"}|${country || "any"}`;
+          const k = `${activeRole}|${win}|${remote || "any"}|${disclosed ? "yes" : "no"}|${country || "any"}|${salary || "any"}`;
           if (!cacheRef.current.has(k)) {
-            fetchTrending(activeRole, win, remote, disclosed, country)
+            fetchTrending(activeRole, win, remote, disclosed, country, salary)
               .then((d) => cacheRef.current.set(k, d))
               .catch(() => {});
           }
@@ -201,7 +204,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, activeWindow, remote, disclosed, country]);
+  }, [activeRole, activeWindow, remote, disclosed, country, salary]);
 
   const sorted = useMemo(
     () => [...skills].sort((a, b) => b.count - a.count),
@@ -355,6 +358,8 @@ export default function App() {
     setDisclosed,
     country,
     setCountry,
+    salary,
+    setSalary,
     countries,
     trackedSkills: effectiveTrackedSkills,
     handleTrack,

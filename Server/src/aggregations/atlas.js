@@ -1,6 +1,7 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
+import { salaryBandMatch, SALARY_BAND_IDS } from "../lib/salaryBands.js";
 
 // ── In-memory TTL cache for getAtlas ────────────────────────────────────────
 // Key: `${role||"all"}:${skill||"all"}:${months}`. Value: the full result obj.
@@ -34,9 +35,12 @@ export function clearAtlasCache() {
  * @param {{ role?: string, skill?: string, months?: number }} opts
  * @returns {Promise<{ cities: object[], totalCities: number, totalJobs: number }>}
  */
-export async function getAtlas({ role, skill, months = 12, remote, disclosed, country } = {}) {
+export async function getAtlas({ role, skill, months = 12, remote, disclosed, country, salary } = {}) {
+  // Normalize salary before the cache key: unknown/empty strings would fragment
+  // the cache into identical but separately-cached entries.
+  const normalizedSalary = SALARY_BAND_IDS.has(salary) ? salary : "";
   // Cache key MUST include role + skill + months + facet filters.
-  const cacheKey = `${role || "all"}:${skill || "all"}:${months}:${remote || "any"}:${disclosed ? "yes" : "no"}:${country || "any"}`;
+  const cacheKey = `${role || "all"}:${skill || "all"}:${months}:${remote || "any"}:${disclosed ? "yes" : "no"}:${country || "any"}:${normalizedSalary || "any"}`;
   const hit = ATLAS_CACHE.get(cacheKey);
   if (hit) return hit;
 
@@ -54,6 +58,7 @@ export async function getAtlas({ role, skill, months = 12, remote, disclosed, co
   else if (remote === "onsite") match.isRemote = false;
   if (disclosed) match.salaryDisclosed = true;
   if (country) match["geo.country"] = country;
+  if (salary) Object.assign(match, salaryBandMatch(salary));
 
   const pipeline = [
     { $match: match },

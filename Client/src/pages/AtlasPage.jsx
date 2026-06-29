@@ -67,7 +67,7 @@ function popupHtml(c) {
 export default function AtlasPage() {
   const { filters, setFilter, clearFilter, clearAll, activeChips } =
     useFacetFilters();
-  const { role, window: win, remote, disclosed, country } = filters;
+  const { role, window: win, remote, disclosed, country, salary } = filters;
 
   const [cities, setCities] = useState([]);
   const [totalCities, setTotalCities] = useState(0);
@@ -128,6 +128,7 @@ export default function AtlasPage() {
         if (remote) params.remote = remote;
         if (disclosed) params.disclosed = "1";
         if (country) params.country = country;
+        if (salary) params.salary = salary;
         const res = await axios.get(`${API}/api/atlas`, { params });
         if (cancelled) return;
         setCities(res.data.cities || []);
@@ -142,7 +143,7 @@ export default function AtlasPage() {
     return () => {
       cancelled = true;
     };
-  }, [role, win, remote, disclosed, country, retryCount]);
+  }, [role, win, remote, disclosed, country, salary, retryCount]);
 
   // ── Render markers whenever cities change (and the map is ready) ─────────
   useEffect(() => {

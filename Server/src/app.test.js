@@ -649,3 +649,85 @@ describe("GET /api/places/countries", () => {
     expect(res.body.countries.find((c) => c.code === "in")).toBeDefined();
   });
 });
+
+// ── Salary band filter tests for /api/skills/trending ─────────────────────
+describe("GET /api/skills/trending (salary band filter)", () => {
+  const VALID_BANDS = ["lt10", "10to25", "25to50", "gte50"];
+
+  for (const band of VALID_BANDS) {
+    it(`passes salary=${band} through to getTrendingSkills`, async () => {
+      getTrendingSkills.mockClear();
+      const res = await request(app)
+        .get("/api/skills/trending")
+        .query({ salary: band });
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(getTrendingSkills).toHaveBeenCalledWith(
+        expect.objectContaining({ salary: band }),
+      );
+    });
+  }
+
+  it("drops an invalid salary band — no salary filter applied", async () => {
+    getTrendingSkills.mockClear();
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ salary: "bogus" });
+    expect(res.status).toBe(200);
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.not.objectContaining({ salary: expect.anything() }),
+    );
+  });
+
+  it("drops an empty salary param — no salary filter applied", async () => {
+    getTrendingSkills.mockClear();
+    const res = await request(app)
+      .get("/api/skills/trending")
+      .query({ salary: "" });
+    expect(res.status).toBe(200);
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.not.objectContaining({ salary: expect.anything() }),
+    );
+  });
+});
+
+// ── Salary band filter tests for /api/atlas ───────────────────────────────
+describe("GET /api/atlas (salary band filter)", () => {
+  const VALID_BANDS = ["lt10", "10to25", "25to50", "gte50"];
+
+  for (const band of VALID_BANDS) {
+    it(`passes salary=${band} through to getAtlas`, async () => {
+      getAtlas.mockClear();
+      const res = await request(app)
+        .get("/api/atlas")
+        .query({ salary: band });
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(getAtlas).toHaveBeenCalledWith(
+        expect.objectContaining({ salary: band }),
+      );
+    });
+  }
+
+  it("drops an invalid salary band — no salary filter applied", async () => {
+    getAtlas.mockClear();
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ salary: "bogus" });
+    expect(res.status).toBe(200);
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.not.objectContaining({ salary: expect.anything() }),
+    );
+  });
+
+  it("drops an empty salary param — no salary filter applied", async () => {
+    getAtlas.mockClear();
+    const res = await request(app)
+      .get("/api/atlas")
+      .query({ salary: "" });
+    expect(res.status).toBe(200);
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.not.objectContaining({ salary: expect.anything() }),
+    );
+  });
+});

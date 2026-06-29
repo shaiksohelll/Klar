@@ -38,6 +38,8 @@ export default function DemandPage() {
     setDisclosed,
     country,
     setCountry,
+    salary,
+    setSalary,
     countries,
     trackedSkills,
     handleTrack,
@@ -61,8 +63,9 @@ export default function DemandPage() {
       else if (key === "remote") setRemote(value);
       else if (key === "disclosed") setDisclosed(!!value);
       else if (key === "country") setCountry(value || null);
+      else if (key === "salary") setSalary(value || null);
     },
-    [setUrlFilter, setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry],
+    [setUrlFilter, setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry, setSalary],
   );
 
   // Reset every filter AND mirror the defaults into App.jsx state so
@@ -75,7 +78,8 @@ export default function DemandPage() {
     setRemote(null);
     setDisclosed(false);
     setCountry(null);
-  }, [clearAll, setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry]);
+    setSalary(null);
+  }, [clearAll, setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry, setSalary]);
 
   // Keep App.jsx state in sync with URL filter changes (chip removal,
   // "Clear all", browser back/forward). Only sets when values differ to
@@ -87,8 +91,9 @@ export default function DemandPage() {
     if (filters.remote !== remote) setRemote(filters.remote);
     if (nextDisclosed !== disclosed) setDisclosed(nextDisclosed);
     if (filters.country !== country) setCountry(filters.country);
-  }, [filters, activeRole, activeWindow, remote, disclosed, country,
-      setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry]);
+    if (filters.salary !== salary) setSalary(filters.salary);
+  }, [filters, activeRole, activeWindow, remote, disclosed, country, salary,
+      setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry, setSalary]);
   // Count-up for the hero stat, re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);
 
@@ -240,7 +245,7 @@ export default function DemandPage() {
                   (and thus re-run entrance animations) on filter changes.
                 */}
                 <BarChart
-                  key={`${activeRole}|${activeWindow}|${remote}|${disclosed}|${country}`}
+                  key={`${activeRole}|${activeWindow}|${remote}|${disclosed}|${country}|${salary}`}
                   skills={visibleSkills.slice(0, 12)}
                   maxCount={maxCount}
                   onSelect={setSelectedSkill}

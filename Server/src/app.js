@@ -19,6 +19,7 @@ import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
 import skillDetailRouter from "./routes/skillDetail.js";
 import Job from "./models/Job.js";
+import { SALARY_BAND_IDS } from "./lib/salaryBands.js";
 import Watchlist from "./models/Watchlist.js";
 
 // ── Shared query-param parsers ─────────────────────────────────────────────
@@ -58,6 +59,20 @@ function parseCountryFilter(query) {
   if (!/^[a-z]{2}$/.test(c)) return {};
   return { country: c };
 }
+
+/**
+ * Parse the optional `salary` query param (INR band id).
+ * Valid ids: lt10, 10to25, 25to50, gte50.
+ * Returns { salary: bandId } for a valid band, or {} for unknown/blank values
+ * (no filter applied — same shape-guard discipline as country).
+ */
+function parseSalaryBandFilter(query) {
+  if (query.salary == null || String(query.salary).trim() === "") return {};
+  const id = String(query.salary).trim().toLowerCase();
+  if (!SALARY_BAND_IDS.has(id)) return {};
+  return { salary: id };
+}
+
 
 // ── Ingest secret (read at module load) ────────────────────────────────────
 const INGEST_SECRET = process.env.INGEST_SECRET;
@@ -297,10 +312,11 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     const dp = parseDisclosedFilter(req.query);
     if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
     const cp = parseCountryFilter(req.query);
+    const sp = parseSalaryBandFilter(req.query);
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
-    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country });
+    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, ...(sp.salary ? { salary: sp.salary } : {}) });
     // Most recently touched job = how fresh the dataset is.
     const newest = await Job.findOne()
       .sort({ updatedAt: -1 })
@@ -473,8 +489,9 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
     const dp = parseDisclosedFilter(req.query);
     if (dp.error) return res.status(400).json({ ok: false, error: dp.error });
     const cp = parseCountryFilter(req.query);
+    const sp = parseSalaryBandFilter(req.query);
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
-    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed, country: cp.country });
+    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, ...(sp.salary ? { salary: sp.salary } : {}) });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);
