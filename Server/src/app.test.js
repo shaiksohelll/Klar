@@ -503,12 +503,16 @@ describe("GET /api/skills/trending (country filter)", () => {
     expect(res.body.ok).toBe(true);
   });
 
-  it("ignores unknown country (no 400)", async () => {
+  it("forwards an unknown country as a filter (no 400)", async () => {
+    getTrendingSkills.mockClear();
     const res = await request(app)
       .get("/api/skills/trending")
       .query({ country: "zz" });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+    expect(getTrendingSkills).toHaveBeenCalledWith(
+      expect.objectContaining({ country: "zz" }),
+    );
   });
 
   it("ignores empty country", async () => {
@@ -543,12 +547,16 @@ describe("GET /api/atlas (country filter)", () => {
     expect(res.body.ok).toBe(true);
   });
 
-  it("ignores unknown country (no 400)", async () => {
+  it("forwards an unknown country as a filter (no 400)", async () => {
+    getAtlas.mockClear();
     const res = await request(app)
       .get("/api/atlas")
       .query({ country: "zz" });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+    expect(getAtlas).toHaveBeenCalledWith(
+      expect.objectContaining({ country: "zz" }),
+    );
   });
 
   it("passes country through to getAtlas", async () => {

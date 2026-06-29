@@ -43,7 +43,13 @@ function parseDisclosedFilter(query) {
   return { disclosed: true };
 }
 
-/** Parse the optional `country` query param (ISO-2 code). Unknown → ignored. */
+/**
+ * Parse the optional `country` query param (ISO-2 code).
+ * A non-blank value is trimmed + lowercased and forwarded as an exact
+ * geo.country match; codes with no matching data simply yield empty results.
+ * The frontend dropdown only ever emits codes returned by /api/places/countries,
+ * so in practice every value maps to real data.
+ */
 function parseCountryFilter(query) {
   if (query.country == null || String(query.country).trim() === "") return {};
   return { country: String(query.country).trim().toLowerCase() };
