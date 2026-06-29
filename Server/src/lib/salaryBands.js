@@ -8,7 +8,7 @@
  */
 
 const SALARY_BAND_RANGES = {
-  lt10:     { gte: null,      lt: 1_000_000  },
+  lt10:     { gte: 0,         lt: 1_000_000  },
   "10to25": { gte: 1_000_000, lt: 2_500_000  },
   "25to50": { gte: 2_500_000, lt: 5_000_000  },
   gte50:    { gte: 5_000_000, lt: null        },

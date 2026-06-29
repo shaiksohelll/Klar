@@ -58,6 +58,12 @@ function fixtureForParams(urlStr) {
   const country = url.searchParams.get("country") || "";
   const salary = url.searchParams.get("salary") || "";
 
+  // Salary-aware branch FIRST: if salary is present with role=frontend, return
+  // the combined fixture regardless of the window. This ensures salary is never
+  // shadowed by a months-specific branch (e.g. role=frontend&months=6&salary=10to25
+  // previously hit frontend_6 before reaching this check).
+  if (role === "frontend" && salary === "10to25")
+    return FIXTURES.frontend_salary_10to25;
   if (role === "frontend" && months === "6" && remote === "remote" && disclosed === "1" && country === "in")
     return FIXTURES.frontend_6_remote_disclosed_in;
   if (role === "frontend" && months === "6" && remote === "remote" && disclosed === "1")
@@ -68,11 +74,6 @@ function fixtureForParams(urlStr) {
     return FIXTURES.frontend_6_disclosed;
   if (role === "frontend" && months === "6")
     return FIXTURES.frontend_6;
-  // Combined role+salary — MUST come before role-only match so the router
-  // returns a distinct fixture; if the app drops salary, it falls through to
-  // FIXTURES.frontend instead, making the waitForSkill("Gatsby") assertion fail.
-  if (role === "frontend" && salary === "10to25")
-    return FIXTURES.frontend_salary_10to25;
   if (role === "frontend")
     return FIXTURES.frontend;
   // Salary band fixtures (all-role, 12M)

@@ -10,10 +10,10 @@
  * midpoint is stored in absolute rupees (e.g. 1_500_000 = ₹15L).
  */
 export const SALARY_BANDS = {
-  lt10:   { label: "< ₹10L",   min: null,      max: 1_000_000  },
-  "10to25": { label: "₹10–25L",  min: 1_000_000, max: 2_500_000  },
-  "25to50": { label: "₹25–50L",  min: 2_500_000, max: 5_000_000  },
-  gte50:  { label: "₹50L+",    min: 5_000_000, max: null        },
+  lt10:     { label: "< ₹10L"  },
+  "10to25": { label: "₹10–25L" },
+  "25to50": { label: "₹25–50L" },
+  gte50:    { label: "₹50L+"   },
 };
 
 /** Ordered list of valid band IDs for whitelist checks. */
