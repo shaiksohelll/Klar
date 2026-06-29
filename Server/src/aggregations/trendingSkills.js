@@ -2,7 +2,7 @@ import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
-import { salaryBandMatch } from "../lib/salaryBands.js";
+import { salaryBandMatch, SALARY_BAND_IDS } from "../lib/salaryBands.js";
 
 // ── In-memory TTL cache for getAllSkills ────────────────────────────────────
 // Key: months (number). Value: { data, expiresAt }.
@@ -85,7 +85,10 @@ export async function getAllSkills({ months = 12 } = {}) {
 }
 
 export async function getTrendingSkills({ role, months = 12, limit = 25, remote, disclosed, country, salary }) {
-  const cacheKey = `${role || "all"}:${months}:${limit}:${remote || "any"}:${disclosed ? "yes" : "no"}:${country || "any"}:${salary || "any"}`;
+  // Normalize salary before the cache key: unknown/empty strings would fragment
+  // the cache into identical but separately-cached entries.
+  const normalizedSalary = SALARY_BAND_IDS.has(salary) ? salary : "";
+  const cacheKey = `${role || "all"}:${months}:${limit}:${remote || "any"}:${disclosed ? "yes" : "no"}:${country || "any"}:${normalizedSalary || "any"}`;
   const hit = TRENDING_CACHE.get(cacheKey);
   if (hit) return hit;
 

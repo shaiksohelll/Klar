@@ -1,6 +1,10 @@
 /**
  * Server-side salary band definitions (INR, absolute rupees).
  * The salary facet only applies to disclosed, INR-denominated jobs.
+ *
+ * Band ids must stay in sync with Client/src/utils/salaryBands.js.
+ * Ranges and Mongo $match logic live here (server-side);
+ * labels and dropdown options live in the client counterpart.
  */
 
 const SALARY_BAND_RANGES = {

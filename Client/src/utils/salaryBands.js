@@ -2,6 +2,10 @@
  * Fixed whitelist of INR salary bands for the salary facet.
  * Shared between FilterBar (option labels) and useFacetFilters (chip labels).
  *
+ * Band ids must stay in sync with Server/src/lib/salaryBands.js.
+ * Labels and dropdown options live here (client-side);
+ * ranges and Mongo $match logic live in the server counterpart.
+ *
  * Bands apply only to disclosed, INR-denominated jobs.
  * midpoint is stored in absolute rupees (e.g. 1_500_000 = ₹15L).
  */

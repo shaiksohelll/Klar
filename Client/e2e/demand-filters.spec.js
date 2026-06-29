@@ -41,6 +41,11 @@ const FIXTURES = {
   salary_10to25: makeTrending({ totalJobs: 2200, skills: [
     { skill: "Node.js", demand: 440, avgSalary: 1800000, remoteCount: 100, velocity: 3, trend: "up" },
   ]}),
+  // Combined: role=frontend + salary=10to25 — unique skill so test 8 can
+  // detect if the app stops forwarding salary when another facet is also active.
+  frontend_salary_10to25: makeTrending({ totalJobs: 850, role: "frontend", skills: [
+    { skill: "Gatsby", demand: 170, avgSalary: 1600000, remoteCount: 50, velocity: 2, trend: "up" },
+  ]}),
 };
 
 /** Pick fixture based on query params. Most specific combos first. */
@@ -63,6 +68,11 @@ function fixtureForParams(urlStr) {
     return FIXTURES.frontend_6_disclosed;
   if (role === "frontend" && months === "6")
     return FIXTURES.frontend_6;
+  // Combined role+salary — MUST come before role-only match so the router
+  // returns a distinct fixture; if the app drops salary, it falls through to
+  // FIXTURES.frontend instead, making the waitForSkill("Gatsby") assertion fail.
+  if (role === "frontend" && salary === "10to25")
+    return FIXTURES.frontend_salary_10to25;
   if (role === "frontend")
     return FIXTURES.frontend;
   // Salary band fixtures (all-role, 12M)
@@ -362,14 +372,19 @@ test.describe("Demand page filter URL-sync", () => {
 
   // ─── 8. Clear-all resets salary dropdown ────────────────────────────────────
   // "Clear all" only renders when ≥ 2 chips are active, so we deep-link with
-  // two filters (role + salary).
+  // role + salary. The combined fixture (frontend_salary_10to25 → "Gatsby") is
+  // distinct from the role-only fixture (frontend → "Next.js"), so if the app
+  // ever stops forwarding salary when another facet is active the waitForSkill
+  // assertion will fail immediately.
   test("8: clear-all resets the salary dropdown", async ({ page }) => {
-    await setupMocks(page);
+    const { findReq } = await setupMocks(page);
     await page.goto(`${DEMAND}?role=frontend&salary=10to25`);
-    // With role=frontend the fixture matcher hits FIXTURES.frontend (Next.js)
-    // because role-match is checked before salary-match. The key verification
-    // is that clear-all resets the salary dropdown + URL, not the data.
-    await waitForSkill(page, "Next.js");
+    await waitForSkill(page, "Gatsby"); // unique to the combined fixture
+
+    // Verify the initial request carried BOTH params.
+    const initialReq = new URL(findReq({ role: "frontend", salary: "10to25" }));
+    expect(initialReq.searchParams.get("role")).toBe("frontend");
+    expect(initialReq.searchParams.get("salary")).toBe("10to25");
 
     // Two chips visible → Clear all button appears.
     await page.getByText("Clear all").click();
@@ -378,6 +393,7 @@ test.describe("Demand page filter URL-sync", () => {
     // URL should not have salary param.
     const url = new URL(page.url());
     expect(url.searchParams.has("salary")).toBe(false);
+    expect(url.searchParams.has("role")).toBe(false);
 
     // No chips.
     const chips = await getChipLabels(page, 0);

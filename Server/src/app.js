@@ -316,7 +316,7 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     // Clamp months to [1, 24] and limit to [1, 100] to prevent expensive queries
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
-    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, salary: sp.salary });
+    const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, ...(sp.salary ? { salary: sp.salary } : {}) });
     // Most recently touched job = how fresh the dataset is.
     const newest = await Job.findOne()
       .sort({ updatedAt: -1 })
@@ -491,7 +491,7 @@ app.get("/api/atlas", readLimiter, async (req, res, next) => {
     const cp = parseCountryFilter(req.query);
     const sp = parseSalaryBandFilter(req.query);
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
-    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, salary: sp.salary });
+    const data = await getAtlas({ role, skill, months, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, ...(sp.salary ? { salary: sp.salary } : {}) });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);
