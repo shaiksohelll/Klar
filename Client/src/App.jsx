@@ -82,7 +82,7 @@ export default function App() {
   // URL is the single source of truth for facet state.
   // useFacetFilters reads useSearchParams which is seeded from the current URL
   // on mount, so deep-linked pages get the correct cache key on first render.
-  const { filters, clearAll } = useFacetFilters();
+  const { filters } = useFacetFilters();
   const { role: activeRole, window: activeWindow, remote, disclosed, country, salary } = filters;
 
   const [countries, setCountries] = useState([]);
@@ -97,12 +97,11 @@ export default function App() {
   // Incrementing this forces the watchlist effect to re-run (manual retry).
   const [watchlistRetry, setWatchlistRetry] = useState(0);
   
-  // Forces a refetch of trending data + resets all filters to default.
+  // Forces a refetch of trending data.
   const [retryCount, setRetryCount] = useState(0);
   const retryDemand = useCallback(() => {
-    clearAll();
     setRetryCount((c) => c + 1);
-  }, [clearAll]);
+  }, []);
 
   // Mobile nav glass sheet open state.
   const [menuOpen, setMenuOpen] = useState(false);
