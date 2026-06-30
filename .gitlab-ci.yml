@@ -63,3 +63,4 @@ client-lint:
     - cd Client
     - npm ci --cache .npm --prefer-offline
     - npm run lint
+    - npm run build
