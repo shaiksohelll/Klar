@@ -35,6 +35,7 @@ export default function DemandPage() {
     error,
     velocityReady,
     velocityBasisDays,
+    retryDemand,
   } = useOutletContext();
 
   // URL-backed filter state (shareable, refresh-safe).
@@ -121,7 +122,7 @@ export default function DemandPage() {
             a few seconds.
           </p>
           <button
-            onClick={() => setFilter("role", activeRole)}
+            onClick={retryDemand}
             className="mt-5 inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
             Try again

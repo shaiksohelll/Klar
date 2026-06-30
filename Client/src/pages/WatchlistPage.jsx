@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link, useOutletContext } from "react-router-dom";
+import useFacetFilters from "../hooks/useFacetFilters";
 import { RankingList } from "../components/RankingList";
 import { SkillGap } from "../components/SkillGap";
 import Button from "../components/ui/Button";
@@ -41,10 +42,10 @@ export default function WatchlistPage() {
     watchlistError,
     retryWatchlist,
     getToken,
-    activeWindow,
   } = ctx;
 
-  const months = WINDOW_MONTHS[activeWindow] ?? 12;
+  const { filters } = useFacetFilters();
+  const months = WINDOW_MONTHS[filters.window] ?? 12;
 
   const watched = useMemo(
     () => sorted.filter((s) => trackedSkills.includes(s.id)),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from "react";
 import axios from "axios";
 import {
   UserButton,
@@ -82,7 +82,7 @@ export default function App() {
   // URL is the single source of truth for facet state.
   // useFacetFilters reads useSearchParams which is seeded from the current URL
   // on mount, so deep-linked pages get the correct cache key on first render.
-  const { filters } = useFacetFilters();
+  const { filters, clearAll } = useFacetFilters();
   const { role: activeRole, window: activeWindow, remote, disclosed, country, salary } = filters;
 
   const [countries, setCountries] = useState([]);
@@ -96,6 +96,14 @@ export default function App() {
   const [error, setError] = useState(null);
   // Incrementing this forces the watchlist effect to re-run (manual retry).
   const [watchlistRetry, setWatchlistRetry] = useState(0);
+  
+  // Forces a refetch of trending data + resets all filters to default.
+  const [retryCount, setRetryCount] = useState(0);
+  const retryDemand = useCallback(() => {
+    clearAll();
+    setRetryCount((c) => c + 1);
+  }, [clearAll]);
+
   // Mobile nav glass sheet open state.
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -191,7 +199,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, activeWindow, remote, disclosed, country, salary]);
+  }, [activeRole, activeWindow, remote, disclosed, country, salary, retryCount]);
 
   const sorted = useMemo(
     () => [...skills].sort((a, b) => b.count - a.count),
@@ -345,6 +353,7 @@ export default function App() {
     velocityBasisDays,
     watchlistError,
     retryWatchlist: () => setWatchlistRetry((c) => c + 1),
+    retryDemand,
     getToken,
   };
 
