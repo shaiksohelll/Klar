@@ -417,4 +417,49 @@ test.describe("Demand page filter URL-sync", () => {
     // Salary dropdown restored to the deep-linked value.
     await expect(page.locator("select[aria-label='Filter by salary band']")).toHaveValue("10to25");
   });
+
+  test("10: error recovery keeps active filters on retry", async ({ page }) => {
+    await setupMocks(page);
+    let shouldFail = true;
+    const trendingRequests = [];
+    
+    // We override the default trending mock for just this test
+    await page.route("**/api/skills/trending*", async (route) => {
+      trendingRequests.push(route.request().url());
+      if (shouldFail) {
+        // Fail the requests until the Try Again button is clicked
+        await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+      } else {
+        // Succeed on retry
+        const body = fixtureForParams(route.request().url());
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      }
+    });
+
+    await page.route("**/api/skills/all*", async (route) => {
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ ok: true, skills: [] }),
+      });
+    });
+
+    await page.goto("/?role=frontend&w=6");
+    
+    // Should see error state and Try again button
+    const retryBtn = page.getByRole("button", { name: /try again/i });
+    await expect(retryBtn).toBeVisible({ timeout: 10000 });
+
+    // Now allow it to succeed and click retry
+    shouldFail = false;
+    trendingRequests.length = 0; // clear to capture only the retry requests
+    await retryBtn.click();
+    
+    // Should recover and show data, ensuring the 2nd request had role=frontend and months=6
+    await expect(page.getByText("Vue").first()).toBeVisible({ timeout: 10000 });
+    
+    expect(
+      trendingRequests.some(
+        (url) => url.includes("role=frontend") && url.includes("months=6")
+      )
+    ).toBeTruthy();  });
 });
