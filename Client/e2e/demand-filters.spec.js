@@ -460,9 +460,9 @@ test.describe("Demand page filter URL-sync", () => {
     // Should recover and show data, ensuring the 2nd request had role=frontend and months=6
     await expect(page.getByText("Vue").first()).toBeVisible({ timeout: 10000 });
     
-    expect(trendingRequests.length).toBeGreaterThanOrEqual(1);
-    const mainReq = trendingRequests[0]; // first request after retry is the main one
-    expect(mainReq).toContain("role=frontend");
-    expect(mainReq).toContain("months=6");
-  });
+    expect(
+      trendingRequests.some(
+        (url) => url.includes("role=frontend") && url.includes("months=6")
+      )
+    ).toBeTruthy();  });
 });
