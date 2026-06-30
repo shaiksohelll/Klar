@@ -14,7 +14,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import Nav, { NavRoutes } from "./components/ui/Nav";
 import Sheet from "./components/ui/Sheet";
 import { getInitialTheme, applyTheme } from "./lib/theme";
-import { WINDOW_MONTHS, normalizeRole, normalizeWindow, normalizeRemote, normalizeDisclosed, normalizeCountry, normalizeSalaryBand } from "./hooks/useFacetFilters";
+import useFacetFilters, { WINDOW_MONTHS } from "./hooks/useFacetFilters";
 
 // Lightweight fallback shown while a lazily-loaded route page is fetched.
 const PageLoader = () => (
@@ -26,18 +26,6 @@ const PageLoader = () => (
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const ALL_WINDOWS = ["3M", "6M", "12M"];
 
-// Seed fetch state from the URL so deep-linked pages don't double-fetch.
-function readUrlFilters() {
-  const sp = new URLSearchParams(window.location.search);
-  return {
-    role: normalizeRole(sp.get("role")),
-    window: normalizeWindow(sp.get("w")),
-    remote: normalizeRemote(sp.get("remote")),
-    disclosed: normalizeDisclosed(sp.get("disclosed")),
-    country: normalizeCountry(sp.get("country")),
-    salary: normalizeSalaryBand(sp.get("salary")),
-  };
-}
 
 // Turn an ISO timestamp into a short "Xh ago" string.
 function timeAgo(iso) {
@@ -91,13 +79,12 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [velocityReady, setVelocityReady] = useState(false);
   const [velocityBasisDays, setVelocityBasisDays] = useState(null);
-  const [initialFilters] = useState(readUrlFilters);
-  const [activeRole, setActiveRole] = useState(initialFilters.role);
-  const [activeWindow, setActiveWindow] = useState(initialFilters.window);
-  const [remote, setRemote] = useState(initialFilters.remote);
-  const [disclosed, setDisclosed] = useState(initialFilters.disclosed);
-  const [country, setCountry] = useState(initialFilters.country);
-  const [salary, setSalary] = useState(initialFilters.salary);
+  // URL is the single source of truth for facet state.
+  // useFacetFilters reads useSearchParams which is seeded from the current URL
+  // on mount, so deep-linked pages get the correct cache key on first render.
+  const { filters } = useFacetFilters();
+  const { role: activeRole, window: activeWindow, remote, disclosed, country, salary } = filters;
+
   const [countries, setCountries] = useState([]);
   const [trackedSkills, setTrackedSkills] = useState([]);
   const [watchlistError, setWatchlistError] = useState(null);
@@ -348,18 +335,6 @@ export default function App() {
     sorted,
     maxCount,
     totalJobs,
-    activeRole,
-    setActiveRole,
-    activeWindow,
-    setActiveWindow,
-    remote,
-    setRemote,
-    disclosed,
-    setDisclosed,
-    country,
-    setCountry,
-    salary,
-    setSalary,
     countries,
     trackedSkills: effectiveTrackedSkills,
     handleTrack,
