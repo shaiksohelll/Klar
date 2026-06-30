@@ -3,20 +3,11 @@ import axios from "axios";
 import { motion, useReducedMotion } from "framer-motion";
 import Confidence from "../components/ui/Confidence";
 import { useSearchParams } from "react-router-dom";
+import useFacetFilters, { WINDOW_MONTHS } from "../hooks/useFacetFilters";
 import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// Allowed month windows for this page's data. The active window drives every
-// fetch and the per-skill cache key, and is persisted in the URL as ?w=.
-const ALLOWED_WINDOWS = [3, 6, 12];
-const DEFAULT_WINDOW = 12;
-
-// Normalize an arbitrary value to a valid window, falling back to 12.
-function normalizeWindow(value) {
-  const n = Number(value);
-  return ALLOWED_WINDOWS.includes(n) ? n : DEFAULT_WINDOW;
-}
 
 // Maximum number of skills that can be compared at once. Minimum to render
 // the comparison is 2.
@@ -462,6 +453,12 @@ function SkillColumn({ skillKey, color, state }) {
 export default function ComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Window is URL-driven via useFacetFilters — URL is the single source of truth.
+  // windowMonths is derived each render; no separate state needed.
+  const { filters, setFilter } = useFacetFilters();
+  const windowMonths = WINDOW_MONTHS[filters.window]; // numeric: 3 | 6 | 12
+
+
   // Valid skill universe (powers the picker + URL validation).
   const [allSkills, setAllSkills] = useState([]);
   const [allLoaded, setAllLoaded] = useState(false);
@@ -469,13 +466,10 @@ export default function ComparePage() {
   // Selected raw skill keys (order matters — drives palette assignment).
   const [selected, setSelected] = useState([]);
 
-  // Active month window (3 | 6 | 12). Persisted in the URL as ?w=.
-  const [windowMonths, setWindowMonths] = useState(DEFAULT_WINDOW);
-
   // Per-skill { loading, error, detail, salary }, keyed by raw skill key.
   const [data, setData] = useState({});
 
-  // Session cache keyed by `${skill}:12` so re-adding a skill is instant.
+  // Session cache keyed by `${skill}:${windowMonths}` so re-adding is instant.
   const cacheRef = useRef(new Map());
   // Guards URL hydration so it only runs once, after the skill list loads.
   const hydratedRef = useRef(false);
@@ -501,22 +495,12 @@ export default function ComparePage() {
     };
   }, [windowMonths]);
 
-  // Hydrate selection from ?skills=react,node.js once the valid list is known.
-  // Validate against the list and drop unknown keys.
+  // Hydrate skill selection from ?skills=react,node.js once the valid list is
+  // known. Validate against the list and drop unknown keys.
+  // Window (?w=) is handled automatically by useFacetFilters on mount.
   useEffect(() => {
     if (!allLoaded || hydratedRef.current) return;
     hydratedRef.current = true;
-
-    // Window: validate ?w= against the allowed set, fall back to 12.
-    const rawWindow = searchParams.get("w");
-    if (rawWindow !== null) {
-      const win = normalizeWindow(rawWindow);
-      if (win !== windowMonths) {
-        skipNextSyncRef.current = true;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setWindowMonths(win);
-      }
-    }
 
     const raw = searchParams.get("skills");
     if (!raw) return;
@@ -530,13 +514,15 @@ export default function ComparePage() {
     }
     if (keys.length) {
       skipNextSyncRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(keys);
     }
-  }, [allLoaded, allSkills, searchParams, windowMonths]);
+  }, [allLoaded, allSkills, searchParams]);
 
   // Keep the ?skills= query param in sync with the selection so every
   // comparison is a shareable URL. Skip writing during the very first render
   // pass before hydration has had a chance to run.
+  // Note: ?w= is now managed entirely by useFacetFilters.setFilter.
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (skipNextSyncRef.current) {
@@ -548,14 +534,11 @@ export default function ComparePage() {
         const next = new URLSearchParams(prev);
         if (selected.length) next.set("skills", selected.join(","));
         else next.delete("skills");
-        // Only persist a non-default window so default URLs stay clean.
-        if (windowMonths !== DEFAULT_WINDOW) next.set("w", String(windowMonths));
-        else next.delete("w");
         return next;
       },
       { replace: true },
     );
-  }, [selected, windowMonths, setSearchParams]);
+  }, [selected, setSearchParams]);
 
   // Fetch detail + salary for each selected skill independently, caching by
   // `${skill}:${windowMonths}`. Each skill's loading/error state is isolated.
@@ -839,12 +822,12 @@ export default function ComparePage() {
               role="group"
               aria-label="Time window"
             >
-              {ALLOWED_WINDOWS.map((m) => {
+              {[3, 6, 12].map((m) => {
                 const active = windowMonths === m;
                 return (
                   <button
                     key={m}
-                    onClick={() => setWindowMonths(m)}
+                    onClick={() => setFilter("window", m + "M")}
                     aria-label={`Last ${m} months`}
                     aria-pressed={active}
                     className={`relative px-3 py-2 rounded-md font-mono text-xs uppercase tracking-wider transition-colors ${

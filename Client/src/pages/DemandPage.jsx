@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+// No hooks needed from react itself — useFacetFilters and useOutletContext come from their own imports.
 import { motion } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
 import { TiltCard } from "../components/TiltCard";
@@ -23,23 +23,10 @@ const heroCountShow = { opacity: 1 };
 const heroCountTrans = { delay: 0.4, duration: 0.6 };
 
 export default function DemandPage() {
-  const ctx = useOutletContext();
   const {
     sorted,
     maxCount,
     totalJobs,
-    activeRole,
-    setActiveRole,
-    activeWindow,
-    setActiveWindow,
-    remote,
-    setRemote,
-    disclosed,
-    setDisclosed,
-    country,
-    setCountry,
-    salary,
-    setSalary,
     countries,
     trackedSkills,
     handleTrack,
@@ -48,53 +35,15 @@ export default function DemandPage() {
     error,
     velocityReady,
     velocityBasisDays,
-  } = ctx;
+    retryDemand,
+  } = useOutletContext();
 
   // URL-backed filter state (shareable, refresh-safe).
-  const { filters, setFilter: setUrlFilter, clearFilter, clearAll, activeChips } =
+  const { filters, setFilter, clearFilter, clearAll, activeChips } =
     useFacetFilters();
+  const { role: activeRole, window: activeWindow, remote, disclosed, country, salary } = filters;
 
-  // Wrapper: update both the URL (shareable) AND App.jsx's state (data fetch).
-  const setFilter = useCallback(
-    (key, value) => {
-      setUrlFilter(key, value);
-      if (key === "role") setActiveRole(value || "All");
-      else if (key === "window") setActiveWindow(value || "12M");
-      else if (key === "remote") setRemote(value);
-      else if (key === "disclosed") setDisclosed(!!value);
-      else if (key === "country") setCountry(value || null);
-      else if (key === "salary") setSalary(value || null);
-    },
-    [setUrlFilter, setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry, setSalary],
-  );
 
-  // Reset every filter AND mirror the defaults into App.jsx state so
-  // downstream consumers (SkillSearch, BarChart key, fetch) see the
-  // cleared values on this render — not one render later via the sync effect.
-  const clearAllFilters = useCallback(() => {
-    clearAll();
-    setActiveRole("All");
-    setActiveWindow("12M");
-    setRemote(null);
-    setDisclosed(false);
-    setCountry(null);
-    setSalary(null);
-  }, [clearAll, setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry, setSalary]);
-
-  // Keep App.jsx state in sync with URL filter changes (chip removal,
-  // "Clear all", browser back/forward). Only sets when values differ to
-  // avoid redundant renders.
-  useEffect(() => {
-    const nextDisclosed = !!filters.disclosed;
-    if (filters.role !== activeRole) setActiveRole(filters.role);
-    if (filters.window !== activeWindow) setActiveWindow(filters.window);
-    if (filters.remote !== remote) setRemote(filters.remote);
-    if (nextDisclosed !== disclosed) setDisclosed(nextDisclosed);
-    if (filters.country !== country) setCountry(filters.country);
-    if (filters.salary !== salary) setSalary(filters.salary);
-  }, [filters, activeRole, activeWindow, remote, disclosed, country, salary,
-      setActiveRole, setActiveWindow, setRemote, setDisclosed, setCountry, setSalary]);
-  // Count-up for the hero stat, re-triggers on totalJobs change (filter change)
   const animatedTotal = useCountUp(totalJobs, 700);
 
   const visibleSkills = sorted;
@@ -157,7 +106,7 @@ export default function DemandPage() {
         layoutPrefix="demand"
       />
 
-      <FacetChips chips={activeChips} clearFilter={clearFilter} clearAll={clearAllFilters} />
+      <FacetChips chips={activeChips} clearFilter={clearFilter} clearAll={clearAll} />
 
       {error ? (
         /* ERROR — adaptive recovery: what/why/next, retry not color-only. */
@@ -173,7 +122,7 @@ export default function DemandPage() {
             a few seconds.
           </p>
           <button
-            onClick={() => setActiveRole(activeRole)}
+            onClick={retryDemand}
             className="mt-5 inline-flex h-11 items-center rounded-[var(--radius-md)] border border-[var(--border)] px-6 font-sans text-sm font-medium text-[var(--text)] transition-colors hover:border-[var(--muted)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
             Try again
@@ -217,7 +166,7 @@ export default function DemandPage() {
             the window or view every role.
           </p>
         <button
-            onClick={() => clearAllFilters()}
+            onClick={() => clearAll()}
             className="mt-6 inline-flex h-11 items-center rounded-[var(--radius-md)] bg-[var(--accent)] px-6 font-sans text-sm font-medium text-white transition-[background-color,transform] duration-[120ms] [transition-timing-function:var(--ease-spring)] hover:bg-[var(--accent-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]"
           >
             Show all skills
