@@ -2,10 +2,6 @@
   "name": "klar",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "Client",
-    "Server"
-  ],
   "description": "Klar — real-time job-market skill & salary analytics (MERN).",
   "license": "MIT",
   "author": "Shaik Sohel",
