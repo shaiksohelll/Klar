@@ -46,6 +46,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_e2e_mock_not_used
 
   client-e2e:
     name: Client E2E (Playwright)
