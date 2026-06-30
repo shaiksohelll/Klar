@@ -12,7 +12,7 @@
   "keywords": [],
   "author": "",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@clerk/express": "^2.1.23",
