@@ -443,9 +443,6 @@ test.describe("Demand page filter URL-sync", () => {
       });
     });
 
-    page.on('console', msg => console.log('TEST LOG:', msg.text()));
-    page.on('request', req => console.log('REQ:', req.method(), req.url()));
-    page.on('response', res => console.log('RES:', res.status(), res.url()));
     await page.goto("/?role=frontend&w=6");
     
     // Should see error state and Try again button

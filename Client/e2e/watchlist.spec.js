@@ -37,10 +37,7 @@ test.describe("WatchlistPage", () => {
       });
     });
 
-    page.on('console', msg => console.log('TEST LOG:', msg.text()));
-    page.on('pageerror', err => console.log('PAGE ERROR', err.message));
-    page.on('request', req => console.log('REQ:', req.method(), req.url()));
-    page.on('response', res => console.log('RES:', res.status(), res.url()));
+
     
     // We deep link with ?w=6 (6 months)
     const responsePromise = page.waitForResponse((r) => r.url().includes("/api/skill-gap"), { timeout: 5000 });
