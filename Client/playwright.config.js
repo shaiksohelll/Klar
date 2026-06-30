@@ -10,7 +10,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
   webServer: {
-    command: "npx cross-env VITE_E2E_MOCK_AUTH=true npm run dev -- --port 5173",
+    command: "npx cross-env VITE_E2E_MOCK_AUTH=true VITE_CLERK_PUBLISHABLE_KEY=pk_test_e2e_mock_not_used npm run dev -- --port 5173",
     port: 5173,
     reuseExistingServer: !process.env.CI,
     timeout: 15_000,

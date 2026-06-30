@@ -52,8 +52,6 @@ jobs:
     defaults:
       run:
         working-directory: Client
-    env:
-      VITE_CLERK_PUBLISHABLE_KEY: pk_test_e2e_mock_not_used
     steps:
       - uses: actions/checkout@v4
         with:

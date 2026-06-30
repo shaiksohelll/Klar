@@ -43,7 +43,7 @@ test.describe("WatchlistPage", () => {
     page.on('response', res => console.log('RES:', res.status(), res.url()));
     
     // We deep link with ?w=6 (6 months)
-    const responsePromise = page.waitForResponse((r) => r.url().includes("/api/skill-gap"), { timeout: 5000 }).catch(e => console.log("Response wait timed out:", e));
+    const responsePromise = page.waitForResponse((r) => r.url().includes("/api/skill-gap"), { timeout: 5000 });
     await page.goto("/watchlist?w=6");
     await responsePromise;
 
