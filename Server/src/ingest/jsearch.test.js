@@ -2,9 +2,12 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
-// JSearch key must exist before import (read at load); without it ingest
-// returns early and never prunes.
-process.env.JSEARCH_API_KEY = "test-key";
+// jsearch.js reads JSEARCH_API_KEY into a module-level const at import time.
+// ESM imports are hoisted above top-level statements, so setting env below
+// the imports runs too late. vi.hoisted() runs before imports.
+vi.hoisted(() => {
+  process.env.JSEARCH_API_KEY = "test-key";
+});
 
 import Job from "../models/Job.js";
 import { makeDedupeKey } from "../lib/dedupe.js";

@@ -2,9 +2,13 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
-// Adzuna credentials must exist before importing the module (read at load).
-process.env.ADZUNA_APP_ID = "test-id";
-process.env.ADZUNA_APP_KEY = "test-key";
+// adzuna.js reads ADZUNA_APP_ID/KEY into module-level consts at import time.
+// ESM imports are hoisted above top-level statements, so setting env below
+// the imports runs too late. vi.hoisted() runs before imports.
+vi.hoisted(() => {
+  process.env.ADZUNA_APP_ID = "test-id";
+  process.env.ADZUNA_APP_KEY = "test-key";
+});
 
 import Job from "../models/Job.js";
 import { ingestAdzuna } from "./adzuna.js";
