@@ -142,6 +142,7 @@ export async function ingestJSearch({
   country = "in",
   pages = 1,
   datePosted = "month",
+  prune,
 } = {}) {
   // Free-tier safety: missing key → log + return early, never throw.
   if (!JSEARCH_API_KEY) {
@@ -164,6 +165,11 @@ export async function ingestJSearch({
   // 1.2s sleep between them. Per-query try/catch keeps error isolation: a
   // single 429 or timeout does not abort the remaining queries.
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // JSearch always sweeps the full role list (no narrow single-term mode),
+  // so a clean run is a complete snapshot and pruning is the default.
+  // Callers can force it off via prune:false.
+  const shouldPrune = prune ?? true;
+  const runStartedAt = new Date();
   let fetched = 0;
   let errorCount = 0;
   let succeeded = 0;
@@ -211,6 +217,24 @@ export async function ingestJSearch({
     modified = result.modifiedCount || 0;
   }
 
+  // ── Prune stale rows (symmetric with ingestAdzuna) ─────────────────────
+  // JSearch upserts only, so without this stale postings accumulate forever
+  // and inflate counts. Delete jsearch rows that were NOT refreshed this run
+  // (updatedAt predates runStartedAt). Guarded exactly like Adzuna: skip when
+  // any query failed (partial snapshot) or nothing was fetched, so a failed
+  // or empty run can never wipe the collection.
+  let removed = 0;
+  if (errorCount > 0 && shouldPrune) {
+    console.warn("JSearch prune skipped due to fetch failures");
+  }
+  if (shouldPrune && errorCount === 0 && fetched > 0) {
+    const pruneResult = await Job.deleteMany({
+      source: "jsearch",
+      updatedAt: { $lt: runStartedAt },
+    });
+    removed = pruneResult.deletedCount || 0;
+  }
+
   // ── Invalidate read caches ─────────────────────────────────────────────
   // Mirror exactly what ingestAdzuna does: clear all caches so the next
   // request recomputes from the freshly-written rows.
@@ -227,6 +251,7 @@ export async function ingestJSearch({
     unique: docsById.size,
     upserted,
     modified,
+    removed,
     errors: errorCount,
   };
   console.log("🔄 JSearch ingest:", summary);
