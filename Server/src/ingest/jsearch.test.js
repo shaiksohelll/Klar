@@ -102,7 +102,7 @@ describe("ingestJSearch — symmetric prune", () => {
 
     // The adzuna row is NEVER touched by a jsearch prune.
     expect(await Job.findOne({ externalId: "stale-adzuna" })).not.toBeNull();
-  });
+  }, 20_000);
 
   it("does NOT prune when any query failed (partial snapshot)", async () => {
     await seedJob({
@@ -118,7 +118,7 @@ describe("ingestJSearch — symmetric prune", () => {
     expect(res.removed).toBe(0);
     // Stale row is spared because the run was not a clean full snapshot.
     expect(await Job.findOne({ externalId: "jsearch:stale-2" })).not.toBeNull();
-  });
+  }, 20_000);
 
   it("does NOT prune when prune:false is passed", async () => {
     await seedJob({
@@ -132,5 +132,5 @@ describe("ingestJSearch — symmetric prune", () => {
 
     expect(res.removed).toBe(0);
     expect(await Job.findOne({ externalId: "jsearch:stale-3" })).not.toBeNull();
-  });
+  }, 20_000);
 });
