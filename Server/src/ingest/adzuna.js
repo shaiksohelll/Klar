@@ -74,9 +74,14 @@ function mapJob(raw, country) {
       midpoint,
       currency: country === "in" ? "INR" : country === "us" ? "USD" : "GBP",
     },
-    // Mark as disclosed only when Adzuna provides a real min figure and
-    // has NOT flagged it as a predicted/estimated value.
-    salaryDisclosed: Boolean(raw.salary_min && raw.salary_is_predicted !== "1"),
+    // Mark as disclosed when Adzuna provides a real salary figure (min OR max —
+    // matching the midpoint logic above, which uses min ?? max) and has NOT
+    // flagged it as predicted/estimated. salary_is_predicted is coerced to a
+    // string first so a numeric 1 is treated the same as the string "1".
+    salaryDisclosed: Boolean(
+      (raw.salary_min || raw.salary_max) &&
+        String(raw.salary_is_predicted) !== "1",
+    ),
     location: raw.location?.display_name || "",
     redirectUrl: raw.redirect_url || "",
     postedAt: raw.created ? new Date(raw.created) : new Date(),
