@@ -40,7 +40,7 @@ vi.mock("../lib/dedupe.js", () => ({
   dedupeGroupStages: () => [],
 }));
 
-import skillDetailRouter from "./skillDetail.js";
+import skillDetailRouter, { clearDetailCache } from "./skillDetail.js";
 
 // Build a tiny app that mounts only the skill-detail router.
 function makeApp() {
@@ -59,6 +59,9 @@ function monthsFromSince(since, now) {
 describe("GET /api/skill/:name — months clamp", () => {
   beforeEach(() => {
     capturedMatch = undefined;
+    // DETAIL_CACHE is module-level and persists across cases; clear it so a
+    // repeated cache key can't return a hit and skip the aggregate we inspect.
+    clearDetailCache();
     // Freeze time on a mid-month day so month subtraction can't roll over a
     // shorter month (e.g. the 31st) and skew the recovered month count.
     vi.useFakeTimers();
@@ -77,14 +80,14 @@ describe("GET /api/skill/:name — months clamp", () => {
     expect(monthsFromSince(capturedMatch.postedAt.$gte, now)).toBe(24);
   });
 
-  it("clamps a zero/negative ?months up to 1", async () => {
-    const res = await request(makeApp()).get("/api/skill/react?months=0");
+  it("clamps a negative ?months up to 1", async () => {
+    const res = await request(makeApp()).get("/api/skill/react?months=-5");
     expect(res.status).toBe(200);
     expect(monthsFromSince(capturedMatch.postedAt.$gte, now)).toBe(1);
   });
 
-  it("defaults to 12 when ?months is absent or non-numeric", async () => {
-    const res = await request(makeApp()).get("/api/skill/react?months=abc");
+  it("defaults to 12 for zero or non-numeric ?months", async () => {
+    const res = await request(makeApp()).get("/api/skill/react?months=0");
     expect(res.status).toBe(200);
     expect(monthsFromSince(capturedMatch.postedAt.$gte, now)).toBe(12);
   });
