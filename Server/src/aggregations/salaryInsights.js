@@ -1,6 +1,7 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
+import { resolveSkill, resolveRole } from "../lib/validate.js";
 
 // ── In-memory TTL cache for getSalaryInsights ────────────────────────────────
 // Key: `${skill||"all"}:${role||"all"}:${months}`. Value: { data, expiresAt }.
@@ -61,6 +62,14 @@ export async function getSalaryInsights({ skill, role, months = 12 } = {}) {
   const cacheKey = `${skill || "all"}:${role || "all"}:${months}`;
   const hit = SALARY_CACHE.get(cacheKey);
   if (hit) return hit;
+
+  // Only cache keys built from KNOWN skill/role values. Unknown (arbitrary
+  // user-sprayed) values are still computed + returned below, but never
+  // written to the cache, so junk keys can't accumulate or evict hot entries.
+  // A blank skill/role means "all" (the unfiltered baseline) and is cacheable.
+  const cacheable =
+    (!skill || resolveSkill(skill) !== null) &&
+    (!role || resolveRole(role) !== null);
 
   const since = new Date();
   since.setMonth(since.getMonth() - Number(months));
@@ -142,6 +151,6 @@ export async function getSalaryInsights({ skill, role, months = 12 } = {}) {
     primary: byCurrency[0] ?? null,
   };
 
-  SALARY_CACHE.set(cacheKey, data);
+  if (cacheable) SALARY_CACHE.set(cacheKey, data);
   return data;
 }

@@ -1,6 +1,7 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
+import { resolveSkill } from "../lib/validate.js";
 
 // ── In-memory TTL cache for getSkillPairs ──────────────────────────────────
 // Key: `${normalizedSkill}:${limit}`. Value: { data, expiresAt }.
@@ -38,6 +39,11 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
   const hit = PAIRS_CACHE.get(cacheKey);
   if (hit) return hit;
 
+  // Only cache keys built from a KNOWN skill. Unknown (arbitrary user-sprayed)
+  // values are still computed + returned below, but never written to the
+  // cache, so junk keys can't accumulate or evict hot entries.
+  const cacheable = resolveSkill(normalized) !== null;
+
   // Deduplicated baseCount: aggregate rather than countDocuments so we can
   // prepend the dedupe stages. This ensures the denominator matches the counts
   // computed in the pairs pipeline below.
@@ -50,7 +56,7 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
 
   if (baseCount === 0) {
     const result = { skill: normalized, baseCount: 0, pairs: [] };
-    PAIRS_CACHE.set(cacheKey, result);
+    if (cacheable) PAIRS_CACHE.set(cacheKey, result);
     return result;
   }
 
@@ -72,6 +78,6 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
   }));
 
   const result = { skill: normalized, baseCount, pairs };
-  PAIRS_CACHE.set(cacheKey, result);
+  if (cacheable) PAIRS_CACHE.set(cacheKey, result);
   return result;
 }
