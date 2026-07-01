@@ -1,6 +1,7 @@
 import Job from "../models/Job.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
+import { resolveSkill, resolveRole } from "../lib/validate.js";
 
 // ── In-memory TTL cache for getTopCompanies ─────────────────────────────────
 // Key: `${role||"all"}:${skill||"all"}:${months}:${limit}`. Value: { data, expiresAt }.
@@ -49,6 +50,14 @@ export async function getTopCompanies({
   const cacheKey = `${role || "all"}:${skill || "all"}:${months}:${limit}`;
   const hit = COMPANIES_CACHE.get(cacheKey);
   if (hit) return hit;
+
+  // Only cache keys built from KNOWN skill/role values. Unknown (arbitrary
+  // user-sprayed) values are still computed + returned below, but never
+  // written to the cache, so junk keys can't accumulate or evict hot entries.
+  // A blank skill/role means "all" (the unfiltered baseline) and is cacheable.
+  const cacheable =
+    (!skill || resolveSkill(skill) !== null) &&
+    (!role || resolveRole(role) !== null);
 
   // Build the match stage.
   const since = new Date();
@@ -102,6 +111,6 @@ export async function getTopCompanies({
     };
   });
 
-  COMPANIES_CACHE.set(cacheKey, companies);
+  if (cacheable) COMPANIES_CACHE.set(cacheKey, companies);
   return companies;
 }

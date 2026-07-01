@@ -52,6 +52,10 @@ router.get("/:name", async (req, res, next) => {
       return res.json(hit);
     }
 
+    // `name` is already the canonical output of resolveSkill() above, so the
+    // cache key can only ever contain a known-taxonomy skill: an unknown skill
+    // is rejected with 400 before we reach here and never reaches the cache.
+
     const since = sinceDate(months);
     const baseMatch = { requiredSkills: name, postedAt: { $gte: since } };
     const windowMatch = { postedAt: { $gte: since } };
