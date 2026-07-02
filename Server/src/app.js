@@ -722,25 +722,49 @@ app.use("/api/watchlist", watchlistLimiter, watchlistRouter);
 // ── Skill-Gap Advisor (auth-gated) ─────────────────────────────────────────
 // Returns skills that co-occur most often with the user's watchlist but that
 // they don't already track. Auth-gated: userId comes from the Clerk JWT only.
-app.get("/api/skill-gap", readLimiter, requireAuth(), async (req, res, next) => {
+async function skillGapRoiHandler(req, res, next) {
   try {
     const userId = req.auth.userId;
+
+    // months + limit: clamp (limit in [1,50] per the route contract).
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
-    const limit = Math.min(Math.max(Number(req.query.limit) || 6, 1), 20);
+    const rawLimit = req.query.limit ?? (req.body && req.body.limit);
+    const limit = Math.min(Math.max(Number(rawLimit) || 12, 1), 50);
 
-    const items = await Watchlist.find({ userId }).lean();
-    const watchedSkills = items.map((i) => i.skill);
-
-    if (watchedSkills.length === 0) {
-      return res.json({ ok: true, empty: true, gaps: [] });
+    // role: optional, must resolve to a known bucket when present (else 400).
+    let role = null;
+    const rawRole = req.query.role ?? (req.body && req.body.role);
+    if (rawRole != null && String(rawRole).trim() !== "") {
+      role = resolveRole(rawRole);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
     }
 
-    const gaps = await getSkillGap(watchedSkills, { limit, months });
-    res.json({ ok: true, empty: false, gaps });
+    // knownSkills: default to the caller's own watchlist (authoritative, read by
+    // verified userId). POST may override with an explicit array; a non-array
+    // body value is structurally invalid → 400. Unknown skills are dropped
+    // inside computeSkillGapRoi (resolveSkill), never rejected here.
+    let knownSkills;
+    if (req.body && req.body.knownSkills !== undefined) {
+      if (!Array.isArray(req.body.knownSkills)) {
+        return res.status(400).json({ ok: false, error: "knownSkills must be an array of skill names." });
+      }
+      knownSkills = req.body.knownSkills;
+    } else {
+      const items = await Watchlist.find({ userId }).lean();
+      knownSkills = items.map((i) => i.skill);
+    }
+
+    const data = await computeSkillGapRoi({ knownSkills, role, limit, months });
+    res.json({ ok: true, ...data });
   } catch (err) {
     next(err);
   }
-});
+}
+
+app.get("/api/skill-gap", readLimiter, requireAuth(), skillGapRoiHandler);
+app.post("/api/skill-gap", readLimiter, requireAuth(), skillGapRoiHandler);
 
 // ── Résumé Gap Analyser (public) ───────────────────────────────────────────
 // POST /api/resume-gap — accepts { text } (the raw résumé text), returns the
