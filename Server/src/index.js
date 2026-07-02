@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import app from "./app.js";
+import { ensureSkillSnapshotIndexes } from "./lib/skillSnapshotIndexes.js";
 
 // ── Startup validation ─────────────────────────────────────────────────────
 const IS_PROD = process.env.NODE_ENV === "production";
@@ -54,8 +55,15 @@ if (IS_PROD && !process.env.CLIENT_ORIGIN) {
 const PORT = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log("✅ Mongo connected");
+
+    // One-time, NON-FATAL index migration: drop the legacy non-partial
+    // capturedAt TTL (if the deployed DB still has it) so it can never expire
+    // the day-bucketed momentum rows, then converge on the schema indexes.
+    // Awaited so it completes before we serve traffic; it never throws.
+    await ensureSkillSnapshotIndexes();
+
     const server = app.listen(PORT, () => {
       console.log(`✅ API running on http://localhost:${PORT}`);
     });
