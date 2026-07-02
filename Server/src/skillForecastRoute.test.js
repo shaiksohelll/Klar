@@ -71,11 +71,11 @@ describe("/api/skills/forecast — valid requests", () => {
     );
   });
 
-  it("forwards a valid horizon + role", async () => {
-    const res = await request(app).get("/api/skills/forecast?horizon=12&role=backend&limit=10");
+  it("forwards a valid horizon + limit to the engine", async () => {
+    const res = await request(app).get("/api/skills/forecast?horizon=12&limit=10");
     expect(res.status).toBe(200);
     expect(computeSkillForecast).toHaveBeenCalledWith(
-      expect.objectContaining({ horizonMonths: 12, role: "backend", limit: 10 }),
+      expect.objectContaining({ horizonMonths: 12, limit: 10 }),
     );
   });
 });
@@ -105,7 +105,10 @@ describe("/api/skills/forecast — invalid requests (400, engine not called)", (
     expect(computeSkillForecast).not.toHaveBeenCalled();
   });
 
-  it("400s on an unknown role", async () => {
+  // Role does NOT affect forecast results (snapshots have no role dimension),
+  // but the route still VALIDATES it for a stable, momentum-consistent API
+  // contract, so an unknown role is a 400 rather than a silent no-op.
+  it("400s on an unknown role (validation only; role does not change results)", async () => {
     const res = await request(app).get("/api/skills/forecast?role=wizard");
     expect(res.status).toBe(400);
     expect(computeSkillForecast).not.toHaveBeenCalled();
