@@ -70,7 +70,7 @@ function makeJob({
 function snap({ skill, date, postingCount, salaryMidpointMedian = null }) {
   return { skill, date, postingCount, salaryMidpointMedian };
 }
-const ANCHOR = new Date("2026-06-15T00:00:00.000Z");
+const ANCHOR = new Date();
 function dayAgo(n) {
   const d = new Date(ANCHOR);
   d.setUTCDate(d.getUTCDate() - n);
@@ -119,10 +119,10 @@ describe("computeSkillGapRoi — ranking", () => {
 
     // Momentum: react rising strongly, php flat.
     await SkillSnapshot.create([
-      snap({ skill: "react", date: dayAgo(45), postingCount: 8 }),
-      snap({ skill: "react", date: dayAgo(0), postingCount: 16 }), // +100%
-      snap({ skill: "php", date: dayAgo(45), postingCount: 6 }),
-      snap({ skill: "php", date: dayAgo(0), postingCount: 6 }), // flat
+      snap({ skill: "react", date: dayAgo(135), postingCount: 8 }),  // prior 3-mo window
+      snap({ skill: "react", date: dayAgo(10), postingCount: 16 }),  // recent window → +100%
+      snap({ skill: "php", date: dayAgo(135), postingCount: 6 }),
+      snap({ skill: "php", date: dayAgo(10), postingCount: 6 }),     // flat
     ]);
 
     const res = await computeSkillGapRoi({ knownSkills: ["node.js"], limit: 20 });
