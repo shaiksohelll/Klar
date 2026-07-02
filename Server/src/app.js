@@ -381,14 +381,46 @@ app.get("/api/skills/momentum", readLimiter, async (req, res, next) => {
   }
 });
 
+// ── Skill forecast (Foresight: projected demand) ──────────────────────────
+// Public, read-only — same posture as /api/skills/momentum. Fits a deterministic
+// least-squares linear trend over each skill's banked postingCount history and
+// projects demand `horizon` months out. Validates horizon [1,24], limit [1,50],
+// role via resolveRole (null allowed); 400 on invalid rather than a silent
+// clamp. Cold-start returns insufficientHistory:true (never an error). Does NOT
+// alter /api/skills/momentum or /api/skills/trending.
+app.get("/api/skills/forecast", readLimiter, async (req, res, next) => {
+  try {
+    // role — blank means "all"; an unknown non-blank role is a 400.
+    let role = null;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+
+    // horizon — integer months in [1, 24].
+    const rawHorizon = req.query.horizon == null || String(req.query.horizon).trim() === "" ? "6" : String(req.query.horizon).trim();
+    const horizonMonths = Number(rawHorizon);
+    if (!Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 24) {
+      return res.status(400).json({ ok: false, error: "Invalid horizon. Use an integer number of months in [1, 24]." });
+    }
+
+    // limit — integer in [1, 50].
+    const rawLimit = req.query.limit == null || String(req.query.limit).trim() === "" ? "20" : String(req.query.limit).trim();
+    const limit = Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+      return res.status(400).json({ ok: false, error: "Invalid limit. Use an integer in [1, 50]." });
+    }
+
+    const data = await computeSkillForecast({ role, horizonMonths, limit });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Cache pre-warm ───────────────────────────────────────────────────────
-// Public, read-only forecast endpoint. Fits a deterministic least-squares
-// linear trend over each skill's banked postingCount history and projects
-// demand `horizon` months out. Validates horizon [1,24], limit [1,50], role via
-// resolveRole (null allowed); 400 on invalid rather than a silent clamp.
-// Cold-start returns insufficientHistory:true (never an error). Does NOT alter
-// /api/skills/momentum or /api/skills/trending.
-appForecastRouteAnchor:
 // Lightweight unauthenticated endpoint that pre-warms all time-window caches
 // used by the UI (3M / 6M / 12M). Idempotent: a cache hit is a sub-ms no-op.
 // Intended for uptime-monitor pings on Render's free tier to prevent cold
