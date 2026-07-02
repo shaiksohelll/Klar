@@ -4,9 +4,12 @@ const SkillSnapshotSchema = new mongoose.Schema({
   skill: { type: String, required: true, trim: true },
   count: { type: Number, required: true }, // trailing 12-month total (matches Demand page)
   count30: { type: Number, required: true }, // trailing 30-day total (for velocity)
-  capturedAt: { type: Date, required: true, default: Date.now },
+  // capturedAt drives the 90-day velocity TTL below. Optional so a momentum-only
+  // upsert (keyed on { skill, date }) is valid without a capturedAt; the ingest
+  // orchestrator always sets it on the combined row, so in practice it is present.
+  capturedAt: { type: Date, default: Date.now },
 
-  // ── Momentum (Trends) fields ──────────────────────────────────────────────
+  // ── Momentum (Trends) fields ───────────────────────────────────────────────
   // Added for the Skill Momentum feature. These are day-bucketed so the daily
   // ingest cron banks exactly one row per (skill, date). Older rows recorded
   // before this migration simply lack these fields; computeSkillMomentum()
@@ -39,9 +42,16 @@ SkillSnapshotSchema.index(
 );
 // Range scans over the day-bucketed series ("all rows in the last N months").
 SkillSnapshotSchema.index({ date: -1 });
-// Auto-expire snapshots older than 90 days. On first run, any existing docs
-// older than 90 days will be purged by MongoDB's TTL thread — this is expected
-// and safe; the cron re-fills snapshots on the next run.
-SkillSnapshotSchema.index({ capturedAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 });
+// Auto-expire ONLY legacy velocity-only snapshots older than 90 days. The
+// partial filter excludes day-bucketed momentum rows (those with a `date`) so
+// the momentum data moat accrues indefinitely — that long history is the whole
+// point of the feature and must survive the TTL sweep.
+SkillSnapshotSchema.index(
+  { capturedAt: 1 },
+  {
+    expireAfterSeconds: 60 * 60 * 24 * 90,
+    partialFilterExpression: { date: { $exists: false } },
+  },
+);
 
 export default mongoose.model("SkillSnapshot", SkillSnapshotSchema);
