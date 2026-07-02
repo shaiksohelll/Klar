@@ -11,6 +11,7 @@ import "./index.css";
 
 const DemandPage = lazy(() => import("./pages/DemandPage"));
 const TrendsPage = lazy(() => import("./pages/TrendsPage"));
+const ForecastPage = lazy(() => import("./pages/ForecastPage"));
 const HiringPage = lazy(() => import("./pages/HiringPage"));
 const WatchlistPage = lazy(() => import("./pages/WatchlistPage"));
 const ResumePage = lazy(() => import("./pages/ResumePage"));
@@ -49,6 +50,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route element={<App />}>
               <Route index element={<DemandPage />} />
               <Route path="trends" element={<TrendsPage />} />
+              <Route path="forecast" element={<ForecastPage />} />
               <Route path="atlas" element={<AtlasPage />} />
               <Route path="relocate" element={<RelocatePage />} />
               <Route path="compare" element={<ComparePage />} />
