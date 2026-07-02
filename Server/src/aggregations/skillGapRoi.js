@@ -5,6 +5,7 @@ import { computeSkillMomentum } from "./skillMomentum.js";
 import { createTtlCache } from "../lib/ttlCache.js";
 import { resolveSkill, resolveRole } from "../lib/validate.js";
 import { SKILL_ALIASES } from "../lib/skills.js";
+import { displayName } from "../lib/displayName.js";
 
 // ══ Skill-Gap ROI scoring (the "Learn Next" brain) ═══════════════════════════
 // Fuses three EXISTING Klar assets — live momentum, disclosed-INR salary lift,
@@ -25,6 +26,16 @@ const W_AFFINITY = 0.20; // how adjacent it is to what they know (learnability/p
 // ── Normalization caps (values at/above the cap map to a normalized 1.0) ─────
 const MOMENTUM_CAP_PCT = 50; // +50% growth (or more) is treated as maximal momentum
 const SALARY_LIFT_CAP_PCT = 60; // +60% median lift (or more) is treated as maximal lift
+
+// ── Falling-skill penalty (future-proofing guard) ────────────────────────────
+// Positive momentum already lifts roiScore via W_MOMENTUM. But treating negative
+// momentum as merely neutral (0) lets a HIGH-DEMAND skill in freefall still top
+// "Learn Next" — wrong for a tool meant to future-proof a career. So a candidate
+// whose momentumPct is strongly negative (at/below the threshold) gets its whole
+// roiScore multiplied by the penalty factor, ranking it BELOW an otherwise-equal
+// flat or rising skill. Mild dips (above the threshold) are left neutral.
+const MOMENTUM_PENALTY_THRESHOLD_PCT = -10; // momentumPct at/below this = "sharply falling"
+const MOMENTUM_PENALTY_FACTOR = 0.7; // multiply roiScore by this when sharply falling
 
 // ── Badge thresholds (below these, the factor is real but not worth a badge) ──
 const MOMENTUM_BADGE_MIN_PCT = 5; // only badge momentum once it is clearly rising
@@ -185,6 +196,10 @@ export async function computeSkillGapRoi({
     const baseline = median((baselineMedians || []).filter((n) => typeof n === "number"));
 
     // ── Candidate set: top-demand skills the user does NOT already know ──────
+    // getAllSkills() returns items shaped { skill, demand, remoteCount,
+    // remoteShare } ALREADY sorted by `demand` (job volume) DESC, so `s.demand`
+    // is the real volume field and slicing the head takes the most in-demand
+    // skills. (Verified against trendingSkills.getAllSkills.)
     const candidatePool = (allSkills || [])
       .filter((s) => !knownSet.has(s.skill))
       .slice(0, CANDIDATE_POOL);
@@ -233,11 +248,17 @@ export async function computeSkillGapRoi({
       const affinity = affinityBySkill.get(s.skill) || 0;
       const affinityNorm = maxAffinity > 0 ? clamp01(affinity / maxAffinity) : 0;
 
-      const roiScore =
+      let roiScore =
         W_DEMAND * demandNorm +
         W_MOMENTUM * momentumNorm +
         W_SALARY * salaryNorm +
         W_AFFINITY * affinityNorm;
+
+      // Down-weight sharply-falling skills so a high-demand skill in freefall
+      // cannot outrank an equivalent flat/rising one (see constant comments).
+      if (momentumPct != null && momentumPct <= MOMENTUM_PENALTY_THRESHOLD_PCT) {
+        roiScore *= MOMENTUM_PENALTY_FACTOR;
+      }
 
       // ── reasons[] — human-readable WHY badges; omit any factor that is absent
       //    or below its badge threshold (so we never show a hollow/fake badge).
@@ -250,7 +271,10 @@ export async function computeSkillGapRoi({
       }
       const partner = topPartnerBySkill.get(s.skill);
       if (partner && partner.percentage >= AFFINITY_BADGE_MIN) {
-        reasons.push(`🔗 pairs with your ${partner.known}`);
+        // Format the partner skill through the shared displayName helper so the
+        // pre-baked badge reads "Node.js", not the raw canonical "node.js",
+        // matching the client-rendered row title.
+        reasons.push(`🔗 pairs with your ${displayName(partner.known)}`);
       }
 
       return {
