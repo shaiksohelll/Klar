@@ -7,6 +7,7 @@ import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { ingestAdzuna } from "./ingest/adzuna.js";
 import { ingestJSearch } from "./ingest/jsearch.js";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
+import { computeSkillMomentum } from "./aggregations/skillMomentum.js";
 import { getSkillGap } from "./aggregations/skillGap.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
@@ -336,6 +337,44 @@ app.get("/api/skills/all", readLimiter, async (req, res, next) => {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const skills = await getAllSkills({ months });
     res.json({ ok: true, skills });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Skill momentum (Trends: rising vs falling) ────────────────────────────
+// Public, read-only. Compares the latest snapshot window against the prior
+// window of equal length. Validates window [1,24], limit [1,50], role via
+// resolveRole (null allowed). Cold-start returns insufficientHistory:true
+// rather than an error. Does NOT alter /api/skills/trending.
+app.get("/api/skills/momentum", readLimiter, async (req, res, next) => {
+  try {
+    // role — blank means "all"; an unknown non-blank role is a 400.
+    let role = null;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+
+    // window — integer months in [1, 24]. Reject non-numeric / out-of-range
+    // explicitly (400) rather than silently clamping, per the route contract.
+    const rawWindow = req.query.window == null || String(req.query.window).trim() === "" ? "3" : String(req.query.window).trim();
+    const windowMonths = Number(rawWindow);
+    if (!Number.isInteger(windowMonths) || windowMonths < 1 || windowMonths > 24) {
+      return res.status(400).json({ ok: false, error: "Invalid window. Use an integer number of months in [1, 24]." });
+    }
+
+    // limit — integer in [1, 50].
+    const rawLimit = req.query.limit == null || String(req.query.limit).trim() === "" ? "20" : String(req.query.limit).trim();
+    const limit = Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+      return res.status(400).json({ ok: false, error: "Invalid limit. Use an integer in [1, 50]." });
+    }
+
+    const data = await computeSkillMomentum({ windowMonths, role, limit });
+    res.json({ ok: true, ...data });
   } catch (err) {
     next(err);
   }

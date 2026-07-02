@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import app from "./app.js";
+import { ensureSkillSnapshotIndexes } from "./lib/skillSnapshotIndexes.js";
 
 // ── Startup validation ─────────────────────────────────────────────────────
 const IS_PROD = process.env.NODE_ENV === "production";
@@ -53,9 +54,26 @@ if (IS_PROD && !process.env.CLIENT_ORIGIN) {
 // ── DB connect + listen ────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => {
+  // autoIndex is FALSE in production so Mongoose's automatic background index
+  // build can never race or conflict with ensureSkillSnapshotIndexes() (e.g.
+  // trying to (re)build the stale non-partial capturedAt_1 index while the
+  // migration is dropping/replacing it). In prod the migration below is the
+  // SINGLE source of index truth. In dev/test autoIndex stays ON so local runs
+  // and the in-memory-Mongo index tests still build indexes automatically.
+  .connect(process.env.MONGODB_URI, {
+    autoIndex: process.env.NODE_ENV !== "production",
+  })
+  .then(async () => {
     console.log("✅ Mongo connected");
+
+    // Boot order: connect → run migration → listen.
+    // One-time, NON-FATAL index migration: drop the legacy non-partial
+    // capturedAt TTL (if the deployed DB still has it) so it can never expire
+    // the day-bucketed momentum rows, then syncIndexes to converge on the
+    // schema indexes. Awaited so it completes BEFORE we accept traffic; it
+    // never throws, so boot always proceeds even if index maintenance hiccups.
+    await ensureSkillSnapshotIndexes();
+
     const server = app.listen(PORT, () => {
       console.log(`✅ API running on http://localhost:${PORT}`);
     });

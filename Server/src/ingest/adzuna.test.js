@@ -10,6 +10,14 @@ vi.hoisted(() => {
   process.env.ADZUNA_APP_KEY = "test-key";
 });
 
+// Controllable mock of the momentum snapshot writer. Defaults to a resolved
+// no-op so the salaryDisclosed cases are unaffected; the non-fatal test sets
+// mockRejectedValueOnce to prove a throw here can't abort the ingest run.
+const { recordSkillMomentumSnapshot } = vi.hoisted(() => ({
+  recordSkillMomentumSnapshot: vi.fn().mockResolvedValue({ ok: true, skills: 0 }),
+}));
+vi.mock("./snapshot.js", () => ({ recordSkillMomentumSnapshot }));
+
 import Job from "../models/Job.js";
 import { ingestAdzuna } from "./adzuna.js";
 
@@ -111,5 +119,23 @@ describe("ingestAdzuna — salaryDisclosed coercion", () => {
     ]);
     const doc = await Job.findOne({ externalId: "none" }).lean();
     expect(doc.salaryDisclosed).toBe(false);
+  });
+});
+
+describe("ingestAdzuna — momentum snapshot is non-fatal", () => {
+  it("stays green even when the momentum snapshot write throws", async () => {
+    // Belt-and-braces: even if the helper somehow throws (it normally swallows
+    // its own errors), ingestAdzuna must catch it and complete the run.
+    recordSkillMomentumSnapshot.mockRejectedValueOnce(new Error("snapshot boom"));
+
+    stubFetch([rawJob({ id: "green-1", salary_min: 100000, salary_is_predicted: 0 })]);
+    const result = await ingestAdzuna({ what: "backend developer", country: "in", pages: 1 });
+
+    // The run completed and returned its normal summary despite the throw.
+    expect(result).toMatchObject({ fetched: expect.any(Number), totalInDb: expect.any(Number) });
+    expect(recordSkillMomentumSnapshot).toHaveBeenCalled();
+    // The job itself was still written — ingestion did its real work.
+    const doc = await Job.findOne({ externalId: "green-1" }).lean();
+    expect(doc).toBeTruthy();
   });
 });

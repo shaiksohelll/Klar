@@ -8,6 +8,7 @@ import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
+import { clearMomentumCache } from "../aggregations/skillMomentum.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
 //
@@ -244,6 +245,7 @@ export async function ingestJSearch({
   clearCompaniesCache();
   clearSalaryCache();
   clearAtlasCache();
+  clearMomentumCache();
 
   const summary = {
     requested: queries.length,

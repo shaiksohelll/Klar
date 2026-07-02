@@ -11,6 +11,7 @@ import Brand from "../Brand";
 // Routes are listed in a fixed order and never reordered.
 const ROUTES = [
   { to: "/", label: "Demand", end: true },
+  { to: "/trends", label: "Trends" },
   { to: "/atlas", label: "Atlas" },
   { to: "/relocate", label: "Relocate" },
   { to: "/compare", label: "Compare" },
