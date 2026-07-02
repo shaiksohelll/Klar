@@ -107,8 +107,9 @@ describe("computeSkillGapRoi — ranking", () => {
     for (let i = 0; i < 12; i++) {
       jobs.push(makeJob({ company: `NR-${i}`, skills: ["node.js", "react"], salaryDisclosed: true, midpoint: 2_000_000, currency: "INR" }));
     }
-    // node.js baseline salary (lower than react) so react shows a positive lift.
-    for (let i = 0; i < 8; i++) {
+    // node.js baseline: more standalone @₹10L jobs than the 12 shared @₹20L react
+    // jobs, so node.js's median stays at ₹10L and react shows a real +100% lift.
+    for (let i = 0; i < 16; i++) {
       jobs.push(makeJob({ company: `N-${i}`, skills: ["node.js"], salaryDisclosed: true, midpoint: 1_000_000, currency: "INR" }));
     }
     // php: standalone, low salary, does not co-occur with node.js.
