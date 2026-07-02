@@ -105,8 +105,10 @@ describe("ensureSkillSnapshotIndexes — migration", () => {
     const after = capturedAtTtls(await SkillSnapshot.collection.indexes());
     expect(after).toHaveLength(1);
     expect(after[0].partialFilterExpression).toBeTruthy();
-    // The partial filter scopes the TTL to legacy rows only (date absent).
-    expect(after[0].partialFilterExpression).toMatchObject({ date: { $exists: false } });
+    // The partial filter scopes the TTL to legacy rows only. MongoDB forbids
+    // $exists:false in partial indexes, so we key on capturedAt PRESENCE
+    // (momentum rows carry no capturedAt and are therefore excluded).
+    expect(after[0].partialFilterExpression).toMatchObject({ capturedAt: { $exists: true } });
   });
 
   it("is idempotent: a second run keeps exactly one partial capturedAt TTL", async () => {
