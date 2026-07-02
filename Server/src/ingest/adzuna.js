@@ -10,6 +10,7 @@ import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
+import { recordSkillMomentumSnapshot } from "./snapshot.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -217,6 +218,17 @@ export async function ingestAdzuna({
     }
   } catch (err) {
     console.warn("snapshot failed:", err.message);
+  }
+
+  // ── Skill Momentum snapshot (the data moat) ─────────────────────────────
+  // Banks one dated row per skill so we can compute rising/falling momentum
+  // over time. recordSkillMomentumSnapshot() already catches everything and
+  // never throws; the extra try/catch here is belt-and-braces so a snapshot
+  // failure can NEVER abort the ingest run (ingestion must stay green).
+  try {
+    await recordSkillMomentumSnapshot();
+  } catch (err) {
+    console.warn("momentum snapshot threw unexpectedly:", err?.message);
   }
 
   // ── Invalidate read caches ─────────────────────────────────────────────
