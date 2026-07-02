@@ -2,8 +2,12 @@ import mongoose from "mongoose";
 
 const SkillSnapshotSchema = new mongoose.Schema({
   skill: { type: String, required: true, trim: true },
-  count: { type: Number, required: true }, // trailing 12-month total (matches Demand page)
-  count30: { type: Number, required: true }, // trailing 30-day total (for velocity)
+  // count / count30 are LEGACY velocity fields, only meaningful for the
+  // ephemeral velocity rows written by ingest/adzuna.js (which always set them
+  // explicitly). They are NOT required because day-bucketed momentum rows do not
+  // carry them; making them required would reject a valid momentum document.
+  count: { type: Number }, // trailing 12-month total (matches Demand page)
+  count30: { type: Number }, // trailing 30-day total (for velocity)
   // capturedAt drives the 90-day velocity TTL below. NO default on purpose:
   // day-bucketed momentum rows (keyed on { skill, date }) must NOT carry a
   // capturedAt, or the TTL index could expire the data moat. It is set
@@ -44,15 +48,21 @@ SkillSnapshotSchema.index(
 );
 // Range scans over the day-bucketed series ("all rows in the last N months").
 SkillSnapshotSchema.index({ date: -1 });
-// Auto-expire ONLY legacy velocity-only snapshots older than 90 days. The
-// partial filter excludes day-bucketed momentum rows (those with a `date`) so
-// the momentum data moat accrues indefinitely — that long history is the whole
-// point of the feature and must survive the TTL sweep.
+// Auto-expire ONLY legacy velocity-only snapshots older than 90 days.
+//
+// The partial filter scopes the TTL to rows that HAVE a capturedAt. Day-bucketed
+// momentum rows carry NO capturedAt (see the model field + ingest/snapshot.js),
+// so they are excluded and the momentum data moat accrues indefinitely — that
+// long history is the whole point of the feature and must survive the TTL sweep.
+//
+// IMPORTANT: MongoDB partial indexes support `$exists: true` but NOT
+// `$exists: false` (the latter compiles to `$not`, which is rejected). So we key
+// the filter on capturedAt presence, which is equivalent to "legacy row" here.
 SkillSnapshotSchema.index(
   { capturedAt: 1 },
   {
     expireAfterSeconds: 60 * 60 * 24 * 90,
-    partialFilterExpression: { date: { $exists: false } },
+    partialFilterExpression: { capturedAt: { $exists: true } },
   },
 );
 
