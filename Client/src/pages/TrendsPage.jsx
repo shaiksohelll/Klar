@@ -73,12 +73,13 @@ function MomentumColumn({ title, emoji, items, rising, emptyLabel }) {
 }
 
 export default function TrendsPage() {
-  const { filters, setFilter, clearFilter, clearAll, activeChips } =
-    useFacetFilters();
-  const { role, window: win, remote, disclosed, country, salary } = filters;
-
-  // countries list for the FilterBar dropdown — shared from App.jsx.
-  const { countries } = useOutletContext();
+  // The momentum series is GLOBAL today (no per-role/remote/disclosed/country/
+  // salary dimension in the snapshots yet), so only the time window changes the
+  // results. We therefore expose a window-only control here and ignore the other
+  // facets. FUTURE EXTENSION: once snapshots are recorded per facet, restore the
+  // shared FilterBar and pass the extra params through to /api/skills/momentum.
+  const { filters, setFilter } = useFacetFilters();
+  const { window: win } = filters;
 
   const [risers, setRisers] = useState([]);
   const [fallers, setFallers] = useState([]);
@@ -98,8 +99,8 @@ export default function TrendsPage() {
       setLoading(true);
       setError(null);
       try {
+        // Window is the only dimension the momentum series supports today.
         const params = { window: WINDOW_MONTHS[win], limit: 20 };
-        if (role !== "All") params.role = role.toLowerCase();
         const res = await axios.get(`${API}/api/skills/momentum`, { params });
         if (cancelled) return;
         setRisers(res.data.risers || []);
@@ -115,9 +116,8 @@ export default function TrendsPage() {
     return () => {
       cancelled = true;
     };
-    // remote/disclosed/country/salary are in the deps so chips stay in sync even
-    // though momentum does not yet sub-filter on them (stable contract).
-  }, [role, win, remote, disclosed, country, salary, retryCount]);
+    // Window is the only input that affects momentum results today.
+  }, [win, retryCount]);
 
   return (
     <main className="max-w-6xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-12 relative z-10">
@@ -140,14 +140,38 @@ export default function TrendsPage() {
         )}
       </section>
 
-      <FilterBar
-        filters={filters}
-        setFilter={setFilter}
-        countries={countries}
-        layoutPrefix="trends"
-      />
-
-      <FacetChips chips={activeChips} clearFilter={clearFilter} clearAll={clearAll} />
+      {/* Window-only control. Momentum is global today, so no role/remote/etc
+          filters here — showing controls that do nothing would mislead. */}
+      <section className="flex justify-center border-b border-[var(--border)] pb-6">
+        <div
+          className="flex bg-[var(--panel)] border border-[var(--border)] rounded-full p-1"
+          role="group"
+          aria-label="Time window"
+        >
+          {WINDOWS.map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => setFilter("window", w)}
+              aria-pressed={win === w}
+              className={`relative px-4 py-1.5 rounded-full font-mono text-xs uppercase tracking-wider transition-colors ${
+                win === w
+                  ? "text-white"
+                  : "text-[var(--muted-2)] hover:text-[var(--muted)]"
+              }`}
+            >
+              {win === w && (
+                <motion.div
+                  layoutId="trendsActiveWindow"
+                  className="absolute inset-0 bg-[var(--accent)] rounded-full -z-10"
+                  transition={{ type: "spring", stiffness: 180, damping: 22 }}
+                />
+              )}
+              {w}
+            </button>
+          ))}
+        </div>
+      </section>
 
       {error ? (
         /* ERROR — what/why/next; retry is not colour-only. */
