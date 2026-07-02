@@ -720,8 +720,11 @@ app.get("/api/relocation", readLimiter, (req, res, next) => {
 app.use("/api/watchlist", watchlistLimiter, watchlistRouter);
 
 // ── Skill-Gap Advisor (auth-gated) ─────────────────────────────────────────
-// Returns skills that co-occur most often with the user's watchlist but that
-// they don't already track. Auth-gated: userId comes from the Clerk JWT only.
+// Ranked skill recommendations scored by a transparent blend of live demand,
+// momentum, disclosed-INR salary lift, and co-occurrence affinity with what the
+// user already knows. Auth-gated: userId comes from the Clerk JWT only (auth
+// contract unchanged). GET uses the caller's watchlist as knownSkills; POST may
+// additionally supply an explicit { knownSkills: [...] } array.
 async function skillGapRoiHandler(req, res, next) {
   try {
     const userId = req.auth.userId;
