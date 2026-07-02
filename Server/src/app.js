@@ -8,6 +8,7 @@ import { ingestAdzuna } from "./ingest/adzuna.js";
 import { ingestJSearch } from "./ingest/jsearch.js";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { computeSkillMomentum } from "./aggregations/skillMomentum.js";
+import { computeSkillForecast } from "./aggregations/skillForecast.js";
 import { computeSkillGapRoi } from "./aggregations/skillGapRoi.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
@@ -381,6 +382,13 @@ app.get("/api/skills/momentum", readLimiter, async (req, res, next) => {
 });
 
 // ── Cache pre-warm ───────────────────────────────────────────────────────
+// Public, read-only forecast endpoint. Fits a deterministic least-squares
+// linear trend over each skill's banked postingCount history and projects
+// demand `horizon` months out. Validates horizon [1,24], limit [1,50], role via
+// resolveRole (null allowed); 400 on invalid rather than a silent clamp.
+// Cold-start returns insufficientHistory:true (never an error). Does NOT alter
+// /api/skills/momentum or /api/skills/trending.
+appForecastRouteAnchor:
 // Lightweight unauthenticated endpoint that pre-warms all time-window caches
 // used by the UI (3M / 6M / 12M). Idempotent: a cache hit is a sub-ms no-op.
 // Intended for uptime-monitor pings on Render's free tier to prevent cold
