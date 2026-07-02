@@ -15,6 +15,10 @@ export const ROLES = [
 ];
 export const WINDOWS = ["3M", "6M", "12M"];
 export const WINDOW_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
+// Forecast horizons (Foresight view). Kept small + honest: projecting further
+// than banked history reasonably supports would over-claim.
+export const HORIZONS = ["3M", "6M", "12M"];
+export const HORIZON_MONTHS = { "3M": 3, "6M": 6, "12M": 12 };
 const REMOTE_VALUES = new Set(["remote", "onsite"]);
 
 // ── Normalizers ──────────────────────────────────────────────────────────────
@@ -30,6 +34,15 @@ export function normalizeWindow(raw) {
   const upper = String(raw).toUpperCase();
   if (WINDOWS.includes(upper)) return upper;
   return mapped[raw] || "12M";
+}
+
+// Forecast horizon. Default 6M (the API default). Same mapping style as window.
+export function normalizeHorizon(raw) {
+  if (!raw) return "6M";
+  const mapped = { 3: "3M", 6: "6M", 12: "12M" };
+  const upper = String(raw).toUpperCase();
+  if (HORIZONS.includes(upper)) return upper;
+  return mapped[raw] || "6M";
 }
 
 export function normalizeRemote(raw) {
@@ -68,6 +81,7 @@ export default function useFacetFilters() {
     return {
       role: normalizeRole(searchParams.get("role")),
       window: normalizeWindow(searchParams.get("w")),
+      horizon: normalizeHorizon(searchParams.get("h")),
       remote: normalizeRemote(searchParams.get("remote")),
       disclosed: normalizeDisclosed(searchParams.get("disclosed")),
       country: normalizeCountry(searchParams.get("country")),
@@ -80,12 +94,13 @@ export default function useFacetFilters() {
     (key, value) => {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        const paramKey = key === "window" ? "w" : key;
+        const paramKey = key === "window" ? "w" : key === "horizon" ? "h" : key;
 
         // Omit default values to keep URLs clean.
         const isDefault =
           (key === "role" && (!value || value === "All")) ||
           (key === "window" && (!value || value === "12M")) ||
+          (key === "horizon" && (!value || value === "6M")) ||
           (key === "remote" && !value) ||
           (key === "disclosed" && !value) ||
           (key === "country" && !value) ||
@@ -99,7 +114,7 @@ export default function useFacetFilters() {
               ? "1"
               : key === "role"
                 ? value.toLowerCase()
-                : key === "window"
+                : key === "window" || key === "horizon"
                   ? String(value).replace(/M$/i, "")
                   : value;
           next.set(paramKey, urlValue);

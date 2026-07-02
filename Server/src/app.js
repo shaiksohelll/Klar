@@ -8,6 +8,7 @@ import { ingestAdzuna } from "./ingest/adzuna.js";
 import { ingestJSearch } from "./ingest/jsearch.js";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { computeSkillMomentum } from "./aggregations/skillMomentum.js";
+import { computeSkillForecast } from "./aggregations/skillForecast.js";
 import { computeSkillGapRoi } from "./aggregations/skillGapRoi.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
@@ -374,6 +375,49 @@ app.get("/api/skills/momentum", readLimiter, async (req, res, next) => {
     }
 
     const data = await computeSkillMomentum({ windowMonths, role, limit });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Skill forecast (Foresight: projected demand) ──────────────────────────
+// Public, read-only — same posture as /api/skills/momentum. Fits a deterministic
+// least-squares linear trend over each skill's banked postingCount history and
+// projects demand `horizon` months out. Validates horizon [1,24], limit [1,50],
+// role via resolveRole (null allowed); 400 on invalid rather than a silent
+// clamp. Cold-start returns insufficientHistory:true (never an error). Does NOT
+// alter /api/skills/momentum or /api/skills/trending.
+app.get("/api/skills/forecast", readLimiter, async (req, res, next) => {
+  try {
+    // role — blank means "all"; an unknown non-blank role is a 400. NOTE: like
+    // /api/skills/momentum, snapshots have no role dimension and getAllSkills
+    // takes no role, so role only affects the cache key — it does NOT filter
+    // results. Kept for a stable, momentum-consistent contract; the client
+    // exposes no role control for Foresight.
+    let role = null;
+    if (req.query.role != null && String(req.query.role).trim() !== "") {
+      role = resolveRole(req.query.role);
+      if (!role) {
+        return res.status(400).json({ ok: false, error: `Unknown role. Valid: ${KNOWN_ROLES.join(", ")}` });
+      }
+    }
+
+    // horizon — integer months in [1, 24].
+    const rawHorizon = req.query.horizon == null || String(req.query.horizon).trim() === "" ? "6" : String(req.query.horizon).trim();
+    const horizonMonths = Number(rawHorizon);
+    if (!Number.isInteger(horizonMonths) || horizonMonths < 1 || horizonMonths > 24) {
+      return res.status(400).json({ ok: false, error: "Invalid horizon. Use an integer number of months in [1, 24]." });
+    }
+
+    // limit — integer in [1, 50].
+    const rawLimit = req.query.limit == null || String(req.query.limit).trim() === "" ? "20" : String(req.query.limit).trim();
+    const limit = Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+      return res.status(400).json({ ok: false, error: "Invalid limit. Use an integer in [1, 50]." });
+    }
+
+    const data = await computeSkillForecast({ role, horizonMonths, limit });
     res.json({ ok: true, ...data });
   } catch (err) {
     next(err);
