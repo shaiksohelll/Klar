@@ -390,7 +390,11 @@ app.get("/api/skills/momentum", readLimiter, async (req, res, next) => {
 // alter /api/skills/momentum or /api/skills/trending.
 app.get("/api/skills/forecast", readLimiter, async (req, res, next) => {
   try {
-    // role — blank means "all"; an unknown non-blank role is a 400.
+    // role — blank means "all"; an unknown non-blank role is a 400. NOTE: like
+    // /api/skills/momentum, snapshots have no role dimension and getAllSkills
+    // takes no role, so role only affects the cache key — it does NOT filter
+    // results. Kept for a stable, momentum-consistent contract; the client
+    // exposes no role control for Foresight.
     let role = null;
     if (req.query.role != null && String(req.query.role).trim() !== "") {
       role = resolveRole(req.query.role);
