@@ -10,6 +10,7 @@ import { clearDetailCache } from "../routes/skillDetail.js";
 import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
+import { clearMomentumCache } from "../aggregations/skillMomentum.js";
 import { recordSkillMomentumSnapshot } from "./snapshot.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
@@ -240,6 +241,7 @@ export async function ingestAdzuna({
   clearCompaniesCache();
   clearSalaryCache();
   clearAtlasCache();
+  clearMomentumCache();
   console.log("🗑️  Read caches cleared after ingest");
 
   return {
