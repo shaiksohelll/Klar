@@ -196,6 +196,10 @@ export async function computeSkillGapRoi({
     const baseline = median((baselineMedians || []).filter((n) => typeof n === "number"));
 
     // ── Candidate set: top-demand skills the user does NOT already know ──────
+    // getAllSkills() returns items shaped { skill, demand, remoteCount,
+    // remoteShare } ALREADY sorted by `demand` (job volume) DESC, so `s.demand`
+    // is the real volume field and slicing the head takes the most in-demand
+    // skills. (Verified against trendingSkills.getAllSkills.)
     const candidatePool = (allSkills || [])
       .filter((s) => !knownSet.has(s.skill))
       .slice(0, CANDIDATE_POOL);
@@ -244,11 +248,17 @@ export async function computeSkillGapRoi({
       const affinity = affinityBySkill.get(s.skill) || 0;
       const affinityNorm = maxAffinity > 0 ? clamp01(affinity / maxAffinity) : 0;
 
-      const roiScore =
+      let roiScore =
         W_DEMAND * demandNorm +
         W_MOMENTUM * momentumNorm +
         W_SALARY * salaryNorm +
         W_AFFINITY * affinityNorm;
+
+      // Down-weight sharply-falling skills so a high-demand skill in freefall
+      // cannot outrank an equivalent flat/rising one (see constant comments).
+      if (momentumPct != null && momentumPct <= MOMENTUM_PENALTY_THRESHOLD_PCT) {
+        roiScore *= MOMENTUM_PENALTY_FACTOR;
+      }
 
       // ── reasons[] — human-readable WHY badges; omit any factor that is absent
       //    or below its badge threshold (so we never show a hollow/fake badge).
@@ -261,7 +271,10 @@ export async function computeSkillGapRoi({
       }
       const partner = topPartnerBySkill.get(s.skill);
       if (partner && partner.percentage >= AFFINITY_BADGE_MIN) {
-        reasons.push(`🔗 pairs with your ${partner.known}`);
+        // Format the partner skill through the shared displayName helper so the
+        // pre-baked badge reads "Node.js", not the raw canonical "node.js",
+        // matching the client-rendered row title.
+        reasons.push(`🔗 pairs with your ${displayName(partner.known)}`);
       }
 
       return {
