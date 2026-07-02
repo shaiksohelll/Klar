@@ -167,8 +167,10 @@ export async function computeSkillForecast({
   };
 
   try {
-    // Candidate universe + current demand come from the shared, cached
-    // getAllSkills aggregation (items are { skill, demand, ... }, demand-desc).
+    // Candidate universe comes from the shared, cached getAllSkills aggregation
+    // (items are { skill, demand, ... }, demand-desc). We use it ONLY to pick +
+    // order which skills to forecast; the forecast baseline is the observed
+    // series level below, never this job-demand count.
     const allSkills = await getAllSkills({ months: HISTORY_LOOKBACK_MONTHS });
     const candidates = (allSkills || []).slice(0, CANDIDATE_POOL);
     if (candidates.length === 0) return emptyResult;
