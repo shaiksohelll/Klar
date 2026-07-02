@@ -12,9 +12,17 @@ import { resolveRole } from "../lib/validate.js";
 //
 // It is intentionally a simple, fully-auditable statistical model — NOT a
 // black-box "AI". Every input is real banked history; nothing is fabricated.
-// The module reads shared inputs (getAllSkills for the candidate universe +
-// current demand, SkillSnapshot for the series) but NEVER mutates their
-// signatures or the snapshot schema. It never throws.
+// The module reads shared inputs (getAllSkills ONLY to pick/order the candidate
+// universe, SkillSnapshot for the per-day series that is both fitted and used
+// for the current level) but NEVER mutates their signatures or the snapshot
+// schema. It never throws.
+//
+// NOTE ON ROLE: like computeSkillMomentum, day-bucketed snapshots are recorded
+// across ALL roles (SkillSnapshot has no role dimension) and getAllSkills takes
+// no role param, so there is nothing role can honestly filter here. The client
+// therefore exposes no role control for Foresight. The route still accepts +
+// validates `role` for a stable, momentum-consistent contract, but it only
+// affects the cache key — never the results.
 
 // ── History reading window ───────────────────────────────────────────────
 const HISTORY_LOOKBACK_MONTHS = 12; // how far back we read the day-bucketed series to fit the trend
