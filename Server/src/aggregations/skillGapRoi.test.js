@@ -137,7 +137,101 @@ describe("computeSkillGapRoi — ranking", () => {
     // react carries all three WHY badges.
     expect(react.reasons.some((r) => r.includes("rising"))).toBe(true);
     expect(react.reasons.some((r) => r.includes("median"))).toBe(true);
-    expect(react.reasons.some((r) => r.includes("pairs with your node.js"))).toBe(true);
+    expect(react.reasons.some((r) => r.includes("pairs with your Node.js"))).toBe(true);
+  });
+});
+
+describe("computeSkillGapRoi — demand contribution (Fix 1 regression guard)", () => {
+  it("ranks a higher job-volume skill above an equal-on-everything-else lower-volume one", async () => {
+    // Two candidates, react vs vue, with everything held equal EXCEPT job volume:
+    //   - no salary disclosed anywhere  -> salaryLift = 0 for both
+    //   - no momentum snapshots         -> momentum   = 0 for both
+    //   - the user knows nothing        -> affinity   = 0 for both
+    // The ONLY differentiator is demand (job volume). react appears in many more
+    // postings than vue, so it MUST rank strictly higher. If s.demand were read
+    // from the wrong key (undefined -> 0 for all), both would tie at roiScore 0
+    // and this ordering assertion would fail — this is the guard that was missing.
+    const jobs = [];
+    for (let i = 0; i < 20; i++) jobs.push(makeJob({ company: `R-${i}`, skills: ["react"] }));
+    for (let i = 0; i < 3; i++) jobs.push(makeJob({ company: `V-${i}`, skills: ["vue"] }));
+    await Job.create(jobs);
+
+    // knownSkills empty -> zero affinity for every candidate; role null.
+    const res = await computeSkillGapRoi({ knownSkills: [], limit: 20 });
+    const react = res.recommendations.find((r) => r.skill === "react");
+    const vue = res.recommendations.find((r) => r.skill === "vue");
+    expect(react).toBeTruthy();
+    expect(vue).toBeTruthy();
+
+    // Demand carried through to the row is the real job volume, not zero.
+    expect(react.demand).toBe(20);
+    expect(vue.demand).toBe(3);
+
+    // With every other factor equal at 0, the higher-volume skill scores higher
+    // AND ranks higher. A zeroed demand would make these equal.
+    expect(react.roiScore).toBeGreaterThan(vue.roiScore);
+    const rankOf = (skill) => res.recommendations.findIndex((r) => r.skill === skill);
+    expect(rankOf("react")).toBeLessThan(rankOf("vue"));
+  });
+});
+
+describe("computeSkillGapRoi — affinity badge display name (Fix 2)", () => {
+  it("formats the partner skill through displayName in the badge (Node.js, not node.js)", async () => {
+    const jobs = [];
+    for (let i = 0; i < 10; i++) {
+      jobs.push(makeJob({ company: `NR-${i}`, skills: ["node.js", "react"] }));
+    }
+    await Job.create(jobs);
+
+    const res = await computeSkillGapRoi({ knownSkills: ["node.js"], limit: 20 });
+    const react = res.recommendations.find((r) => r.skill === "react");
+    expect(react).toBeTruthy();
+
+    const badge = react.reasons.find((r) => r.includes("pairs with your"));
+    expect(badge).toBeTruthy();
+    // Display name, matching the client-rendered row title.
+    expect(badge).toContain("pairs with your Node.js");
+    // Never the raw canonical id.
+    expect(badge).not.toContain("node.js");
+  });
+});
+
+describe("computeSkillGapRoi — falling-skill penalty (Fix 3)", () => {
+  it("ranks a sharply-falling skill strictly below an equal flat one", async () => {
+    // react and vue: identical job volume, no disclosed salary, and the user
+    // knows nothing (zero affinity for both). The ONLY difference is momentum:
+    //   react  is sharply falling (well below MOMENTUM_PENALTY_THRESHOLD_PCT)
+    //   vue    is flat (deltaPct 0 -> neutral, no penalty)
+    // The falling skill must therefore rank strictly lower.
+    const jobs = [];
+    for (let i = 0; i < 12; i++) jobs.push(makeJob({ company: `R-${i}`, skills: ["react"] }));
+    for (let i = 0; i < 12; i++) jobs.push(makeJob({ company: `V-${i}`, skills: ["vue"] }));
+    await Job.create(jobs);
+
+    // Momentum: react falls hard (-50%), vue flat (0%).
+    await SkillSnapshot.create([
+      snap({ skill: "react", date: dayAgo(135), postingCount: 20 }), // prior window
+      snap({ skill: "react", date: dayAgo(10), postingCount: 10 }),  // recent -> -50%
+      snap({ skill: "vue", date: dayAgo(135), postingCount: 12 }),
+      snap({ skill: "vue", date: dayAgo(10), postingCount: 12 }),    // flat -> 0%
+    ]);
+
+    const res = await computeSkillGapRoi({ knownSkills: [], limit: 20 });
+    const react = res.recommendations.find((r) => r.skill === "react");
+    const vue = res.recommendations.find((r) => r.skill === "vue");
+    expect(react).toBeTruthy();
+    expect(vue).toBeTruthy();
+
+    // react really is captured as sharply falling.
+    expect(react.momentumPct).toBeLessThanOrEqual(-10);
+    // vue is flat/neutral.
+    expect(vue.momentumPct === 0 || vue.momentumPct === null).toBe(true);
+
+    // Penalty bites: the falling skill scores lower and ranks lower despite
+    // identical demand/salary/affinity.
+    expect(react.roiScore).toBeLessThan(vue.roiScore);
+    const rankOf = (skill) => res.recommendations.findIndex((r) => r.skill === skill);
+    expect(rankOf("react")).toBeGreaterThan(rankOf("vue"));
   });
 });
 
@@ -185,7 +279,7 @@ describe("computeSkillGapRoi — affinity", () => {
     expect(react).toBeTruthy();
     expect(graphql).toBeTruthy();
     expect(react.affinity).toBeGreaterThan(graphql.affinity);
-    expect(react.reasons.some((r) => r.includes("pairs with your node.js"))).toBe(true);
+    expect(react.reasons.some((r) => r.includes("pairs with your Node.js"))).toBe(true);
   });
 });
 
