@@ -173,7 +173,6 @@ export async function computeSkillForecast({
     const candidates = (allSkills || []).slice(0, CANDIDATE_POOL);
     if (candidates.length === 0) return emptyResult;
     const candidateSet = new Set(candidates.map((s) => s.skill));
-    const currentBySkill = new Map(candidates.map((s) => [s.skill, s.demand || 0]));
 
     // Read the day-bucketed postingCount series for these skills over the
     // lookback window. Same snapshot-reading idiom as computeSkillMomentum
@@ -216,11 +215,15 @@ export async function computeSkillForecast({
       for (const p of series) byDay.set(dayIndex(p.ms), p.y);
       if (byDay.size < MIN_POINTS_FOR_FORECAST) continue; // guard: too thin to forecast
 
-      const xs = [...byDay.keys()];
+      // Sort day indices ascending so the LAST reading is the most recent.
+      const xs = [...byDay.keys()].sort((a, b) => a - b);
       const ys = xs.map((x) => byDay.get(x));
       const { slope, intercept, r2, stdErr, n } = linearFit(xs, ys);
 
-      const current = currentBySkill.get(skill) ?? ys[ys.length - 1];
+      // `current` is the latest OBSERVED series level, so forecast / changePct /
+      // trajectory all share one basis (getAllSkills demand only picks + orders
+      // the candidate universe; it is NOT the forecast baseline).
+      const current = ys[ys.length - 1];
       const rawForecast = intercept + slope * projectAtDay;
       const forecast = Math.max(0, Math.round(rawForecast)); // demand can't go negative
 
