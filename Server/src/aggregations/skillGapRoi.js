@@ -5,6 +5,7 @@ import { computeSkillMomentum } from "./skillMomentum.js";
 import { createTtlCache } from "../lib/ttlCache.js";
 import { resolveSkill, resolveRole } from "../lib/validate.js";
 import { SKILL_ALIASES } from "../lib/skills.js";
+import { displayName } from "../lib/displayName.js";
 
 // ══ Skill-Gap ROI scoring (the "Learn Next" brain) ═══════════════════════════
 // Fuses three EXISTING Klar assets — live momentum, disclosed-INR salary lift,
@@ -25,6 +26,16 @@ const W_AFFINITY = 0.20; // how adjacent it is to what they know (learnability/p
 // ── Normalization caps (values at/above the cap map to a normalized 1.0) ─────
 const MOMENTUM_CAP_PCT = 50; // +50% growth (or more) is treated as maximal momentum
 const SALARY_LIFT_CAP_PCT = 60; // +60% median lift (or more) is treated as maximal lift
+
+// ── Falling-skill penalty (future-proofing guard) ────────────────────────────
+// Positive momentum already lifts roiScore via W_MOMENTUM. But treating negative
+// momentum as merely neutral (0) lets a HIGH-DEMAND skill in freefall still top
+// "Learn Next" — wrong for a tool meant to future-proof a career. So a candidate
+// whose momentumPct is strongly negative (at/below the threshold) gets its whole
+// roiScore multiplied by the penalty factor, ranking it BELOW an otherwise-equal
+// flat or rising skill. Mild dips (above the threshold) are left neutral.
+const MOMENTUM_PENALTY_THRESHOLD_PCT = -10; // momentumPct at/below this = "sharply falling"
+const MOMENTUM_PENALTY_FACTOR = 0.7; // multiply roiScore by this when sharply falling
 
 // ── Badge thresholds (below these, the factor is real but not worth a badge) ──
 const MOMENTUM_BADGE_MIN_PCT = 5; // only badge momentum once it is clearly rising
