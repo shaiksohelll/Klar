@@ -8,7 +8,7 @@ import { ingestAdzuna } from "./ingest/adzuna.js";
 import { ingestJSearch } from "./ingest/jsearch.js";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { computeSkillMomentum } from "./aggregations/skillMomentum.js";
-import { getSkillGap } from "./aggregations/skillGap.js";
+import { computeSkillGapRoi } from "./aggregations/skillGapRoi.js";
 import { getTopCompanies } from "./aggregations/topCompanies.js";
 import { getSalaryInsights } from "./aggregations/salaryInsights.js";
 import { getAtlas } from "./aggregations/atlas.js";
