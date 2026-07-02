@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
-import { useOutletContext } from "react-router-dom";
-import useFacetFilters, { WINDOW_MONTHS } from "../hooks/useFacetFilters";
-import FilterBar from "../components/FilterBar";
-import FacetChips from "../components/FacetChips";
+import useFacetFilters, { WINDOWS, WINDOW_MONTHS } from "../hooks/useFacetFilters";
 import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
