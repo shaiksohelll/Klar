@@ -4,10 +4,12 @@ const SkillSnapshotSchema = new mongoose.Schema({
   skill: { type: String, required: true, trim: true },
   count: { type: Number, required: true }, // trailing 12-month total (matches Demand page)
   count30: { type: Number, required: true }, // trailing 30-day total (for velocity)
-  // capturedAt drives the 90-day velocity TTL below. Optional so a momentum-only
-  // upsert (keyed on { skill, date }) is valid without a capturedAt; the ingest
-  // orchestrator always sets it on the combined row, so in practice it is present.
-  capturedAt: { type: Date, default: Date.now },
+  // capturedAt drives the 90-day velocity TTL below. NO default on purpose:
+  // day-bucketed momentum rows (keyed on { skill, date }) must NOT carry a
+  // capturedAt, or the TTL index could expire the data moat. It is set
+  // EXPLICITLY only where legacy velocity snapshot rows are written
+  // (see the SkillSnapshot.insertMany in ingest/adzuna.js).
+  capturedAt: { type: Date },
 
   // ── Momentum (Trends) fields ───────────────────────────────────────────────
   // Added for the Skill Momentum feature. These are day-bucketed so the daily
