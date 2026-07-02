@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
-import useFacetFilters, { HORIZONS, HORIZON_MONTHS, ROLES } from "../hooks/useFacetFilters";
+import useFacetFilters, { HORIZONS, HORIZON_MONTHS } from "../hooks/useFacetFilters";
 import { displayName } from "../lib/displayName";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -151,7 +151,10 @@ function ForecastCard({ item, index }) {
 
 export default function ForecastPage() {
   const { filters, setFilter } = useFacetFilters();
-  const { horizon, role: activeRole } = filters;
+  // Foresight has ONE honest dimension: the horizon. Snapshots carry no role
+  // dimension (see the forecast engine + /api/skills/momentum), so there is no
+  // role control here — a role filter would change nothing and mislead.
+  const { horizon } = filters;
 
   const [forecasts, setForecasts] = useState([]);
   const [asOf, setAsOf] = useState(null);
@@ -169,7 +172,6 @@ export default function ForecastPage() {
       setError(null);
       try {
         const params = { horizon: HORIZON_MONTHS[horizon], limit: 20 };
-        if (activeRole && activeRole !== "All") params.role = activeRole.toLowerCase();
         const res = await axios.get(`${API}/api/skills/forecast`, { params });
         if (cancelled) return;
         setForecasts(res.data.forecasts || []);
@@ -184,7 +186,7 @@ export default function ForecastPage() {
     return () => {
       cancelled = true;
     };
-  }, [horizon, activeRole, retryCount]);
+  }, [horizon, retryCount]);
 
   return (
     <main className="max-w-6xl mx-auto px-4 md:px-6 mt-16 md:mt-24 space-y-12 relative z-10">
@@ -207,7 +209,7 @@ export default function ForecastPage() {
         )}
       </section>
 
-      {/* Controls: horizon + role */}
+      {/* Control: horizon only (Foresight has no honest role dimension). */}
       <section className="flex flex-wrap justify-center gap-3 border-b border-[var(--border)] pb-6">
         <div className="flex bg-[var(--panel)] border border-[var(--border)] rounded-full p-1" role="group" aria-label="Forecast horizon">
           {HORIZONS.map((h) => (
@@ -231,17 +233,6 @@ export default function ForecastPage() {
             </button>
           ))}
         </div>
-
-        <select
-          value={activeRole}
-          onChange={(e) => setFilter("role", e.target.value)}
-          aria-label="Filter forecast by role"
-          className="h-9 rounded-[var(--radius-pill)] border border-[var(--border)] bg-[var(--bg)] px-3 font-mono text-[11px] uppercase tracking-wider text-[var(--muted)] transition-colors hover:border-[var(--muted-2)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)] cursor-pointer"
-        >
-          {ROLES.map((r) => (
-            <option key={r} value={r}>{r === "All" ? "All roles" : r}</option>
-          ))}
-        </select>
       </section>
 
       {error ? (
