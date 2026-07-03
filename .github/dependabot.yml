@@ -1,0 +1,26 @@
+version: 2
+
+updates:
+  # ── Server (Node/Express backend) ──────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /Server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # ── Client (Vite React frontend) ───────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /Client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
