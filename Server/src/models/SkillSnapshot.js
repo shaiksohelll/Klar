@@ -46,8 +46,19 @@ SkillSnapshotSchema.index(
   { skill: 1, date: 1 },
   { unique: true, partialFilterExpression: { date: { $type: "date" } } },
 );
-// Range scans over the day-bucketed series ("all rows in the last N months").
-SkillSnapshotSchema.index({ date: -1 });
+// Retention on the day-bucketed series: keep ~13 months (400 days). This TTL
+// MUST exceed the 12-month forecast lookback — a 180-day TTL would delete data
+// the forecast still reads. The partial filter scopes it to rows that HAVE a
+// `date`, so legacy capturedAt-only rows are untouched (and the 90-day legacy
+// TTL below still governs those). This index also serves range scans over the
+// day-bucketed series ("all rows in the last N months").
+SkillSnapshotSchema.index(
+  { date: 1 },
+  {
+    expireAfterSeconds: 60 * 60 * 24 * 400,
+    partialFilterExpression: { date: { $exists: true } },
+  },
+);
 // Auto-expire ONLY legacy velocity-only snapshots older than 90 days.
 //
 // The partial filter scopes the TTL to rows that HAVE a capturedAt. Day-bucketed
