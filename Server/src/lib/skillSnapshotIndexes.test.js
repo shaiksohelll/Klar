@@ -13,7 +13,12 @@ let mongod;
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  // autoIndex OFF — these tests fully own index state via beforeEach
+  // dropIndexes + per-test createIndex/ensureSkillSnapshotIndexes. Without
+  // this, Mongoose builds the schema's partial capturedAt_1 TTL async on
+  // connect, and on a slow CI runner that build can land AFTER dropIndexes
+  // but BEFORE the test's createIndex → IndexKeySpecsConflict (code 86).
+  await mongoose.connect(mongod.getUri(), { autoIndex: false });
 });
 
 afterAll(async () => {

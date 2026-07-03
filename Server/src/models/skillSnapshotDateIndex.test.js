@@ -9,7 +9,8 @@ let mongod;
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  // autoIndex OFF — the beforeEach syncIndexes() below is the sole index builder.
+  await mongoose.connect(mongod.getUri(), { autoIndex: false });
 });
 
 afterAll(async () => {

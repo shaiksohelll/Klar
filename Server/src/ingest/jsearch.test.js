@@ -29,7 +29,7 @@ let mongod;
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  await mongoose.connect(mongod.getUri(), { autoIndex: false });
 });
 
 afterAll(async () => {
