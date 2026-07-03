@@ -309,10 +309,18 @@ app.post("/api/admin/backfill-geo", async (req, res, next) => {
 // fully idempotent (upsert keyed on the unique { skill, date } index). Legacy
 // capturedAt rows are left untouched. Clears the momentum + forecast caches on
 // success so the next read reflects the freshly-banked history.
+let skillBucketsBackfillInProgress = false;
 app.post("/api/admin/backfill-skill-buckets", async (req, res, next) => {
   if (!isValidIngestSecret(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
+  // In-flight guard: the backfill recomputes the full history + prunes stale
+  // rows, so two overlapping runs would fight over the same { skill, date } keys.
+  // Skip (200) if one is already running rather than starting a second.
+  if (skillBucketsBackfillInProgress) {
+    return res.status(200).json({ ok: true, message: "Backfill already in progress" });
+  }
+  skillBucketsBackfillInProgress = true;
   try {
     const result = await backfillDailySkillBuckets();
     if (result.ok) {
@@ -323,6 +331,8 @@ app.post("/api/admin/backfill-skill-buckets", async (req, res, next) => {
     res.status(status).json(result);
   } catch (err) {
     next(err);
+  } finally {
+    skillBucketsBackfillInProgress = false;
   }
 });
 
