@@ -2,15 +2,17 @@ import Job from "../models/Job.js";
 import SkillSnapshot from "../models/SkillSnapshot.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 
-// ── Skill Momentum snapshot writer ───────────────────────────────────────────
-// The data moat. On every SUCCESSFUL ingest run we bank one dated row per skill
-// so we can later compute rising/falling momentum over time. Everything here is
-// wrapped so a failure LOGS A WARNING and NEVER throws out of the ingest run:
-// ingestion must stay green even if snapshotting fails.
-//
-// Idempotent per (skill, date): the write is an upsert keyed on the unique
-// { skill, date } index, so re-running ingest on the same day updates the same
-// row instead of appending a duplicate.
+// ── Skill Momentum snapshot writer ─────────────────────────────────────────
+// LEGACY / UNWIRED. This trailing-12-month cumulative writer is NO LONGER wired
+// into any ingest path (see ingest/adzuna.js + ingest/jsearch.js, which call
+// recordDailySkillBuckets ONLY). It banked one dated row per skill keyed on the
+// unique { skill, date } index — the SAME key the day-bucketed daily-flow writer
+// below uses. If both ran over the same day the last writer would win and the
+// day-bucketed series would be corrupted with a cumulative value. It is kept
+// here only for the momentum-era regression tests; do NOT re-wire it into ingest
+// without introducing a distinct key (see the MR "future option" note about a
+// `kind` discriminator / separate collection). Everything here is wrapped so a
+// failure LOGS A WARNING and NEVER throws out of the caller.
 
 /** UTC midnight of the given date (day bucket). Pure. */
 export function dayBucket(d = new Date()) {
@@ -35,6 +37,12 @@ function median(nums) {
 
 /**
  * Record a day-bucketed momentum snapshot for every skill.
+ *
+ * LEGACY / UNWIRED (see the module header): this still writes day-keyed
+ * { skill, date } rows, so it MUST NOT be called from ingest alongside
+ * recordDailySkillBuckets — the two would collide on the shared unique key and
+ * the last writer would corrupt the day-bucketed series. It survives only for
+ * the momentum-era regression suite.
  *
  * Metrics per skill (trailing 12-month window, cross-source deduped):
  *   - postingCount:          deduped demand
@@ -125,23 +133,26 @@ export async function recordSkillMomentumSnapshot({ date, months = 12 } = {}) {
   }
 }
 
-// ── Day-bucketed DAILY-FLOW skill writer ─────────────────────────────────────
+// ── Day-bucketed DAILY-FLOW skill writer ───────────────────────────────────
 // A SECOND, independent snapshot writer that banks one row per (skill, UTC day)
 // where `postingCount` is the DAILY FLOW: the number of jobs whose `postedAt`
 // falls on that UTC day and whose `requiredSkills` includes the skill. This is
 // NEW postings that day, NOT a cumulative/trailing window.
 //
-// This is deliberately distinct from recordSkillMomentumSnapshot() above, which
-// banks a trailing-12-month cumulative `postingCount`. See the MR description
-// for the semantic difference; both write to SkillSnapshot { skill, date } rows,
-// but this one is the day-bucketed history the brief specifies for the backfill
-// and self-healing forward writer. Both are idempotent on (skill, date).
+// This is the ONLY writer wired into ingest. recordSkillMomentumSnapshot() above
+// is legacy/unwired; both key on { skill, date } but only ONE may ever run over
+// a given day or they collide. See the MR description for the semantic split.
 //
 // Idempotent per (skill, date): the write is an upsert keyed on the unique
 // { skill, date } index, so re-running on the same day updates the same row
 // instead of appending a duplicate. Recomputing the last 2 UTC days each run
 // lets partial-day ingests self-heal (today's count grows as more postings for
 // today arrive across the day's ingest runs).
+//
+// Zero-flow correctness: after upserting the fresh set we DELETE any day-keyed
+// row inside the recompute window that is NOT in the fresh set, so a skill that
+// drops to zero postings on a recomputed day leaves NO stale positive row for
+// forecast/momentum to read. Upsert-first-then-delete keeps reads gap-free.
 //
 // Non-fatal by contract: any failure LOGS A WARNING and NEVER throws out of the
 // ingest run — ingestion must stay green even if snapshotting fails.
@@ -171,8 +182,10 @@ export function isValidDailyBucket({ skill, date, postingCount } = {}) {
  *   - since: explicit lower bound for postedAt (overrides lookbackDays).
  *   - lookbackDays: how many whole UTC days back to recompute (default 1 => the
  *     last 2 UTC days: yesterday's midnight through now).
- * @returns {Promise<{ ok: boolean, buckets: number, skipped?: boolean, error?: string }>}
- *   Always resolves; never rejects. `ok:false` signals a caught failure.
+ * @returns {Promise<{ ok: boolean, buckets: number, deleted?: number, skipped?: boolean, error?: string }>}
+ *   Always resolves; never rejects. `ok:false` signals a caught failure. On a
+ *   BulkWriteError (e.g. a concurrent duplicate key) the PARTIAL success count
+ *   is surfaced with ok:true rather than reported as a total failure.
  */
 export async function recordDailySkillBuckets({
   now = new Date(),
@@ -196,8 +209,10 @@ export async function recordDailySkillBuckets({
     const buckets = await Job.aggregate([
       {
         $match: {
-          postedAt: { $ne: null, $gte: lowerBound },
-          requiredSkills: { $exists: true, $ne: [] },
+          // Strict type guards so $dateTrunc / $unwind can never throw and flip
+          // the writer to ok:false on a malformed doc.
+          postedAt: { $type: "date", $gte: lowerBound },
+          requiredSkills: { $type: "array", $ne: [] },
         },
       },
       { $unwind: "$requiredSkills" },
@@ -214,7 +229,9 @@ export async function recordDailySkillBuckets({
 
     // Shape-guard every row before writing. bulkWrite skips Mongoose validators,
     // so a wrong-shaped row would otherwise slip through — reject in code.
+    // Track the fresh (skill, date) keys so we can prune stale rows afterwards.
     const ops = [];
+    const freshKeys = new Set();
     let skipped = 0;
     for (const b of buckets) {
       const skill = b?._id?.skill;
@@ -224,11 +241,22 @@ export async function recordDailySkillBuckets({
         skipped++;
         continue;
       }
+      freshKeys.add(`${skill}\u0000${date.getTime()}`);
       ops.push({
         updateOne: {
           filter: { skill, date },
           update: {
+            // A pure daily-flow row carries ONLY postingCount. Unset the
+            // momentum/legacy-only fields so a row previously written by the
+            // momentum writer can never linger with mixed semantics.
             $set: { postingCount },
+            $unset: {
+              disclosedCount: "",
+              salaryMidpointMedian: "",
+              count: "",
+              count30: "",
+              capturedAt: "",
+            },
             $setOnInsert: { skill, date },
           },
           upsert: true,
@@ -239,14 +267,69 @@ export async function recordDailySkillBuckets({
     if (skipped > 0) {
       console.warn(`daily buckets: skipped ${skipped} invalid row(s)`);
     }
-    if (ops.length === 0) {
-      console.log("daily buckets: nothing to record");
-      return { ok: true, buckets: 0, skipped: skipped > 0 };
+
+    // Upsert fresh FIRST so reads never see a gap, then prune stale rows.
+    let written = 0;
+    if (ops.length > 0) {
+      try {
+        const result = await SkillSnapshot.bulkWrite(ops, { ordered: false });
+        // Partial-success accounting: a duplicate-key (E11000) under
+        // ordered:false still applies the other ops; count what actually landed.
+        written = (result.upsertedCount || 0) + (result.modifiedCount || 0);
+      } catch (err) {
+        // BulkWriteError still carries a partial result. Surface the ops that
+        // succeeded instead of reporting a total failure, so concurrent
+        // ingest/backfill doesn't look like it wrote nothing.
+        const partial = err?.result;
+        if (partial) {
+          const up = partial.upsertedCount ?? partial.nUpserted ?? 0;
+          const mod = partial.modifiedCount ?? partial.nModified ?? 0;
+          written = up + mod;
+          console.warn(
+            `daily buckets: partial bulkWrite (${written} applied) — ${err?.message}`,
+          );
+        } else {
+          throw err; // not a BulkWriteError — let the outer catch handle it.
+        }
+      }
     }
 
-    await SkillSnapshot.bulkWrite(ops, { ordered: false });
-    console.log(`daily buckets: banked ${ops.length} (skill, day) rows since ${lowerBound.toISOString().slice(0, 10)}`);
-    return { ok: true, buckets: ops.length };
+    // ── Prune zero-flow day rows ────────────────────────────────────────
+    // Any day-keyed row inside the recompute window [lowerBound, now] that is
+    // NOT in the fresh set is stale (its skill dropped to zero postings that
+    // day). Delete it so forecast/momentum never read a stale positive count.
+    // Scoped strictly to rows that HAVE a `date` in the window — legacy
+    // capturedAt-only rows (no `date`) are never touched by the partial filter.
+    let deleted = 0;
+    const inWindow = await SkillSnapshot.find({
+      date: { $type: "date", $gte: lowerBound },
+    })
+      .select("skill date -_id")
+      .lean();
+    const staleKeys = [];
+    for (const r of inWindow) {
+      const key = `${r.skill}\u0000${r.date.getTime()}`;
+      if (!freshKeys.has(key)) {
+        staleKeys.push({ skill: r.skill, date: r.date });
+      }
+    }
+    if (staleKeys.length > 0) {
+      const delResult = await SkillSnapshot.deleteMany({
+        date: { $type: "date", $gte: lowerBound },
+        $or: staleKeys,
+      });
+      deleted = delResult.deletedCount || 0;
+    }
+
+    if (ops.length === 0 && deleted === 0) {
+      console.log("daily buckets: nothing to record");
+      return { ok: true, buckets: 0, deleted: 0, skipped: skipped > 0 };
+    }
+
+    console.log(
+      `daily buckets: banked ${written}/${ops.length} (skill, day) rows, pruned ${deleted} stale since ${lowerBound.toISOString().slice(0, 10)}`,
+    );
+    return { ok: true, buckets: written, deleted };
   } catch (err) {
     // NON-FATAL by contract: log and swallow so ingestion stays green.
     console.warn("daily buckets failed:", err?.message);
@@ -259,23 +342,28 @@ export async function recordDailySkillBuckets({
  *
  * Aggregates every job (skipping empty requiredSkills / null postedAt), groups
  * by (skill, UTC day of postedAt), counts, and upserts every (skill, date) with
- * the SAME upsert + shape-guard as recordDailySkillBuckets. Fully idempotent.
- * Logs buckets written, the date range, and distinct skill count.
+ * the SAME upsert + shape-guard + zero-flow prune as recordDailySkillBuckets.
+ * Because it recomputes the FULL history in one pass, its prune removes any
+ * day-keyed row whose (skill, date) is not in the fresh full set. Fully
+ * idempotent. Logs buckets written, the date range, and distinct skill count.
  *
  * Implemented by calling recordDailySkillBuckets with `since` at the Unix epoch
  * so the recompute window spans the entire postedAt history.
  *
- * @returns {Promise<{ ok: boolean, buckets: number, minDate: string|null,
- *   maxDate: string|null, distinctSkills: number, error?: string }>}
+ * @returns {Promise<{ ok: boolean, buckets: number, deleted: number,
+ *   minDate: string|null, maxDate: string|null, distinctSkills: number,
+ *   error?: string }>}
  */
 export async function backfillDailySkillBuckets() {
   try {
-    // Epoch lower bound => the full history is recomputed in one pass.
+    // Epoch lower bound => the full history is recomputed in one pass, and the
+    // prune inside recordDailySkillBuckets is scoped to the entire day-keyed set.
     const res = await recordDailySkillBuckets({ since: new Date(0) });
     if (!res.ok) {
       return {
         ok: false,
         buckets: 0,
+        deleted: 0,
         minDate: null,
         maxDate: null,
         distinctSkills: 0,
@@ -301,14 +389,22 @@ export async function backfillDailySkillBuckets() {
     const distinctSkills = range?.skills?.length ?? 0;
 
     console.log(
-      `daily buckets backfill: ${res.buckets} rows, range ${minDate} .. ${maxDate}, ${distinctSkills} distinct skills`,
+      `daily buckets backfill: ${res.buckets} rows, pruned ${res.deleted ?? 0}, range ${minDate} .. ${maxDate}, ${distinctSkills} distinct skills`,
     );
-    return { ok: true, buckets: res.buckets, minDate, maxDate, distinctSkills };
+    return {
+      ok: true,
+      buckets: res.buckets,
+      deleted: res.deleted ?? 0,
+      minDate,
+      maxDate,
+      distinctSkills,
+    };
   } catch (err) {
     console.warn("daily buckets backfill failed:", err?.message);
     return {
       ok: false,
       buckets: 0,
+      deleted: 0,
       minDate: null,
       maxDate: null,
       distinctSkills: 0,
