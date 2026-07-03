@@ -9,6 +9,17 @@ vi.hoisted(() => {
   process.env.JSEARCH_API_KEY = "test-key";
 });
 
+// Mirror adzuna.test.js: stub the day-bucket writer so JSearch ingest tests
+// exercise ONLY the fetch/upsert/prune contract and never run the real
+// aggregation/bulkWrite against the shared collection.
+const { recordDailySkillBuckets } = vi.hoisted(() => ({
+  recordDailySkillBuckets: vi.fn().mockResolvedValue({ ok: true, buckets: 0 }),
+}));
+vi.mock("./snapshot.js", () => ({
+  recordSkillMomentumSnapshot: vi.fn().mockResolvedValue({ ok: true, skills: 0 }),
+  recordDailySkillBuckets,
+}));
+
 import Job from "../models/Job.js";
 import { makeDedupeKey } from "../lib/dedupe.js";
 import { ingestJSearch } from "./jsearch.js";
@@ -29,6 +40,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await Job.deleteMany({});
+  recordDailySkillBuckets.mockClear();
 });
 
 // Seed a Job row directly, controlling source + updatedAt (timestamps:true
