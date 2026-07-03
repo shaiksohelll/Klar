@@ -9,6 +9,7 @@ import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
 import { clearMomentumCache } from "../aggregations/skillMomentum.js";
+import { clearSkillForecastCache } from "../aggregations/skillForecast.js";
 import { recordDailySkillBuckets } from "./snapshot.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
@@ -255,7 +256,11 @@ export async function ingestJSearch({
   clearCompaniesCache();
   clearSalaryCache();
   clearAtlasCache();
+  // Momentum + forecast read from the freshly-written day-buckets. Mirror the
+  // admin backfill route (and ingestAdzuna) so those endpoints never serve up
+  // to 6h of stale results after a normal ingest.
   clearMomentumCache();
+  clearSkillForecastCache();
 
   const summary = {
     requested: queries.length,
