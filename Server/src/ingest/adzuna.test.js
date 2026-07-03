@@ -32,6 +32,10 @@ let mongod;
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
   await mongoose.connect(mongod.getUri(), { autoIndex: false });
+  // Build the Job unique { source, externalId } index explicitly.
+  // autoIndex is OFF so Mongoose will not create it automatically;
+  // without it ingestAdzuna's bulkWrite upsert filter has no backing index.
+  await Job.syncIndexes();
 });
 
 afterAll(async () => {
