@@ -8,6 +8,8 @@ import { makeDedupeKey } from "../lib/dedupe.js";
 import {
   recordDailySkillBuckets,
   backfillDailySkillBuckets,
+  recordSkillMomentumSnapshot,
+  dayBucket,
   isValidDailyBucket,
 } from "./snapshot.js";
 
@@ -239,5 +241,46 @@ describe("backfillDailySkillBuckets — full-range, idempotent", () => {
     const second = await SkillSnapshot.countDocuments({ date: { $type: "date" } });
     expect(second).toBe(first);
     expect(first).toBe(2);
+  });
+});
+
+describe("daily-flow ownership of { skill, date } rows", () => {
+  // Regression guard for the fix that stopped recordSkillMomentumSnapshot()
+  // (cumulative trailing-window postingCount) from running in ingest. Both
+  // writers key on { skill, date }; if both run over the same rows the last
+  // writer wins and the series is corrupted. Today's row MUST end up holding
+  // the DAILY-FLOW count (new postings today), not the cumulative total.
+  it("today's day-bucket holds daily flow, not the cumulative trailing count, after BOTH writers run", async () => {
+    // Spread node.js across several UTC days so cumulative (trailing) != daily.
+    //   today: 2 postings  -> daily flow for today = 2
+    //   older days: 5 more postings within the trailing window
+    // recordSkillMomentumSnapshot() would bank cumulative = 7 into today's row.
+    await Job.create([
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) }),
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) }),
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(10) }),
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(10) }),
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(20) }),
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(20) }),
+      makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(30) }),
+    ]);
+
+    // Simulate a single ingest that (wrongly) runs both writers. Daily-flow
+    // writer runs LAST so it owns the row — mirrors the corrected ingest order
+    // where only the daily-flow writer touches these rows at all.
+    await recordSkillMomentumSnapshot();
+    await recordDailySkillBuckets({ since: new Date(0) });
+
+    // Exactly one row for today (no duplicate from the two writers colliding).
+    const todayRows = await SkillSnapshot.find({ skill: "node.js", date: dayBucket() }).lean();
+    expect(todayRows).toHaveLength(1);
+    // The whole point: today's postingCount is the DAILY FLOW (2), not the
+    // cumulative trailing total (7) the momentum writer would have banked.
+    expect(todayRows[0].postingCount).toBe(2);
+
+    // Older days carry their own daily flow too (2 on the day 10 ago), proving
+    // the series is genuinely day-bucketed and not a single cumulative point.
+    const tenAgo = await SkillSnapshot.findOne({ skill: "node.js", date: utcDay(10) }).lean();
+    expect(tenAgo.postingCount).toBe(2);
   });
 });
