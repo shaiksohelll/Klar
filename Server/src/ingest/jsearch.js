@@ -237,6 +237,15 @@ export async function ingestJSearch({
     removed = pruneResult.deletedCount || 0;
   }
 
+  // ── Day-bucketed daily-flow rows (Trends/Foresight history) ────────────
+  // Symmetric with ingestAdzuna: bank one row per (skill, UTC day) recomputing
+  // the last 2 UTC days so partial-day ingests self-heal. Non-fatal.
+  try {
+    await recordDailySkillBuckets();
+  } catch (err) {
+    console.warn("daily buckets threw unexpectedly:", err?.message);
+  }
+
   // ── Invalidate read caches ─────────────────────────────────────────────
   // Mirror exactly what ingestAdzuna does: clear all caches so the next
   // request recomputes from the freshly-written rows.
