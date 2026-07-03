@@ -12,7 +12,10 @@ let mongod;
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  await mongoose.connect(mongod.getUri(), { autoIndex: false });
+  // Build schema indexes synchronously so the unique { skill, date }
+  // constraint is in place for the idempotency test.
+  await SkillSnapshot.syncIndexes();
 });
 
 afterAll(async () => {

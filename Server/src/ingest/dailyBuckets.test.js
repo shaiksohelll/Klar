@@ -18,7 +18,7 @@ let mongod;
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
+  await mongoose.connect(mongod.getUri(), { autoIndex: false });
   // Build indexes so the unique { skill, date } constraint is enforced in tests.
   await SkillSnapshot.syncIndexes();
 });
