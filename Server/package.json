@@ -15,14 +15,14 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "@clerk/express": "^2.1.23",
+    "@clerk/express": "^2.1.35",
     "@sentry/node": "^10.63.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "mongoose": "^9.6.3"
+    "mongoose": "^9.7.3"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.2",
