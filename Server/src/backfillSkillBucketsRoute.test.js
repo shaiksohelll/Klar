@@ -134,7 +134,7 @@ describe("POST /api/admin/backfill-skill-buckets — authorized", () => {
       .post("/api/admin/backfill-skill-buckets")
       .set("x-ingest-secret", "test-secret");
     expect(second.status).toBe(200);
-    expect(second.body).toMatchObject({ ok: true, message: /in progress/i });
+    expect(second.body).toMatchObject({ ok: true, message: expect.stringMatching(/in progress/i) });
 
     release();
     const firstRes = await first;
