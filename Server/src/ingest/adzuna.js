@@ -11,7 +11,7 @@ import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
 import { clearMomentumCache } from "../aggregations/skillMomentum.js";
-import { recordSkillMomentumSnapshot } from "./snapshot.js";
+import { recordSkillMomentumSnapshot, recordDailySkillBuckets } from "./snapshot.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -230,6 +230,17 @@ export async function ingestAdzuna({
     await recordSkillMomentumSnapshot();
   } catch (err) {
     console.warn("momentum snapshot threw unexpectedly:", err?.message);
+  }
+
+  // ── Day-bucketed daily-flow rows (Trends/Foresight history) ─────────────
+  // Banks one row per (skill, UTC day) with postingCount = new postings that
+  // day. Recomputes the last 2 UTC days so partial-day ingests self-heal.
+  // Non-fatal by contract; the extra try/catch is belt-and-braces so a
+  // snapshot failure can NEVER abort the ingest run.
+  try {
+    await recordDailySkillBuckets();
+  } catch (err) {
+    console.warn("daily buckets threw unexpectedly:", err?.message);
   }
 
   // ── Invalidate read caches ─────────────────────────────────────────────
