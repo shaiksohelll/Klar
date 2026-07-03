@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import * as Sentry from "@sentry/node";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -878,6 +879,11 @@ app.post("/api/resume-gap", readLimiter, async (req, res, next) => {
     next(err);
   }
 });
+
+// ── Sentry error handler (must precede the central handler) ────────────────
+// Feeds unhandled route errors to Sentry so they appear in the dashboard.
+// No-op when SENTRY_DSN is unset (Sentry.init was never called).
+Sentry.setupExpressErrorHandler(app);
 
 // ── Central error handler ──────────────────────────────────────────────────
 // Must be registered AFTER all routes. Routes signal errors via next(err).
