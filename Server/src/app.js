@@ -883,7 +883,9 @@ app.post("/api/resume-gap", readLimiter, async (req, res, next) => {
 // ── Sentry error handler (must precede the central handler) ────────────────
 // Feeds unhandled route errors to Sentry so they appear in the dashboard.
 // No-op when SENTRY_DSN is unset (Sentry.init was never called).
-Sentry.setupExpressErrorHandler(app);
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // ── Central error handler ──────────────────────────────────────────────────
 // Must be registered AFTER all routes. Routes signal errors via next(err).
