@@ -104,6 +104,7 @@ function isValidIngestSecret(req) {
 const IS_PROD = process.env.NODE_ENV === "production";
 
 const app = express();
+app.disable("x-powered-by");
 // Trust Render's proxy in production so express-rate-limit sees the real
 // client IP via X-Forwarded-For. Disabled in development to avoid trusting
 // spoofed X-Forwarded-For headers from a local network.
@@ -894,7 +895,7 @@ if (process.env.SENTRY_DSN) {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
-  console.error(`${req.method} ${req.originalUrl}`, err);
+  console.error("%s %s", req.method, req.originalUrl, err);
   const status = err.status || err.statusCode || 500;
   res.status(status).json({ ok: false, error: status >= 500 ? "Internal server error" : err.message });
 });
