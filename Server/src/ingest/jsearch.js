@@ -9,6 +9,7 @@ import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
 import { clearMomentumCache } from "../aggregations/skillMomentum.js";
+import { recordDailySkillBuckets } from "./snapshot.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
 //
