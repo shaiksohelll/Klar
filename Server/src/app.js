@@ -6,6 +6,9 @@ import rateLimit from "express-rate-limit";
 import { clerkMiddleware, requireAuth } from "@clerk/express";
 import { ingestAdzuna } from "./ingest/adzuna.js";
 import { ingestJSearch } from "./ingest/jsearch.js";
+import { backfillDailySkillBuckets } from "./ingest/snapshot.js";
+import { clearMomentumCache } from "./aggregations/skillMomentum.js";
+import { clearSkillForecastCache } from "./aggregations/skillForecast.js";
 import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
 import { computeSkillMomentum } from "./aggregations/skillMomentum.js";
 import { computeSkillForecast } from "./aggregations/skillForecast.js";
@@ -298,7 +301,42 @@ app.post("/api/admin/backfill-geo", async (req, res, next) => {
   }
 });
 
-// ── Trending skills ────────────────────────────────────────────────────────
+// ── Backfill day-bucketed skill history (admin) ────────────────────────
+// Aggregates ALL jobs into day-bucketed daily-flow SkillSnapshot rows
+// (one doc per skill/UTC day; postingCount = new postings that day). This
+// gives Trends/Momentum + Foresight/Forecast real history to read. Mirrors
+// /api/admin/backfill-geo: protected by the same X-Ingest-Secret header and
+// fully idempotent (upsert keyed on the unique { skill, date } index). Legacy
+// capturedAt rows are left untouched. Clears the momentum + forecast caches on
+// success so the next read reflects the freshly-banked history.
+let skillBucketsBackfillInProgress = false;
+app.post("/api/admin/backfill-skill-buckets", async (req, res, next) => {
+  if (!isValidIngestSecret(req)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  // In-flight guard: the backfill recomputes the full history + prunes stale
+  // rows, so two overlapping runs would fight over the same { skill, date } keys.
+  // Skip (200) if one is already running rather than starting a second.
+  if (skillBucketsBackfillInProgress) {
+    return res.status(200).json({ ok: true, message: "Backfill already in progress" });
+  }
+  skillBucketsBackfillInProgress = true;
+  try {
+    const result = await backfillDailySkillBuckets();
+    if (result.ok) {
+      clearMomentumCache();
+      clearSkillForecastCache();
+    }
+    const status = result.ok ? 200 : 500;
+    res.status(status).json(result);
+  } catch (err) {
+    next(err);
+  } finally {
+    skillBucketsBackfillInProgress = false;
+  }
+});
+
+// ── Trending skills ────────────────────────────────────────────────
 app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
   try {
     let role;

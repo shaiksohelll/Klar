@@ -11,7 +11,8 @@ import { clearCompaniesCache } from "../aggregations/topCompanies.js";
 import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
 import { clearMomentumCache } from "../aggregations/skillMomentum.js";
-import { recordSkillMomentumSnapshot } from "./snapshot.js";
+import { clearSkillForecastCache } from "../aggregations/skillForecast.js";
+import { recordDailySkillBuckets } from "./snapshot.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -221,15 +222,15 @@ export async function ingestAdzuna({
     console.warn("snapshot failed:", err.message);
   }
 
-  // ── Skill Momentum snapshot (the data moat) ─────────────────────────────
-  // Banks one dated row per skill so we can compute rising/falling momentum
-  // over time. recordSkillMomentumSnapshot() already catches everything and
-  // never throws; the extra try/catch here is belt-and-braces so a snapshot
-  // failure can NEVER abort the ingest run (ingestion must stay green).
+  // ── Day-bucketed daily-flow rows (Trends/Foresight history) ─────────────
+  // Banks one row per (skill, UTC day) with postingCount = new postings that
+  // day. Recomputes the last 2 UTC days so partial-day ingests self-heal.
+  // Non-fatal by contract; the extra try/catch is belt-and-braces so a
+  // snapshot failure can NEVER abort the ingest run.
   try {
-    await recordSkillMomentumSnapshot();
+    await recordDailySkillBuckets();
   } catch (err) {
-    console.warn("momentum snapshot threw unexpectedly:", err?.message);
+    console.warn("daily buckets threw unexpectedly:", err?.message);
   }
 
   // ── Invalidate read caches ─────────────────────────────────────────────
@@ -241,7 +242,11 @@ export async function ingestAdzuna({
   clearCompaniesCache();
   clearSalaryCache();
   clearAtlasCache();
+  // Momentum + forecast read from the freshly-written day-buckets. Mirror the
+  // admin backfill route so /api/skills/momentum and /api/skills/forecast never
+  // serve up to 6h of stale results after a normal ingest.
   clearMomentumCache();
+  clearSkillForecastCache();
   console.log("🗑️  Read caches cleared after ingest");
 
   return {

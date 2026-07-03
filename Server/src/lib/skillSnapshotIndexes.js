@@ -24,6 +24,18 @@ function isUnsafeCapturedAtTtl(idx) {
   return isCapturedAtIndex && hasTtl && !hasPartial;
 }
 
+// The schema now defines a `{ date: 1 }` TTL/range index. Any deployed DB that
+// once had an OLD `{ date: -1 }` index (descending, from before this feature)
+// still physically holds it — Mongo treats { date: 1 } and { date: -1 } as
+// distinct indexes, so syncIndexes creates the new one while the obsolete
+// descending one lingers. Detect it here so we can drop it (same guarded,
+// idempotent pattern as the legacy capturedAt TTL cleanup). Scoped to a
+// single-key descending `date` index only; the current ascending TTL is left be.
+function isObsoleteDateDescIndex(idx) {
+  const keys = Object.keys(idx.key || {});
+  return keys.length === 1 && keys[0] === "date" && idx.key.date === -1;
+}
+
 /**
  * Ensure the SkillSnapshot capturedAt TTL index is the partial (safe) one.
  * Non-fatal: always resolves, never throws.
@@ -47,14 +59,17 @@ export async function ensureSkillSnapshotIndexes() {
       );
     }
 
-    // 2. Drop any capturedAt TTL index that is NOT partial.
+    // 2. Drop any capturedAt TTL index that is NOT partial, and any obsolete
+    //    descending { date: -1 } index left over from before the { date: 1 }
+    //    TTL/range index existed. Both are guarded + idempotent (a missing
+    //    index simply isn't found, and a failed drop only logs).
     for (const idx of existing) {
-      if (isUnsafeCapturedAtTtl(idx)) {
+      if (isUnsafeCapturedAtTtl(idx) || isObsoleteDateDescIndex(idx)) {
         try {
           await collection.dropIndex(idx.name);
           dropped.push(idx.name);
           console.log(
-            `SkillSnapshot index migration: dropped legacy non-partial TTL index "${idx.name}"`,
+            `SkillSnapshot index migration: dropped obsolete index "${idx.name}"`,
           );
         } catch (err) {
           console.warn(

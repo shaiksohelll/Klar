@@ -133,4 +133,30 @@ describe("ensureSkillSnapshotIndexes — migration", () => {
     expect(after).toHaveLength(1);
     expect(after[0].partialFilterExpression).toBeTruthy();
   });
+
+  // Extract single-key `date` indexes and their sort direction.
+  const dateIndexes = (indexes) =>
+    indexes.filter((idx) => {
+      const keys = Object.keys(idx.key || {});
+      return keys.length === 1 && keys[0] === "date";
+    });
+
+  it("drops an obsolete descending { date: -1 } index and keeps the ascending TTL", async () => {
+    // Simulate a deployed DB that still holds the OLD descending date index.
+    await SkillSnapshot.collection.createIndex({ date: -1 }, { name: "date_-1" });
+    const before = dateIndexes(await SkillSnapshot.collection.indexes());
+    expect(before.some((i) => i.key.date === -1)).toBe(true);
+
+    const res = await ensureSkillSnapshotIndexes();
+    expect(res.ok).toBe(true);
+    expect(res.dropped).toContain("date_-1");
+
+    // End state: no descending date index; exactly one ascending { date: 1 }
+    // TTL/range index remains.
+    const after = dateIndexes(await SkillSnapshot.collection.indexes());
+    expect(after.some((i) => i.key.date === -1)).toBe(false);
+    const asc = after.filter((i) => i.key.date === 1);
+    expect(asc).toHaveLength(1);
+    expect(asc[0].expireAfterSeconds).toBe(60 * 60 * 24 * 400);
+  });
 });
