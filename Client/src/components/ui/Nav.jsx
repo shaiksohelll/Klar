@@ -1,13 +1,9 @@
+import { useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
+import { gsap } from "gsap";
 import ThemeToggle from "../ThemeToggle";
 import Brand from "../Brand";
 
-// Nav — the liquid-glass chrome that frames every screen. Presentational: all
-// auth state and freshness data are passed in from App so no data logic lives
-// here. The brand renders the shared <Brand /> wordmark (Klar + accent period);
-// the active route is marked with the accent. On mobile the link rail collapses
-// into a glass Sheet (rendered by App) toggled by the menu button.
-//
 // Routes are listed in a fixed order and never reordered.
 const ROUTES = [
   { to: "/", label: "Demand", end: true },
@@ -22,6 +18,11 @@ const ROUTES = [
   { to: "/about", label: "About" },
 ];
 
+// Red sweep color for the pill hover circle (named object so it can't get
+// corrupted as an inline style).
+const circleStyle = { background: "#EB0029" };
+
+// Plain links — used inside the mobile glass Sheet (rendered by App).
 export function NavRoutes({ onNavigate, className = "" }) {
   const linkClass = ({ isActive }) =>
     [
@@ -49,18 +50,150 @@ export function NavRoutes({ onNavigate, className = "" }) {
   );
 }
 
+// Desktop rail — same routes, with the animated pill-sweep hover effect.
+function NavPills() {
+  const pillRefs = useRef([]);
+  const circleRefs = useRef([]);
+  const tlRefs = useRef([]);
+  const tweenRefs = useRef([]);
+  const reduceRef = useRef(false);
+
+  useEffect(() => {
+    reduceRef.current =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+    const build = () => {
+      pillRefs.current.forEach((pill, i) => {
+        const circle = circleRefs.current[i];
+        if (!pill || !circle) return;
+
+        const { width: w, height: h } = pill.getBoundingClientRect();
+        if (!w || !h) return;
+
+        const R = ((w * w) / 4 + h * h) / (2 * h);
+        const D = Math.ceil(2 * R) + 2;
+        const delta =
+          Math.ceil(R - Math.sqrt(Math.max(0, R * R - (w * w) / 4))) + 1;
+        const originY = D - delta;
+
+        circle.style.width = `${D}px`;
+        circle.style.height = `${D}px`;
+        circle.style.bottom = `-${delta}px`;
+        gsap.set(circle, {
+          xPercent: -50,
+          scale: 0,
+          transformOrigin: `50% ${originY}px`,
+        });
+
+        const label = pill.querySelector(".pill-label");
+        const hover = pill.querySelector(".pill-label-hover");
+        if (label) gsap.set(label, { y: 0 });
+        if (hover) gsap.set(hover, { y: h + 12, opacity: 0 });
+
+        tlRefs.current[i]?.kill();
+        const tl = gsap.timeline({ paused: true });
+        tl.to(
+          circle,
+          { scale: 1.2, xPercent: -50, duration: 2, ease: "power3.easeOut", overwrite: "auto" },
+          0
+        );
+        if (label)
+          tl.to(
+            label,
+            { y: -(h + 8), duration: 2, ease: "power3.easeOut", overwrite: "auto" },
+            0
+          );
+        if (hover)
+          tl.to(
+            hover,
+            { y: 0, opacity: 1, duration: 2, ease: "power3.easeOut", overwrite: "auto" },
+            0
+          );
+        tlRefs.current[i] = tl;
+      });
+    };
+
+    build();
+    const onResize = () => build();
+    window.addEventListener("resize", onResize);
+    if (document.fonts?.ready) document.fonts.ready.then(build).catch(() => {});
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const enter = (i) => {
+    const tl = tlRefs.current[i];
+    if (!tl) return;
+    tweenRefs.current[i]?.kill();
+    tweenRefs.current[i] = tl.tweenTo(tl.duration(), {
+      duration: reduceRef.current ? 0 : 0.3,
+      ease: "power3.easeOut",
+      overwrite: "auto",
+    });
+  };
+  const leave = (i) => {
+    const tl = tlRefs.current[i];
+    if (!tl) return;
+    tweenRefs.current[i]?.kill();
+    tweenRefs.current[i] = tl.tweenTo(0, {
+      duration: reduceRef.current ? 0 : 0.2,
+      ease: "power3.easeOut",
+      overwrite: "auto",
+    });
+  };
+
+  return (
+    <>
+      {ROUTES.map((r, i) => (
+        <NavLink
+          key={r.to}
+          to={r.to}
+          end={r.end}
+          ref={(el) => (pillRefs.current[i] = el)}
+          onMouseEnter={() => enter(i)}
+          onMouseLeave={() => leave(i)}
+          className={({ isActive }) =>
+            [
+              "pill-link relative overflow-hidden inline-flex items-center justify-center h-8 px-3 rounded-[var(--radius-pill)]",
+              "font-mono text-xs uppercase tracking-[0.14em] whitespace-nowrap no-underline cursor-pointer",
+              "focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]",
+              isActive ? "text-[var(--text)]" : "text-[var(--muted)]",
+            ].join(" ")
+          }
+        >
+          <span
+            ref={(el) => (circleRefs.current[i] = el)}
+            className="absolute left-1/2 bottom-0 z-0 block rounded-full pointer-events-none"
+            style={circleStyle}
+            aria-hidden="true"
+          />
+          <span className="relative z-[1] inline-block leading-none">
+            <span className="pill-label relative inline-block leading-none">
+              {r.label}
+            </span>
+            <span
+              className="pill-label-hover absolute left-0 top-0 inline-block leading-none text-white"
+              aria-hidden="true"
+            >
+              {r.label}
+            </span>
+          </span>
+        </NavLink>
+      ))}
+    </>
+  );
+}
+
 export default function Nav({
-  freshness, // string like "3h ago" or null
+  freshness,
   signedIn,
   onSignIn,
   onSignOut,
   onOpenMenu,
-  userButton, // the Clerk <UserButton/> element, rendered last
+  userButton,
 }) {
   return (
     <nav className="glass sticky top-0 z-40 border-b border-[var(--glass-border)]">
       <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6">
-        {/* Brand: shared <Brand /> wordmark (Klar + accent period). */}
         <NavLink
           to="/"
           className="flex items-baseline font-space text-xl font-bold tracking-tight text-[var(--text)] focus-visible:outline-none focus-visible:shadow-[var(--glow-red)] rounded-[var(--radius-xs)]"
@@ -69,9 +202,8 @@ export default function Nav({
           <Brand />
         </NavLink>
 
-        {/* Desktop link rail. */}
-        <div className="hidden flex-1 items-center justify-center gap-x-5 px-4 lg:gap-x-7 md:flex">
-          <NavRoutes />
+        <div className="hidden flex-1 items-center justify-center gap-x-1 px-2 md:flex">
+          <NavPills />
         </div>
 
         <div className="flex items-center gap-3">
@@ -81,11 +213,9 @@ export default function Nav({
               Updated {freshness}
             </span>
           )}
-
           <div className="hidden md:block">
             <ThemeToggle />
           </div>
-
           {signedIn ? (
             <>
               <button
@@ -106,8 +236,6 @@ export default function Nav({
               Sign in
             </button>
           )}
-
-          {/* Mobile: hamburger opens the glass Sheet (rendered by App). */}
           <button
             type="button"
             onClick={onOpenMenu}
