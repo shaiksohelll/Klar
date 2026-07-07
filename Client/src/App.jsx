@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Component } from "react";
 import axios from "axios";
 import {
   UserButton,
@@ -23,6 +23,15 @@ const PageLoader = () => (
     <div className="w-6 h-6 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
   </div>
 );
+
+// Tiny error boundary for the Silk WebGL background. If WebGL init fails
+// (unsupported browser, disabled hardware accel, headless/test), the app just
+// loses its background instead of crashing.
+class SilkBoundary extends Component {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const ALL_WINDOWS = ["3M", "6M", "12M"];
@@ -361,11 +370,13 @@ export default function App() {
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[#EB0029]/30 selection:text-white pb-24 overflow-x-hidden">
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-200 h-100 bg-[var(--accent)] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
       {/* Silk ambient background */}
-<div className="fixed inset-0 pointer-events-none">
-  <Silk color="#EB0029" speed={5} scale={1} noiseIntensity={1.5} rotation={0} />
-  {/* keep this overlay so text stays readable */}
-  <div className="absolute inset-0 bg-black/50" />
-</div>
+      <SilkBoundary>
+        <div className="fixed inset-0 pointer-events-none">
+          <Silk color="#EB0029" speed={5} scale={1} noiseIntensity={1.5} rotation={0} />
+          {/* keep this overlay so text stays readable */}
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+      </SilkBoundary>
 
       <Nav
         freshness={lastUpdated ? timeAgo(lastUpdated) : null}
