@@ -45,6 +45,17 @@ async function seedSnapshots() {
   ]);
 }
 
+/** Seed snapshots with gap < 2 days so velocity returns tooClose. */
+async function seedTooCloseSnapshots() {
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  await SkillSnapshot.insertMany([
+    { skill: "react", count30: 50, capturedAt: now },
+    { skill: "react", count30: 48, capturedAt: yesterday },
+  ]);
+}
+
 // ── Tests ──────────────────────────────────────────────────────────
 describe("_loadVelocityContext — coalescing", () => {
   it("returns null when no snapshots exist", async () => {
@@ -151,6 +162,53 @@ describe("_loadVelocityContext — coalescing", () => {
 
     // …but the cache must NOT have been populated with the stale data.
     // A subsequent call must hit the DB again (fresh reload).
+    const findOneSpy = vi.spyOn(SkillSnapshot, "findOne");
+    const fresh = await _loadVelocityContext();
+    expect(fresh).not.toBeNull();
+    expect(findOneSpy).toHaveBeenCalled();
+
+    findOneSpy.mockRestore();
+  });
+
+  it("caches a tooClose result (2nd call within TTL doesn't re-query)", async () => {
+    await seedTooCloseSnapshots();
+
+    // First call populates.
+    const ctx = await _loadVelocityContext();
+    expect(ctx).not.toBeNull();
+    expect(ctx.tooClose).toBe(true);
+
+    const findOneSpy = vi.spyOn(SkillSnapshot, "findOne");
+
+    // Second call should hit cache, NOT the DB.
+    const cached = await _loadVelocityContext();
+    expect(cached).toBe(ctx);
+    expect(findOneSpy).not.toHaveBeenCalled();
+
+    findOneSpy.mockRestore();
+  });
+
+  it("does NOT cache a stale tooClose result when clear fires mid-flight", async () => {
+    await seedTooCloseSnapshots();
+
+    const original = SkillSnapshot.findOne.bind(SkillSnapshot);
+    let intercepted = false;
+    const spy = vi.spyOn(SkillSnapshot, "findOne").mockImplementation((...args) => {
+      if (!intercepted) {
+        intercepted = true;
+        clearTrendingCaches();
+      }
+      return original(...args);
+    });
+
+    // Load completes but clear happened mid-flight → result returned but NOT cached.
+    const ctx = await _loadVelocityContext();
+    expect(ctx).not.toBeNull();
+    expect(ctx.tooClose).toBe(true);
+
+    spy.mockRestore();
+
+    // Next call must re-query (cache was not populated).
     const findOneSpy = vi.spyOn(SkillSnapshot, "findOne");
     const fresh = await _loadVelocityContext();
     expect(fresh).not.toBeNull();

@@ -22,7 +22,7 @@ const TRENDING_CACHE = createTtlCache({ ttlMs: TRENDING_TTL_MS, maxEntries: 500 
 // When /api/warm fires N concurrent calls, this coalesces them into a single
 // DB round-trip instead of N duplicate ones.
 let _velocityCtxPromise = null;
-let _velocityCtxCache  = null;   // { value, expiresAt }
+let _velocityCtxCache = null;   // { value, expiresAt }
 let _cacheGeneration   = 0;     // bumped by clearTrendingCaches()
 
 async function _loadVelocityContext() {
@@ -60,12 +60,19 @@ async function _loadVelocityContext() {
       ]);
 
       const baseSnap = idealBase ?? oldestBase;
+      if (!baseSnap) return null; // collection emptied mid-flight; reload next call
       const baselineCapturedAt = baseSnap.capturedAt;
       const gapDays = Math.floor(
         (latestCapturedAt.getTime() - baselineCapturedAt.getTime()) / 86_400_000,
       );
 
-      if (gapDays < 2) return { gapDays, tooClose: true };
+      if (gapDays < 2) {
+        const ctx = { gapDays, tooClose: true };
+        if (gen === _cacheGeneration) {
+          _velocityCtxCache = { value: ctx, expiresAt: Date.now() + TRENDING_TTL_MS };
+        }
+        return ctx;
+      }
 
       const [nowDocs, baseDocs] = await Promise.all([
         SkillSnapshot.find({ capturedAt: latestCapturedAt })
