@@ -531,4 +531,34 @@ describe("recordDailySkillBuckets — chunked deleteMany", () => {
     // The real row for today is still there.
     expect(await SkillSnapshot.findOne({ skill: "node.js", date: utcDay(0) })).not.toBeNull();
   });
+
+  it("returns partial success when one batch's deleteMany throws mid-loop", async () => {
+    // Seed 600 stale rows (2 batches of 500+100) plus one real job.
+    const staleDate = utcDay(5);
+    const staleRows = [];
+    for (let i = 0; i < 600; i++) {
+      staleRows.push({ skill: `stale-${i}`, date: staleDate, postingCount: 1 });
+    }
+    await SkillSnapshot.insertMany(staleRows);
+    await Job.create([makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) })]);
+
+    // Spy on deleteMany: let the FIRST batch succeed, then THROW on the second.
+    const original = SkillSnapshot.deleteMany.bind(SkillSnapshot);
+    let callCount = 0;
+    const spy = vi.spyOn(SkillSnapshot, "deleteMany").mockImplementation((...args) => {
+      callCount++;
+      if (callCount === 2) return Promise.reject(new Error("batch 2 boom"));
+      return original(...args);
+    });
+
+    const res = await recordDailySkillBuckets({ now: ANCHOR, since: new Date(0) });
+
+    // The function must NOT return ok:false / buckets:0.
+    // It should surface the buckets written + deletes from the successful batch.
+    expect(res.ok).toBe(true);
+    expect(res.buckets).toBeGreaterThanOrEqual(1); // node.js was written
+    expect(res.deleted).toBe(500); // first batch succeeded (500 keys)
+
+    spy.mockRestore();
+  });
 });

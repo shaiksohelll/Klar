@@ -316,16 +316,25 @@ export async function recordDailySkillBuckets({
     }
     // Delete in batches of 500 keys to stay clear of MongoDB BSON/query limits
     // when backfill mode produces a large staleKeys set. Idempotent: each batch
-    // is independently safe and a re-run deletes nothing extra.
+    // is independently safe and a re-run deletes nothing extra. Each batch has
+    // its own try/catch so a mid-loop failure never discards the bulkWrite count
+    // or deletes from earlier successful batches (same partial-success discipline
+    // as the bulkWrite handling above).
     if (staleKeys.length > 0) {
       const BATCH = 500;
       for (let i = 0; i < staleKeys.length; i += BATCH) {
         const batch = staleKeys.slice(i, i + BATCH);
-        const delResult = await SkillSnapshot.deleteMany({
-          date: { $type: "date", $gte: lowerBound, $lte: now },
-          $or: batch,
-        });
-        deleted += delResult.deletedCount || 0;
+        try {
+          const delResult = await SkillSnapshot.deleteMany({
+            date: { $type: "date", $gte: lowerBound, $lte: now },
+            $or: batch,
+          });
+          deleted += delResult.deletedCount || 0;
+        } catch (batchErr) {
+          console.warn(
+            `daily buckets: prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,
+          );
+        }
       }
     }
 
