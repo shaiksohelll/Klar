@@ -124,4 +124,38 @@ describe("_loadVelocityContext — coalescing", () => {
 
     findOneSpy.mockRestore();
   });
+
+  it("does NOT cache a stale result when clearTrendingCaches fires mid-flight", async () => {
+    await seedSnapshots();
+
+    // Intercept the FIRST findOne call to inject a clearTrendingCaches() BEFORE
+    // the in-flight load finishes — simulating ingestAdzuna() landing mid-load.
+    const original = SkillSnapshot.findOne.bind(SkillSnapshot);
+    let intercepted = false;
+    const spy = vi.spyOn(SkillSnapshot, "findOne").mockImplementation((...args) => {
+      if (!intercepted) {
+        intercepted = true;
+        // Simulate ingest clearing caches while the load is in-flight.
+        clearTrendingCaches();
+      }
+      return original(...args);
+    });
+
+    // This call starts a load, clearTrendingCaches fires during it.
+    // The result should still be returned to THIS caller (no wasted work)…
+    const ctx = await _loadVelocityContext();
+    expect(ctx).not.toBeNull();
+    expect(ctx.tooClose).toBe(false);
+
+    spy.mockRestore();
+
+    // …but the cache must NOT have been populated with the stale data.
+    // A subsequent call must hit the DB again (fresh reload).
+    const findOneSpy = vi.spyOn(SkillSnapshot, "findOne");
+    const fresh = await _loadVelocityContext();
+    expect(fresh).not.toBeNull();
+    expect(findOneSpy).toHaveBeenCalled();
+
+    findOneSpy.mockRestore();
+  });
 });

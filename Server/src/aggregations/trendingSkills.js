@@ -23,6 +23,7 @@ const TRENDING_CACHE = createTtlCache({ ttlMs: TRENDING_TTL_MS, maxEntries: 500 
 // DB round-trip instead of N duplicate ones.
 let _velocityCtxPromise = null;
 let _velocityCtxCache  = null;   // { value, expiresAt }
+let _cacheGeneration   = 0;     // bumped by clearTrendingCaches()
 
 async function _loadVelocityContext() {
   // 1. Return cached result if still fresh.
@@ -33,7 +34,11 @@ async function _loadVelocityContext() {
   if (_velocityCtxPromise) return _velocityCtxPromise;
 
   // 3. First caller — do the work.
-  _velocityCtxPromise = (async () => {
+  //    Capture the generation BEFORE any async work so we can detect a
+  //    clearTrendingCaches() call that landed mid-flight.
+  const gen = _cacheGeneration;
+
+  const promise = (async () => {
     try {
       const latestSnap = await SkillSnapshot.findOne()
         .sort({ capturedAt: -1 })
@@ -75,15 +80,30 @@ async function _loadVelocityContext() {
       const baseMap = new Map(baseDocs.map(({ skill, count30 }) => [skill, count30]));
 
       const ctx = { gapDays, tooClose: false, nowMap, baseMap };
-      // Cache for the same TTL as trending results.
-      _velocityCtxCache = { value: ctx, expiresAt: Date.now() + TRENDING_TTL_MS };
+      // Only cache if no clear happened while we were loading.
+      // If gen drifted, return the result to THIS caller (no wasted work)
+      // but leave the cache empty so the next request reloads fresh.
+      if (gen === _cacheGeneration) {
+        _velocityCtxCache = { value: ctx, expiresAt: Date.now() + TRENDING_TTL_MS };
+      }
       return ctx;
     } finally {
-      _velocityCtxPromise = null;
+      // Only clear the in-flight promise if it's still ours.
+      if (gen === _cacheGeneration) {
+        _velocityCtxPromise = null;
+      }
     }
   })();
 
-  return _velocityCtxPromise;
+  // Guard: a clearTrendingCaches() call may have fired synchronously during the
+  // IIFE's startup (before the first await). If the generation drifted, do NOT
+  // store the stale promise in the module variable — return it to this caller
+  // only so the next request starts a fresh load.
+  if (gen === _cacheGeneration) {
+    _velocityCtxPromise = promise;
+  }
+
+  return promise;
 }
 
 // Exposed for testing only — verifies the coalescing behaviour.
@@ -98,6 +118,7 @@ export function clearTrendingCaches() {
   TRENDING_CACHE.clear();
   _velocityCtxCache = null;
   _velocityCtxPromise = null;
+  _cacheGeneration++;
 }
 
 /**
