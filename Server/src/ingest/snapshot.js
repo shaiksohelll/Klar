@@ -210,8 +210,9 @@ export async function recordDailySkillBuckets({
       {
         $match: {
           // Strict type guards so $dateTrunc / $unwind can never throw and flip
-          // the writer to ok:false on a malformed doc.
-          postedAt: { $type: "date", $gte: lowerBound },
+          // the writer to ok:false on a malformed doc. The $lte: now upper bound
+          // prevents a bad feed with future-dated postedAt from leaking into buckets.
+          postedAt: { $type: "date", $gte: lowerBound, $lte: now },
           requiredSkills: { $type: "array", $ne: [] },
         },
       },
@@ -302,7 +303,7 @@ export async function recordDailySkillBuckets({
     // capturedAt-only rows (no `date`) are never touched by the partial filter.
     let deleted = 0;
     const inWindow = await SkillSnapshot.find({
-      date: { $type: "date", $gte: lowerBound },
+      date: { $type: "date", $gte: lowerBound, $lte: now },
     })
       .select("skill date -_id")
       .lean();
@@ -313,12 +314,19 @@ export async function recordDailySkillBuckets({
         staleKeys.push({ skill: r.skill, date: r.date });
       }
     }
+    // Delete in batches of 500 keys to stay clear of MongoDB BSON/query limits
+    // when backfill mode produces a large staleKeys set. Idempotent: each batch
+    // is independently safe and a re-run deletes nothing extra.
     if (staleKeys.length > 0) {
-      const delResult = await SkillSnapshot.deleteMany({
-        date: { $type: "date", $gte: lowerBound },
-        $or: staleKeys,
-      });
-      deleted = delResult.deletedCount || 0;
+      const BATCH = 500;
+      for (let i = 0; i < staleKeys.length; i += BATCH) {
+        const batch = staleKeys.slice(i, i + BATCH);
+        const delResult = await SkillSnapshot.deleteMany({
+          date: { $type: "date", $gte: lowerBound, $lte: now },
+          $or: batch,
+        });
+        deleted += delResult.deletedCount || 0;
+      }
     }
 
     if (ops.length === 0 && deleted === 0) {

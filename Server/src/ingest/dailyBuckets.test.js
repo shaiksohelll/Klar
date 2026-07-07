@@ -40,7 +40,7 @@ beforeEach(async () => {
 // could bucket jobs under one day while the test computes today/yesterday under
 // the next. Every job's postedAt and every expected bucket derives from ANCHOR,
 // and recordDailySkillBuckets is always called with `now: ANCHOR`.
-const ANCHOR = new Date("2026-03-15T08:00:00.000Z");
+const ANCHOR = new Date("2026-03-15T23:59:59.000Z");
 
 // ── Helpers ─────────────────────────────────────────────
 let seq = 0;
@@ -450,5 +450,85 @@ describe("daily-flow ownership of { skill, date } rows", () => {
     // the series is genuinely day-bucketed and not a single cumulative point.
     const tenAgo = await SkillSnapshot.findOne({ skill: "node.js", date: utcDay(10) }).lean();
     expect(tenAgo.postingCount).toBe(2);
+  });
+});
+
+describe("recordDailySkillBuckets — $lte upper-bound on postedAt", () => {
+  it("drops a future-dated posting from the aggregation", async () => {
+    // A normal job today + one with a postedAt 1 day INTO THE FUTURE (bad feed).
+    const futureDate = new Date(
+      Date.UTC(
+        ANCHOR.getUTCFullYear(),
+        ANCHOR.getUTCMonth(),
+        ANCHOR.getUTCDate() + 1,
+        12, 0, 0,
+      ),
+    );
+    await Job.create([
+      makeJob({ requiredSkills: ["rust"], postedAt: postedOn(0) }),
+      makeJob({ requiredSkills: ["rust"], postedAt: futureDate }),
+    ]);
+
+    const res = await runWriter({ since: new Date(0) });
+    expect(res.ok).toBe(true);
+
+    // Only today's job is bucketed; the future-dated one is excluded.
+    const todayRow = await SkillSnapshot.findOne({ skill: "rust", date: utcDay(0) }).lean();
+    expect(todayRow).toBeTruthy();
+    expect(todayRow.postingCount).toBe(1);
+
+    // No bucket for the future day exists at all.
+    const futureDay = new Date(
+      Date.UTC(ANCHOR.getUTCFullYear(), ANCHOR.getUTCMonth(), ANCHOR.getUTCDate() + 1),
+    );
+    expect(await SkillSnapshot.findOne({ skill: "rust", date: futureDay })).toBeNull();
+  });
+});
+
+describe("recordDailySkillBuckets — prune never touches future rows", () => {
+  it("leaves a future-dated day-keyed row intact during prune", async () => {
+    // Insert a day-keyed row in the FUTURE. The prune must never delete it
+    // because the prune window is bounded by $lte: now.
+    const futureDay = new Date(
+      Date.UTC(ANCHOR.getUTCFullYear(), ANCHOR.getUTCMonth(), ANCHOR.getUTCDate() + 30),
+    );
+    await SkillSnapshot.create({ skill: "future-skill", date: futureDay, postingCount: 7 });
+
+    // A real job today so the writer has something to do.
+    await Job.create([makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) })]);
+    const res = await runWriter({ since: new Date(0) });
+    expect(res.ok).toBe(true);
+
+    // The future row survives: it was outside the prune window.
+    const row = await SkillSnapshot.findOne({ skill: "future-skill", date: futureDay }).lean();
+    expect(row).toBeTruthy();
+    expect(row.postingCount).toBe(7);
+  });
+});
+
+describe("recordDailySkillBuckets — chunked deleteMany", () => {
+  it("deletes all stale keys even when the set exceeds one 500-key batch", async () => {
+    // Seed 600 stale (skill, date) rows that have no backing jobs.
+    // Each gets a unique skill name so they are all distinct keys.
+    const staleRows = [];
+    const staleDate = utcDay(5);
+    for (let i = 0; i < 600; i++) {
+      staleRows.push({ skill: `stale-${i}`, date: staleDate, postingCount: 1 });
+    }
+    await SkillSnapshot.insertMany(staleRows);
+    expect(await SkillSnapshot.countDocuments({ date: staleDate })).toBe(600);
+
+    // One real job today so the writer runs and its fresh set does NOT contain
+    // any of the 600 stale skills.
+    await Job.create([makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) })]);
+    const res = await recordDailySkillBuckets({ now: ANCHOR, since: new Date(0) });
+    expect(res.ok).toBe(true);
+    // All 600 stale rows should be deleted (across at least 2 batches of 500).
+    expect(res.deleted).toBe(600);
+
+    // None of the stale rows survive.
+    expect(await SkillSnapshot.countDocuments({ date: staleDate })).toBe(0);
+    // The real row for today is still there.
+    expect(await SkillSnapshot.findOne({ skill: "node.js", date: utcDay(0) })).not.toBeNull();
   });
 });

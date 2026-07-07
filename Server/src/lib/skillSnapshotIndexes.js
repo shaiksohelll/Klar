@@ -36,6 +36,23 @@ function isObsoleteDateDescIndex(idx) {
   return keys.length === 1 && keys[0] === "date" && idx.key.date === -1;
 }
 
+// The schema now defines the day TTL index's partialFilterExpression as
+// { date: { $type: "date" } }. An existing deployment that was created before
+// this change still holds the OLD partialFilter { date: { $exists: true } }.
+// MongoDB treats different partialFilterExpressions on the same key as distinct
+// indexes, so syncIndexes alone cannot converge — the old one must be dropped
+// explicitly before the new one can be created. Scoped to a single-key ascending
+// `date` TTL with a partial filter that uses $exists (not $type).
+function isStaleExistsDateTtl(idx) {
+  const keys = Object.keys(idx.key || {});
+  if (keys.length !== 1 || keys[0] !== "date") return false;
+  if (typeof idx.expireAfterSeconds !== "number") return false;
+  const pf = idx.partialFilterExpression;
+  if (!pf || !pf.date) return false;
+  // Stale if it uses $exists instead of $type.
+  return pf.date.$exists != null && pf.date.$type == null;
+}
+
 /**
  * Ensure the SkillSnapshot capturedAt TTL index is the partial (safe) one.
  * Non-fatal: always resolves, never throws.
@@ -64,7 +81,7 @@ export async function ensureSkillSnapshotIndexes() {
     //    TTL/range index existed. Both are guarded + idempotent (a missing
     //    index simply isn't found, and a failed drop only logs).
     for (const idx of existing) {
-      if (isUnsafeCapturedAtTtl(idx) || isObsoleteDateDescIndex(idx)) {
+      if (isUnsafeCapturedAtTtl(idx) || isObsoleteDateDescIndex(idx) || isStaleExistsDateTtl(idx)) {
         try {
           await collection.dropIndex(idx.name);
           dropped.push(idx.name);
