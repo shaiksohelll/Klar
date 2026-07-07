@@ -137,7 +137,6 @@ function NavPills() {
     mounted = false;
     cancelAnimationFrame(rafId);
     window.removeEventListener("resize", onResize);
-    mql?.removeEventListener("change", onReduceChange);
     tweenRefs.current.forEach((tw) => tw?.kill());
     tlRefs.current.forEach((tl) => tl?.kill());
 
