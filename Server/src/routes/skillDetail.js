@@ -57,7 +57,16 @@ router.get("/:name", async (req, res, next) => {
     // is rejected with 400 before we reach here and never reaches the cache.
 
     const since = sinceDate(months);
-    const baseMatch = { requiredSkills: name, postedAt: { $gte: since } };
+    // Type guards (P0/P1 audit): a direct Mongo import / bulkWrite that skips
+    // Mongoose validation can persist a non-Date postedAt (which throws inside
+    // the $dateToString trend stage below) or a non-array requiredSkills (which
+    // $unwind silently miscounts). Both fields are constrained at $match —
+    // mirroring the guards in ingest/snapshot.js — while preserving the existing
+    // `$eq: name` (array-contains) and `$gte: since` semantics.
+    const baseMatch = {
+      requiredSkills: { $eq: name, $type: "array", $ne: [] },
+      postedAt: { $type: "date", $gte: since },
+    };
     const windowMatch = { postedAt: { $gte: since } };
 
     const [
