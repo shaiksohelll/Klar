@@ -119,20 +119,25 @@ function NavPills() {
       });
     };
 
-    build();
-    const onResize = () => build();
-    window.addEventListener("resize", onResize);
-    if (document.fonts?.ready) document.fonts.ready.then(build).catch(() => {});
+      build();
+  let rafId = 0;
+  const onResize = () => {
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(build);
+  };
+  window.addEventListener("resize", onResize);
+  if (document.fonts?.ready) document.fonts.ready.then(build).catch(() => {});
 
-    return () => {
-      mounted = false;
-      window.removeEventListener("resize", onResize);
-      tweenRefs.current.forEach((tw) => tw?.kill());
-      tlRefs.current.forEach((tl) => tl?.kill());
-      tweenRefs.current = [];
-      tlRefs.current = [];
-    };
-  }, []);
+  return () => {
+    mounted = false;
+    cancelAnimationFrame(rafId);
+    window.removeEventListener("resize", onResize);
+    tweenRefs.current.forEach((tw) => tw?.kill());
+    tlRefs.current.forEach((tl) => tl?.kill());
+    tweenRefs.current = [];
+    tlRefs.current = [];
+  };
+}, []);
 
   const enter = (i) => {
     const tl = tlRefs.current[i];
@@ -165,6 +170,8 @@ function NavPills() {
           ref={assignRef(pillRefs, i)}
           onMouseEnter={() => enter(i)}
           onMouseLeave={() => leave(i)}
+          onFocus={() => enter(i)}
+          onBlur={() => leave(i)}
           className={({ isActive }) =>
             [
               "pill-link relative overflow-hidden inline-flex items-center justify-center h-9 px-4 rounded-[var(--radius-pill)]",
