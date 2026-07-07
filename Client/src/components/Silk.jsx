@@ -79,8 +79,10 @@ const SilkPlane = forwardRef(function SilkPlane({ uniforms }, ref) {
   }, [ref, viewport]);
 
   useFrame((_, delta) => {
-    ref.current.material.uniforms.uTime.value += 0.1 * delta;
-  });
+  const mesh = ref.current;
+  if (!mesh?.material?.uniforms?.uTime) return;
+  mesh.material.uniforms.uTime.value += 0.1 * delta;
+});
 
   return (
     <mesh ref={ref}>
@@ -105,9 +107,11 @@ const Silk = ({ speed = 5, scale = 1, color = '#7B7481', noiseIntensity = 1.5, r
     }),
     [speed, scale, noiseIntensity, color, rotation]
   );
-
+const reduceMotion =
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   return (
-    <Canvas dpr={[1, 2]} frameloop="always">
+    <Canvas dpr={[1, 2]} frameloop={reduceMotion ? "demand" : "always"}>
       <SilkPlane ref={meshRef} uniforms={uniforms} />
     </Canvas>
   );

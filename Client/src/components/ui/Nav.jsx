@@ -18,9 +18,13 @@ const ROUTES = [
   { to: "/about", label: "About" },
 ];
 
-// Red sweep color for the pill hover circle (named object so it can't get
-// corrupted as an inline style).
-const circleStyle = { background: "#EB0029" };
+// Red sweep color for the pill hover circle.
+const circleStyle = { background: "#FF2740" };
+
+// Callback-ref helper: block body returns undefined (React 19 cleanup-safe).
+const assignRef = (refArr, i) => (el) => {
+  refArr.current[i] = el;
+};
 
 // Plain links — used inside the mobile glass Sheet (rendered by App).
 export function NavRoutes({ onNavigate, className = "" }) {
@@ -59,10 +63,12 @@ function NavPills() {
   const reduceRef = useRef(false);
 
   useEffect(() => {
+    let mounted = true;
     reduceRef.current =
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
     const build = () => {
+      if (!mounted) return;
       pillRefs.current.forEach((pill, i) => {
         const circle = circleRefs.current[i];
         if (!pill || !circle) return;
@@ -117,7 +123,15 @@ function NavPills() {
     const onResize = () => build();
     window.addEventListener("resize", onResize);
     if (document.fonts?.ready) document.fonts.ready.then(build).catch(() => {});
-    return () => window.removeEventListener("resize", onResize);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("resize", onResize);
+      tweenRefs.current.forEach((tw) => tw?.kill());
+      tlRefs.current.forEach((tl) => tl?.kill());
+      tweenRefs.current = [];
+      tlRefs.current = [];
+    };
   }, []);
 
   const enter = (i) => {
@@ -148,12 +162,12 @@ function NavPills() {
           key={r.to}
           to={r.to}
           end={r.end}
-          ref={(el) => (pillRefs.current[i] = el)}
+          ref={assignRef(pillRefs, i)}
           onMouseEnter={() => enter(i)}
           onMouseLeave={() => leave(i)}
           className={({ isActive }) =>
             [
-              "pill-link relative overflow-hidden inline-flex items-center justify-center h-8 px-3 rounded-[var(--radius-pill)]",
+              "pill-link relative overflow-hidden inline-flex items-center justify-center h-9 px-4 rounded-[var(--radius-pill)]",
               "font-mono text-xs uppercase tracking-[0.14em] whitespace-nowrap no-underline cursor-pointer",
               "focus-visible:outline-none focus-visible:shadow-[var(--glow-red)]",
               isActive ? "text-[var(--text)]" : "text-[var(--muted)]",
@@ -161,7 +175,7 @@ function NavPills() {
           }
         >
           <span
-            ref={(el) => (circleRefs.current[i] = el)}
+            ref={assignRef(circleRefs, i)}
             className="absolute left-1/2 bottom-0 z-0 block rounded-full pointer-events-none"
             style={circleStyle}
             aria-hidden="true"
@@ -171,7 +185,7 @@ function NavPills() {
               {r.label}
             </span>
             <span
-              className="pill-label-hover absolute left-0 top-0 inline-block leading-none text-white"
+              className="pill-label-hover absolute left-0 top-0 inline-block leading-none text-white opacity-0"
               aria-hidden="true"
             >
               {r.label}
@@ -202,7 +216,7 @@ export default function Nav({
           <Brand />
         </NavLink>
 
-        <div className="hidden flex-1 items-center justify-center gap-x-1 px-2 md:flex">
+        <div className="hidden flex-1 items-center justify-center gap-x-2 px-2 md:flex">
           <NavPills />
         </div>
 
