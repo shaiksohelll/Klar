@@ -220,4 +220,36 @@ describe("GET /api/skill/:name — baseMatch type guards exclude malformed docs"
     expect(capturedMatch.requiredSkills.$type).toBe("array");
     expect(capturedMatch.requiredSkills.$eq).toBe("react");
   });
+
+  it("excludes a non-array requiredSkills doc from the totalJobs denominator (windowMatch)", async () => {
+    // One well-formed posting (valid Date + array skills) + one whose
+    // requiredSkills is a STRING while postedAt is a VALID Date. The malformed
+    // doc is excluded from `demand` by baseMatch's $type:"array" guard, but
+    // WITHOUT the windowMatch $type:"array" guard it would still be counted in
+    // `totalJobs` (the share denominator), deflating `share` to 50% instead of
+    // the correct 100%.
+    await jobsCol().insertOne(rawJob({ requiredSkills: ["react", "node.js"] }));
+    await jobsCol().insertOne(
+      rawJob({
+        externalId: "adzuna:bad-skills-window",
+        requiredSkills: "react", // string, not an array — postedAt stays a valid Date
+      }),
+    );
+
+    const res = await request(makeApp()).get("/api/skill/react");
+
+    expect(res.status).toBe(200);
+    // demand excludes the malformed doc (baseMatch $type:"array" guard).
+    expect(res.body.demand).toBe(1);
+    // totalJobs (windowMatch denominator) ALSO excludes the malformed doc —
+    // without the windowMatch $type:"array" guard it would be 2.
+    expect(res.body.totalJobs).toBe(1);
+    // share = demand / totalJobs = 1/1 = 100% (not the skewed 1/2 = 50%).
+    expect(res.body.share).toBe(100);
+    // Co-occurrence: "node.js" comes only from the well-formed doc, never
+    // inflated by the malformed string-requiredSkills doc.
+    const node = res.body.relatedSkills.find((s) => s.skill === "node.js");
+    expect(node).toBeTruthy();
+    expect(node.count).toBe(1);
+  });
 });

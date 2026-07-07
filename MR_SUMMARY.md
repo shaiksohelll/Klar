@@ -43,3 +43,46 @@ Mongoose validation — exactly the bulkWrite scenario the audit describes.
 `skillDetail.test.js` alone → **6 passed (6)** (4 pre-existing clamp tests + 2 new).
 
 No merge, no push, no commit. Branch `fix/skilldetail-type-guards` (off `main`).
+
+---
+
+## Follow-up fixes (round 2) — windowMatch denominator + skillPairs $match guard
+
+Two follow-up P1 findings (codeant + greptile) on the same branch. Scope remains
+ESM-only: `Server/src/routes/skillDetail.js`, `Server/src/aggregations/skillPairs.js`,
+and `Server/src/routes/skillDetail.test.js`. **`baseMatch` was NOT touched.**
+
+### Fixes
+
+| Review source | Severity | File:line | Change |
+| --- | --- | --- | --- |
+| codeant | P1 — `windowMatch` denominator | `Server/src/routes/skillDetail.js:77` | `windowMatch` (the `totalJobs` share denominator) was `{ postedAt: { $gte: since } }`. A doc with a valid Date `postedAt` but a non-array `requiredSkills` was excluded from `demand` (by `baseMatch`) yet still counted in `totalJobs`, skewing `share` downward. Now `{ postedAt: { $type: "date", $gte: since }, requiredSkills: { $type: "array" } }`. CRITICAL: `requiredSkills` uses `$type: "array"` ONLY — no `$ne: []` — so a well-formed job that legitimately lists zero skills still counts toward the denominator, preserving existing share semantics. |
+| greptile | P1 — `skillPairs` `$match` guard | `Server/src/aggregations/skillPairs.js:51` (baseCount) and `:65` (pairs pipeline) | Both `$match` stages used a bare `requiredSkills: normalized` (shorthand `$eq`), which matches a non-array string field equal to `normalized`. A malformed doc (string `requiredSkills`) could enter the pipeline and be silently miscounted by the subsequent `$unwind "$requiredSkills"` (MongoDB treats a non-array scalar as a single-element array). Replaced with `requiredSkills: { $type: "array", $ne: [], $in: [normalized] }` in BOTH stages — dropping only malformed (non-array) docs while preserving array-contains semantics. No `postedAt` guard added: this path is window-independent by design. All other semantics (cache key, `$unwind`, `$group`, `$project`, `$count`) unchanged. |
+
+### Tests (`Server/src/routes/skillDetail.test.js`)
+
+All existing tests (4 months-clamp + 2 prior `baseMatch` type-guard regressions)
+remain intact. One NEW case added inside the `baseMatch type guards` describe block:
+
+- `excludes a non-array requiredSkills doc from the totalJobs denominator (windowMatch)` —
+  inserts via the raw collection (bypassing Mongoose validation) a doc with a VALID
+  Date `postedAt` but a STRING `requiredSkills` (`"react"`) alongside a well-formed
+  doc (valid Date + `["react","node.js"]`). Asserts: status 200 (no throw),
+  `demand === 1` (malformed doc excluded by `baseMatch`), `totalJobs === 1`
+  (malformed doc ALSO excluded from the denominator by `windowMatch` — would be 2
+  without the guard), `share === 100` (not the skewed 50%), and `node.js`
+  co-occurrence === 1 (never inflated by the malformed doc). This is the regression
+  for the codeant `windowMatch` fix.
+
+Note: `getSkillPairs` is mocked at the route level (existing test harness), so the
+greptile `skillPairs` guard is covered by the code change itself rather than a
+direct route assertion. No `skillPairs.test.js` exists to extend, and creating a
+new test file is outside the declared edit scope, so the guard stands on its code
+correctness.
+
+### Verification
+
+`cd Server; npm test` → **25 test files passed (25), 302 tests passed (302)**, duration 43.35s.
+`skillDetail.test.js` alone → **7 passed (7)** (4 clamp + 2 prior guard + 1 new windowMatch).
+
+No merge, no push, no commit. Branch `fix/skilldetail-type-guards` (off `main`), unchanged.

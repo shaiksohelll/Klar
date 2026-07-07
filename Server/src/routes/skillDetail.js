@@ -67,7 +67,17 @@ router.get("/:name", async (req, res, next) => {
       requiredSkills: { $eq: name, $type: "array", $ne: [] },
       postedAt: { $type: "date", $gte: since },
     };
-    const windowMatch = { postedAt: { $gte: since } };
+    // windowMatch sizes the share DENOMINATOR (totalJobs). It must mirror the
+    // postedAt $type guard from baseMatch so a doc with a valid Date postedAt
+    // but a non-array requiredSkills is excluded here too — otherwise it would
+    // be dropped from `demand` (by baseMatch) yet still counted in `totalJobs`,
+    // deflating `share`. NOTE: requiredSkills uses $type:"array" ONLY (no
+    // $ne:[]): a well-formed job that legitimately lists zero skills must still
+    // count toward the denominator, preserving the existing share semantics.
+    const windowMatch = {
+      postedAt: { $type: "date", $gte: since },
+      requiredSkills: { $type: "array" },
+    };
 
     const [
       demand,
