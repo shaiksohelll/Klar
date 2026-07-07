@@ -195,6 +195,10 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
   const hit = TRENDING_CACHE.get(cacheKey);
   if (hit) return hit;
 
+  // Capture the generation immediately so a clearTrendingCaches() that fires
+  // during the aggregation/velocity work can't re-populate with stale data.
+  const requestGeneration = _cacheGeneration;
+
   // Only look at jobs posted within the last N months
   const since = new Date();
   since.setMonth(since.getMonth() - Number(months));
@@ -282,7 +286,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
       velocityReady: false,
       velocityBasisDays: velocityCtx?.gapDays ?? null,
     };
-    TRENDING_CACHE.set(cacheKey, result);
+    if (requestGeneration === _cacheGeneration) TRENDING_CACHE.set(cacheKey, result);
     return result;
   }
 
@@ -323,6 +327,6 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
     velocityReady: true,
     velocityBasisDays: gapDays,
   };
-  TRENDING_CACHE.set(cacheKey, result);
+  if (requestGeneration === _cacheGeneration) TRENDING_CACHE.set(cacheKey, result);
   return result;
 }
