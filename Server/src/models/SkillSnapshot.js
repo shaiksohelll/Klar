@@ -56,7 +56,7 @@ SkillSnapshotSchema.index(
   { date: 1 },
   {
     expireAfterSeconds: 60 * 60 * 24 * 400,
-    partialFilterExpression: { date: { $exists: true } },
+    partialFilterExpression: { date: { $type: "date" } },
   },
 );
 // Auto-expire ONLY legacy velocity-only snapshots older than 90 days.

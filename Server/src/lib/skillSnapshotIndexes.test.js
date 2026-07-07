@@ -164,4 +164,51 @@ describe("ensureSkillSnapshotIndexes — migration", () => {
     expect(asc).toHaveLength(1);
     expect(asc[0].expireAfterSeconds).toBe(60 * 60 * 24 * 400);
   });
+
+  // Extract single-key `date` TTL indexes for the $exists → $type migration tests.
+  const dateTtls = (indexes) =>
+    indexes.filter((idx) => {
+      const keys = Object.keys(idx.key || {});
+      return keys.length === 1 && keys[0] === "date" && typeof idx.expireAfterSeconds === "number";
+    });
+
+  it("drops an old $exists-based date TTL and recreates with $type: 'date'", async () => {
+    // Simulate a deployed DB that still holds the OLD partialFilter { $exists: true }.
+    await SkillSnapshot.collection.createIndex(
+      { date: 1 },
+      {
+        name: "date_1_exists",
+        expireAfterSeconds: 60 * 60 * 24 * 400,
+        partialFilterExpression: { date: { $exists: true } },
+      },
+    );
+    const before = dateTtls(await SkillSnapshot.collection.indexes());
+    expect(before).toHaveLength(1);
+    expect(before[0].partialFilterExpression).toMatchObject({ date: { $exists: true } });
+
+    const res = await ensureSkillSnapshotIndexes();
+    expect(res.ok).toBe(true);
+    expect(res.dropped).toContain("date_1_exists");
+
+    // End state: exactly one date TTL and it uses $type: "date".
+    const after = dateTtls(await SkillSnapshot.collection.indexes());
+    expect(after).toHaveLength(1);
+    expect(after[0].partialFilterExpression).toMatchObject({ date: { $type: "date" } });
+    expect(after[0].expireAfterSeconds).toBe(60 * 60 * 24 * 400);
+  });
+
+  it("is idempotent: a second run keeps the $type-based date TTL", async () => {
+    // First run creates from scratch.
+    await ensureSkillSnapshotIndexes();
+    const first = dateTtls(await SkillSnapshot.collection.indexes());
+    expect(first).toHaveLength(1);
+    expect(first[0].partialFilterExpression).toMatchObject({ date: { $type: "date" } });
+
+    // Second run is a no-op.
+    const res = await ensureSkillSnapshotIndexes();
+    expect(res.ok).toBe(true);
+    const second = dateTtls(await SkillSnapshot.collection.indexes());
+    expect(second).toHaveLength(1);
+    expect(second[0].partialFilterExpression).toMatchObject({ date: { $type: "date" } });
+  });
 });
