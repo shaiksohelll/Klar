@@ -54,12 +54,12 @@ function makeJob({ requiredSkills, postedAt }) {
   };
 }
 
-// noon UTC on the day `daysAgo` before now.
+// UTC midnight on the day `daysAgo` before now. Uses hour 0 (not noon) so the
+// timestamp is always in the past relative to `new Date()` at any time of day,
+// which matters because the day-bucket writer bounds postedAt with $lte: now.
 function postedOn(daysAgo) {
   const now = new Date();
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo));
-  d.setUTCHours(12, 0, 0, 0);
-  return d;
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo));
 }
 
 describe("backfill -> forecast + momentum end to end", () => {

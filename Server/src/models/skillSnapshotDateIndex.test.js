@@ -63,6 +63,6 @@ describe("SkillSnapshot date TTL retention", () => {
     // 400 days in seconds. Must exceed the 12-month (~365d) forecast lookback.
     expect(ttl.expireAfterSeconds).toBe(60 * 60 * 24 * 400);
     expect(ttl.expireAfterSeconds).toBeGreaterThan(60 * 60 * 24 * 365);
-    expect(ttl.partialFilterExpression).toMatchObject({ date: { $exists: true } });
+    expect(ttl.partialFilterExpression).toMatchObject({ date: { $type: "date" } });
   });
 });

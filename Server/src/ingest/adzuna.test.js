@@ -10,11 +10,11 @@ vi.hoisted(() => {
   process.env.ADZUNA_APP_KEY = "test-key";
 });
 
-// Controllable mock of the momentum snapshot writer. Defaults to a resolved
+// Controllable mock of the daily-bucket snapshot writer. Defaults to a resolved
 // no-op so the salaryDisclosed cases are unaffected; the non-fatal test sets
 // mockRejectedValueOnce to prove a throw here can't abort the ingest run.
 const { recordDailySkillBuckets } = vi.hoisted(() => ({
-  recordDailySkillBuckets: vi.fn().mockResolvedValue({ ok: true, rows: 0 }),
+  recordDailySkillBuckets: vi.fn().mockResolvedValue({ ok: true, buckets: 0 }),
 }));
 vi.mock("./snapshot.js", () => ({
   recordSkillMomentumSnapshot: vi.fn().mockResolvedValue({ ok: true, skills: 0 }),
