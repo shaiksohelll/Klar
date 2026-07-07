@@ -16,6 +16,79 @@ const ALL_SKILLS_CACHE = createTtlCache({ ttlMs: ALL_SKILLS_TTL_MS, maxEntries: 
 const TRENDING_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const TRENDING_CACHE = createTtlCache({ ttlMs: TRENDING_TTL_MS, maxEntries: 500 });
 
+// ── Velocity snapshot context (promise-coalescing) ──────────────────────────
+// The snapshot lookups (latest batch, baseline batch, nowDocs, baseDocs) are
+// identical for every getTrendingSkills call regardless of role/months/limit.
+// When /api/warm fires N concurrent calls, this coalesces them into a single
+// DB round-trip instead of N duplicate ones.
+let _velocityCtxPromise = null;
+let _velocityCtxCache  = null;   // { value, expiresAt }
+
+async function _loadVelocityContext() {
+  // 1. Return cached result if still fresh.
+  if (_velocityCtxCache && Date.now() < _velocityCtxCache.expiresAt) {
+    return _velocityCtxCache.value;
+  }
+  // 2. If another caller is already in-flight, piggyback on its promise.
+  if (_velocityCtxPromise) return _velocityCtxPromise;
+
+  // 3. First caller — do the work.
+  _velocityCtxPromise = (async () => {
+    try {
+      const latestSnap = await SkillSnapshot.findOne()
+        .sort({ capturedAt: -1 })
+        .select("capturedAt")
+        .lean();
+
+      if (!latestSnap) return null; // no snapshot history yet
+
+      const latestCapturedAt = latestSnap.capturedAt;
+      const sevenDaysAgo = new Date(latestCapturedAt);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const [idealBase, oldestBase] = await Promise.all([
+        SkillSnapshot.findOne({ capturedAt: { $lte: sevenDaysAgo } })
+          .sort({ capturedAt: -1 })
+          .select("capturedAt")
+          .lean(),
+        SkillSnapshot.findOne().sort({ capturedAt: 1 }).select("capturedAt").lean(),
+      ]);
+
+      const baseSnap = idealBase ?? oldestBase;
+      const baselineCapturedAt = baseSnap.capturedAt;
+      const gapDays = Math.floor(
+        (latestCapturedAt.getTime() - baselineCapturedAt.getTime()) / 86_400_000,
+      );
+
+      if (gapDays < 2) return { gapDays, tooClose: true };
+
+      const [nowDocs, baseDocs] = await Promise.all([
+        SkillSnapshot.find({ capturedAt: latestCapturedAt })
+          .select("skill count30 -_id")
+          .lean(),
+        SkillSnapshot.find({ capturedAt: baselineCapturedAt })
+          .select("skill count30 -_id")
+          .lean(),
+      ]);
+
+      const nowMap = new Map(nowDocs.map(({ skill, count30 }) => [skill, count30]));
+      const baseMap = new Map(baseDocs.map(({ skill, count30 }) => [skill, count30]));
+
+      const ctx = { gapDays, tooClose: false, nowMap, baseMap };
+      // Cache for the same TTL as trending results.
+      _velocityCtxCache = { value: ctx, expiresAt: Date.now() + TRENDING_TTL_MS };
+      return ctx;
+    } finally {
+      _velocityCtxPromise = null;
+    }
+  })();
+
+  return _velocityCtxPromise;
+}
+
+// Exposed for testing only — verifies the coalescing behaviour.
+export { _loadVelocityContext };
+
 /**
  * Clears both trending caches. Called by ingestAdzuna() right after a
  * successful bulkWrite so the next request recomputes from fresh data.
@@ -23,6 +96,8 @@ const TRENDING_CACHE = createTtlCache({ ttlMs: TRENDING_TTL_MS, maxEntries: 500 
 export function clearTrendingCaches() {
   ALL_SKILLS_CACHE.clear();
   TRENDING_CACHE.clear();
+  _velocityCtxCache = null;
+  _velocityCtxPromise = null;
 }
 
 /**
@@ -158,81 +233,32 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
   // Compares each skill's trailing-30-day count across two snapshot batches
   // instead of using raw job postedAt buckets, which produce inflated percentages
   // when posting activity is uneven within a 30-day window.
-
-  // Step 1 — find the latest snapshot batch.
-  const latestSnap = await SkillSnapshot.findOne()
-    .sort({ capturedAt: -1 })
-    .select("capturedAt")
-    .lean();
+  //
+  // The snapshot lookups are param-independent, so _loadVelocityContext()
+  // coalesces concurrent callers (e.g. /api/warm's 3 parallel calls) into
+  // a single DB round-trip.
 
   // Helper: stamp every skill with safe null-velocity defaults and return.
   const noVelocity = (skillList) =>
     skillList.map((s) => ({ ...s, velocity: null, trend: "flat" }));
 
-  if (!latestSnap) {
-    // No snapshot history recorded yet.
+  const velocityCtx = await _loadVelocityContext();
+
+  if (!velocityCtx || velocityCtx.tooClose) {
+    // No snapshot history, or batches too close for a meaningful signal.
     const result = {
       totalJobs,
       role: role || "all",
       months: Number(months),
       skills: noVelocity(skills),
       velocityReady: false,
-      velocityBasisDays: null,
+      velocityBasisDays: velocityCtx?.gapDays ?? null,
     };
     TRENDING_CACHE.set(cacheKey, result);
     return result;
   }
 
-  const latestCapturedAt = latestSnap.capturedAt;
-
-  // Step 2 — pick a baseline batch.
-  // Ideal: the most recent batch that is at least 7 days older than the latest.
-  // Fallback: the oldest batch available (used when history is < 7 days old).
-  const sevenDaysAgo = new Date(latestCapturedAt);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const [idealBase, oldestBase] = await Promise.all([
-    SkillSnapshot.findOne({ capturedAt: { $lte: sevenDaysAgo } })
-      .sort({ capturedAt: -1 })
-      .select("capturedAt")
-      .lean(),
-    SkillSnapshot.findOne().sort({ capturedAt: 1 }).select("capturedAt").lean(),
-  ]);
-
-  const baseSnap = idealBase ?? oldestBase;
-  const baselineCapturedAt = baseSnap.capturedAt;
-  const gapDays = Math.floor(
-    (latestCapturedAt.getTime() - baselineCapturedAt.getTime()) / 86_400_000,
-  );
-
-  if (gapDays < 2) {
-    // Batches are too close together — not enough elapsed time for a meaningful signal.
-    const result = {
-      totalJobs,
-      role: role || "all",
-      months: Number(months),
-      skills: noVelocity(skills),
-      velocityReady: false,
-      velocityBasisDays: null,
-    };
-    TRENDING_CACHE.set(cacheKey, result);
-    return result;
-  }
-
-  // Step 3 — load count30 for both batches in parallel (no per-skill DB calls).
-  const [nowDocs, baseDocs] = await Promise.all([
-    SkillSnapshot.find({ capturedAt: latestCapturedAt })
-      .select("skill count30 -_id")
-      .lean(),
-    SkillSnapshot.find({ capturedAt: baselineCapturedAt })
-      .select("skill count30 -_id")
-      .lean(),
-  ]);
-
-  const nowMap = new Map(nowDocs.map(({ skill, count30 }) => [skill, count30]));
-  const baseMap = new Map(
-    baseDocs.map(({ skill, count30 }) => [skill, count30]),
-  );
+  const { gapDays, nowMap, baseMap } = velocityCtx;
 
   // Step 4 — compute velocity for each skill in the trending list.
   const velocityMap = new Map();
