@@ -1,7 +1,8 @@
 
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { forwardRef, useRef, useMemo, useLayoutEffect } from 'react';
+import { forwardRef, useRef, useMemo, useLayoutEffect, useState, useEffect } from 'react';
 import { Color } from 'three';
+
 
 const hexToNormalizedRGB = hex => {
   hex = hex.replace('#', '');
@@ -107,11 +108,19 @@ const Silk = ({ speed = 5, scale = 1, color = '#7B7481', noiseIntensity = 1.5, r
     }),
     [speed, scale, noiseIntensity, color, rotation]
   );
-const reduceMotion =
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const [reduceMotion, setReduceMotion] = useState(() =>
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (e) => setReduceMotion(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   return (
     <Canvas dpr={[1, 2]} frameloop={reduceMotion ? "demand" : "always"}>
+
       <SilkPlane ref={meshRef} uniforms={uniforms} />
     </Canvas>
   );

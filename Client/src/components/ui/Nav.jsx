@@ -67,6 +67,10 @@ function NavPills() {
     reduceRef.current =
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
+    const mql = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const onReduceChange = (e) => { reduceRef.current = e.matches; };
+    mql?.addEventListener("change", onReduceChange);
+
     const build = () => {
       if (!mounted) return;
       pillRefs.current.forEach((pill, i) => {
@@ -132,8 +136,10 @@ function NavPills() {
     mounted = false;
     cancelAnimationFrame(rafId);
     window.removeEventListener("resize", onResize);
+    mql?.removeEventListener("change", onReduceChange);
     tweenRefs.current.forEach((tw) => tw?.kill());
     tlRefs.current.forEach((tl) => tl?.kill());
+
     tweenRefs.current = [];
     tlRefs.current = [];
   };
