@@ -301,36 +301,46 @@ export async function recordDailySkillBuckets({
     // day). Delete it so forecast/momentum never read a stale positive count.
     // Scoped strictly to rows that HAVE a `date` in the window — legacy
     // capturedAt-only rows (no `date`) are never touched by the partial filter.
+    //
+    // Race-safety: each deleteOne is filtered by BOTH _id AND the observed
+    // postingCount. If a concurrent writer refreshed the row after our find(),
+    // its postingCount changed and the filter no longer matches — the fresh row
+    // is NOT deleted. No locking needed.
     let deleted = 0;
     const inWindow = await SkillSnapshot.find({
       date: { $type: "date", $gte: lowerBound, $lte: now },
     })
-      .select("skill date -_id")
+      .select("skill date postingCount")
       .lean();
-    const staleKeys = [];
+    const staleDocs = [];
     for (const r of inWindow) {
       const key = `${r.skill}\u0000${r.date.getTime()}`;
       if (!freshKeys.has(key)) {
-        staleKeys.push({ skill: r.skill, date: r.date });
+        staleDocs.push(r);
       }
     }
-    // Delete in batches of 500 keys to stay clear of MongoDB BSON/query limits
-    // when backfill mode produces a large staleKeys set. Idempotent: each batch
-    // is independently safe and a re-run deletes nothing extra. Each batch has
-    // its own try/catch so a mid-loop failure never discards the bulkWrite count
-    // or deletes from earlier successful batches (same partial-success discipline
-    // as the bulkWrite handling above).
-    if (staleKeys.length > 0) {
+    // Delete in batches of 500 ops via bulkWrite. Each batch has its own
+    // try/catch so a mid-loop failure never discards the bulkWrite count or
+    // deletes from earlier successful batches (same partial-success discipline
+    // as the upsert bulkWrite handling above).
+    if (staleDocs.length > 0) {
       const BATCH = 500;
-      for (let i = 0; i < staleKeys.length; i += BATCH) {
-        const batch = staleKeys.slice(i, i + BATCH);
+      for (let i = 0; i < staleDocs.length; i += BATCH) {
+        const batch = staleDocs.slice(i, i + BATCH);
+        const deleteOps = batch.map((doc) => ({
+          deleteOne: {
+            filter: { _id: doc._id, postingCount: doc.postingCount },
+          },
+        }));
         try {
-          const delResult = await SkillSnapshot.deleteMany({
-            date: { $type: "date", $gte: lowerBound, $lte: now },
-            $or: batch,
-          });
+          const delResult = await SkillSnapshot.bulkWrite(deleteOps, { ordered: false });
           deleted += delResult.deletedCount || 0;
         } catch (batchErr) {
+          // Partial-success: a BulkWriteError still carries a result.
+          const partial = batchErr?.result;
+          if (partial) {
+            deleted += partial.deletedCount ?? partial.nRemoved ?? 0;
+          }
           console.warn(
             `daily buckets: prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,
           );

@@ -506,7 +506,7 @@ describe("recordDailySkillBuckets — prune never touches future rows", () => {
   });
 });
 
-describe("recordDailySkillBuckets — chunked deleteMany", () => {
+describe("recordDailySkillBuckets — chunked guarded prune", () => {
   it("deletes all stale keys even when the set exceeds one 500-key batch", async () => {
     // Seed 600 stale (skill, date) rows that have no backing jobs.
     // Each gets a unique skill name so they are all distinct keys.
@@ -532,7 +532,7 @@ describe("recordDailySkillBuckets — chunked deleteMany", () => {
     expect(await SkillSnapshot.findOne({ skill: "node.js", date: utcDay(0) })).not.toBeNull();
   });
 
-  it("returns partial success when one batch's deleteMany throws mid-loop", async () => {
+  it("returns partial success when one batch's bulkWrite throws mid-loop", async () => {
     // Seed 600 stale rows (2 batches of 500+100) plus one real job.
     const staleDate = utcDay(5);
     const staleRows = [];
@@ -542,12 +542,13 @@ describe("recordDailySkillBuckets — chunked deleteMany", () => {
     await SkillSnapshot.insertMany(staleRows);
     await Job.create([makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) })]);
 
-    // Spy on deleteMany: let the FIRST batch succeed, then THROW on the second.
-    const original = SkillSnapshot.deleteMany.bind(SkillSnapshot);
+    // Spy on bulkWrite: let the FIRST two calls succeed (the upsert + the first
+    // prune batch), then THROW on the third call (the second prune batch).
+    const original = SkillSnapshot.bulkWrite.bind(SkillSnapshot);
     let callCount = 0;
-    const spy = vi.spyOn(SkillSnapshot, "deleteMany").mockImplementation((...args) => {
+    const spy = vi.spyOn(SkillSnapshot, "bulkWrite").mockImplementation((...args) => {
       callCount++;
-      if (callCount === 2) return Promise.reject(new Error("batch 2 boom"));
+      if (callCount === 3) return Promise.reject(new Error("batch 2 boom"));
       return original(...args);
     });
 
@@ -557,7 +558,62 @@ describe("recordDailySkillBuckets — chunked deleteMany", () => {
     // It should surface the buckets written + deletes from the successful batch.
     expect(res.ok).toBe(true);
     expect(res.buckets).toBeGreaterThanOrEqual(1); // node.js was written
-    expect(res.deleted).toBe(500); // first batch succeeded (500 keys)
+    expect(res.deleted).toBe(500); // first prune batch succeeded (500 keys)
+
+    spy.mockRestore();
+  });
+
+  it("does NOT delete a stale row whose postingCount was refreshed concurrently", async () => {
+    // Seed two stale rows: one will be "refreshed" (simulating a concurrent
+    // writer updating it between our find and our delete), and one will stay
+    // genuinely stale.
+    const staleDate = utcDay(5);
+    await SkillSnapshot.create([
+      { skill: "genuinely-stale", date: staleDate, postingCount: 3 },
+      { skill: "concurrently-refreshed", date: staleDate, postingCount: 5 },
+    ]);
+
+    // A real job today so the fresh set has something.
+    await Job.create([makeJob({ requiredSkills: ["node.js"], postedAt: postedOn(0) })]);
+
+    // Intercept bulkWrite: on the prune batch (the SECOND call), mutate the
+    // "concurrently-refreshed" row BEFORE letting the bulkWrite execute. This
+    // simulates writer B upserting a new postingCount between our find() and
+    // our deleteOne — the guarded filter { _id, postingCount: 5 } should no
+    // longer match and the row should survive.
+    const original = SkillSnapshot.bulkWrite.bind(SkillSnapshot);
+    let callCount = 0;
+    const spy = vi.spyOn(SkillSnapshot, "bulkWrite").mockImplementation(async (...args) => {
+      callCount++;
+      if (callCount === 2) {
+        // Simulate concurrent writer refreshing the row.
+        await SkillSnapshot.updateOne(
+          { skill: "concurrently-refreshed", date: staleDate },
+          { $set: { postingCount: 99 } },
+        );
+      }
+      return original(...args);
+    });
+
+    const res = await recordDailySkillBuckets({ now: ANCHOR, since: new Date(0) });
+    expect(res.ok).toBe(true);
+
+    // The genuinely-stale row (postingCount unchanged) was deleted.
+    expect(
+      await SkillSnapshot.findOne({ skill: "genuinely-stale", date: staleDate }),
+    ).toBeNull();
+
+    // The concurrently-refreshed row survived: its postingCount changed between
+    // find and delete, so the guarded filter { _id, postingCount: 5 } missed.
+    const refreshed = await SkillSnapshot.findOne({
+      skill: "concurrently-refreshed",
+      date: staleDate,
+    }).lean();
+    expect(refreshed).toBeTruthy();
+    expect(refreshed.postingCount).toBe(99);
+
+    // Only 1 deleted (the genuinely stale one), not 2.
+    expect(res.deleted).toBe(1);
 
     spy.mockRestore();
   });

@@ -140,6 +140,29 @@ export async function ensureSkillSnapshotIndexes() {
           `SkillSnapshot index migration: unexpected end state — ${capturedAtTtls.length} capturedAt TTL index(es), partial=${isPartial}`,
         );
       }
+
+      // 5. Verify the date TTL end state: exactly ONE { date: 1 } TTL with
+      //    partialFilterExpression { date: { $type: "date" } }.
+      const dateTtls = after.filter((idx) => {
+        const keys = Object.keys(idx.key || {});
+        return (
+          keys.length === 1 &&
+          keys[0] === "date" &&
+          typeof idx.expireAfterSeconds === "number"
+        );
+      });
+      const dateOk =
+        dateTtls.length === 1 &&
+        dateTtls[0].partialFilterExpression?.date?.$type === "date";
+      if (dateOk) {
+        console.log(
+          `SkillSnapshot index migration: OK — exactly one date TTL with $type:"date" partial filter ("${dateTtls[0].name}")`,
+        );
+      } else {
+        console.warn(
+          `SkillSnapshot index migration: unexpected date TTL end state — ${dateTtls.length} date TTL index(es)`,
+        );
+      }
     } catch (err) {
       console.warn(
         `SkillSnapshot index migration: verification read failed: ${err?.message}`,
