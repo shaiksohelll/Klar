@@ -21,6 +21,17 @@ vi.mock("./snapshot.js", () => ({
   recordDailySkillBuckets,
 }));
 
+// Spy on the skill-gap ROI cache clear — the 9th createTtlCache that ingestAdzuna
+// previously missed. Mocked at module level so the imported binding in adzuna.js
+// is the spy (ESM live bindings are read-only, so a runtime spy can't see it).
+const { clearSkillGapRoiCache } = vi.hoisted(() => ({
+  clearSkillGapRoiCache: vi.fn(),
+}));
+vi.mock("../aggregations/skillGapRoi.js", () => ({
+  clearSkillGapRoiCache,
+  computeSkillGapRoi: vi.fn(),
+}));
+
 import Job from "../models/Job.js";
 import { ingestAdzuna } from "./adzuna.js";
 
@@ -46,6 +57,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await Job.deleteMany({});
+  clearSkillGapRoiCache.mockClear();
 });
 
 // Stub global.fetch to return a single-page Adzuna response containing exactly
@@ -142,5 +154,124 @@ describe("ingestAdzuna — daily snapshot is non-fatal", () => {
     // The job itself was still written — ingestion did its real work.
     const doc = await Job.findOne({ externalId: "green-1" }).lean();
     expect(doc).toBeTruthy();
+  });
+});
+
+describe("ingestAdzuna — bulkWrite partial success (class 5)", () => {
+  it("returns partial counts on BulkWriteError and still clears caches + prunes", async () => {
+    // Seed a stale adzuna row so the chunked prune has something to delete,
+    // proving the run did NOT abort after the partial bulkWrite.
+    const stale = await Job.create({
+      externalId: "stale-bw",
+      source: "adzuna",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "bw-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // First bulkWrite (upsert, updateOne ops) throws a BulkWriteError carrying
+    // partial counts; the deleteOne prune batches delegate to the real in-memory Mongo.
+    const bwErr = Object.assign(new Error("E11000 duplicate key"), {
+      name: "BulkWriteError",
+      result: { upsertedCount: 3, modifiedCount: 2, matchedCount: 5 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.updateOne) throw bwErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    bulkSpy.mockRestore();
+
+    // The run RETURNED (did not throw) and surfaced the partial counts.
+    expect(result.bulkWriteError).toMatchObject({
+      upsertedCount: 3,
+      modifiedCount: 2,
+      matchedCount: 5,
+    });
+    expect(result.upserted).toBe(3);
+    expect(result.modified).toBe(2);
+
+    // The cache-clear block STILL RAN, including the previously-missing ROI clear.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+
+    // The prune step STILL RAN (did not abort) and removed the stale row.
+    expect(result.removed).toBeGreaterThanOrEqual(1);
+    expect(await Job.findOne({ externalId: "stale-bw" })).toBeNull();
+  }, 20_000);
+});
+
+describe("ingestAdzuna — chunked stale delete (class 12)", () => {
+  it("deletes >500 stale rows in batches of 500", async () => {
+    // Seed 1200 stale adzuna rows with distinct externalIds + forced-old updatedAt.
+    const staleDocs = Array.from({ length: 1200 }, (_, i) => ({
+      externalId: `stale-chunk-${i}`,
+      source: "adzuna",
+      title: "Old Role",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    }));
+    await Job.insertMany(staleDocs, { ordered: false });
+    // Force updatedAt into the past (timestamps:true sets it to now on insert).
+    await Job.updateMany(
+      { source: "adzuna" },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "chunk-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // Call-through spy: records every bulkWrite call while still hitting Mongo.
+    // First call = upsert (updateOne); the rest = 500-sized deleteOne batches.
+    const bulkSpy = vi.spyOn(Job, "bulkWrite");
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    const deleteBatchCalls = bulkSpy.mock.calls.filter(
+      ([ops]) => ops?.[0]?.deleteOne,
+    );
+    bulkSpy.mockRestore();
+
+    // ceil(1200 / 500) = 3 delete batches.
+    expect(deleteBatchCalls.length).toBe(3);
+    expect(result.removed).toBe(1200);
+    // Only the freshly-upserted row survives.
+    expect(await Job.countDocuments({ source: "adzuna" })).toBe(1);
+  }, 30_000);
+});
+
+describe("ingestAdzuna — ROI cache clear (class 1)", () => {
+  it("clears the skill-gap ROI cache on a successful run", async () => {
+    stubFetch([rawJob({ id: "roi-1", salary_min: 100000, salary_is_predicted: 0 })]);
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+    });
+    expect(result.bulkWriteError).toBeNull();
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
   });
 });
