@@ -6,6 +6,7 @@ import {
   useAuth,
   useClerk,
 } from "@clerk/clerk-react";
+import Silk from "./components/Silk";
 import { Outlet, useLocation } from "react-router-dom";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -359,6 +360,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[#EB0029]/30 selection:text-white pb-24 overflow-x-hidden">
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-200 h-100 bg-[var(--accent)] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
+      {/* Silk ambient background */}
+<div className="fixed inset-0 pointer-events-none">
+  <Silk color="#EB0029" speed={5} scale={1} noiseIntensity={1.5} rotation={0} />
+  {/* keep this overlay so text stays readable */}
+  <div className="absolute inset-0 bg-black/50" />
+</div>
 
       <Nav
         freshness={lastUpdated ? timeAgo(lastUpdated) : null}
