@@ -30,6 +30,7 @@ const PageLoader = () => (
 class SilkBoundary extends Component {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(err) { console.warn("Silk background disabled:", err); }
   render() { return this.state.failed ? null : this.props.children; }
 }
 

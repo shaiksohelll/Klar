@@ -3,6 +3,8 @@ import { NavLink } from "react-router-dom";
 import { gsap } from "gsap";
 import ThemeToggle from "../ThemeToggle";
 import Brand from "../Brand";
+import { useReducedMotion } from "../../lib/useReducedMotion";
+
 
 // Routes are listed in a fixed order and never reordered.
 const ROUTES = [
@@ -62,14 +64,13 @@ function NavPills() {
   const tweenRefs = useRef([]);
   const reduceRef = useRef(false);
 
+  // Sync the hook's reactive value into the ref so gsap enter/leave handlers
+  // (which read reduceRef.current at call time) always use the live setting.
+  const reduceMotion = useReducedMotion();
+  useEffect(() => { reduceRef.current = reduceMotion; }, [reduceMotion]);
+
   useEffect(() => {
     let mounted = true;
-    reduceRef.current =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-
-    const mql = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    const onReduceChange = (e) => { reduceRef.current = e.matches; };
-    mql?.addEventListener("change", onReduceChange);
 
     const build = () => {
       if (!mounted) return;
