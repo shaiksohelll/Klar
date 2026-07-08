@@ -104,13 +104,23 @@ export function makeDedupeKey(companyName, title, location = "") {
 // is IDENTICAL to the raw collection — counts will not change.
 
 /**
- * Returns the two pipeline stages that deduplicate jobs at count time.
+ * Returns the pipeline stages that deduplicate jobs at count time.
  *
- * @returns {object[]}  Two Mongoose/MongoDB aggregation stage objects.
+ * Salary coherence: salaryDisclosed, salaryRange (and the currency embedded
+ * within it) are picked together as ONE unit from the SAME source document
+ * using $top with its own sort (prefer disclosed twin, then newest).  This
+ * prevents pairing a "disclosed" flag from one twin with the salary range of
+ * the other twin's undisclosed posting — a mismatch that would corrupt INR
+ * salary averages.
+ *
+ * All non-salary fields continue to use $first on the postedAt:-1 sort, so
+ * newest-wins semantics are unchanged for every other field.
+ *
+ * @returns {object[]}  Four Mongoose/MongoDB aggregation stage objects.
  */
 export function dedupeGroupStages() {
   return [
-    // Newest posting wins (deterministic choice when twins exist).
+    // Newest posting wins for non-salary fields (deterministic choice when twins exist).
     { $sort: { postedAt: -1 } },
     {
       $group: {
@@ -122,14 +132,36 @@ export function dedupeGroupStages() {
         normalizedRole: { $first: "$normalizedRole" },
         isRemote:       { $first: "$isRemote" },
         requiredSkills: { $first: "$requiredSkills" },
-        salaryRange:    { $first: "$salaryRange" },
-        salaryDisclosed: { $first: "$salaryDisclosed" },
         location:       { $first: "$location" },
         geo:            { $first: "$geo" },
         postedAt:       { $first: "$postedAt" },
         title:          { $first: "$title" },
         redirectUrl:    { $first: "$redirectUrl" },
+        // ── Coherent salary pick ─────────────────────────────────────────────
+        // salaryDisclosed, salaryRange (and the currency nested inside it) MUST
+        // come from the same document.  $top's own sortBy (independent of the
+        // pipeline $sort above) prefers the disclosed twin, then the newest, so
+        // a disclosed posting always wins over an undisclosed one regardless of
+        // which source posted first.
+        _salaryPick: {
+          $top: {
+            sortBy: { salaryDisclosed: -1, postedAt: -1 },
+            output: {
+              salaryDisclosed: "$salaryDisclosed",
+              salaryRange:     "$salaryRange",
+            },
+          },
+        },
       },
     },
+    // Flatten the coherent salary pick back to top-level fields so the output
+    // shape is identical to what downstream stages expect.
+    {
+      $addFields: {
+        salaryDisclosed: "$_salaryPick.salaryDisclosed",
+        salaryRange:     "$_salaryPick.salaryRange",
+      },
+    },
+    { $unset: "_salaryPick" },
   ];
 }

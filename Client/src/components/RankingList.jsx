@@ -3,6 +3,16 @@ import { StarIcon } from "./icons";
 import { VelocityBadge } from "./VelocityBadge";
 import { displayName } from "../lib/displayName";
 
+// Format an INR midpoint (stored in full rupees) into a compact lakh/K string.
+// Matches the convention used in SkillDrawer: 1500000 → "15L", 75000 → "75K".
+function fmtINR(n) {
+  if (n == null || !isFinite(n)) return null;
+  const l = n / 100_000;
+  return l >= 1
+    ? `${l % 1 === 0 ? l : l.toFixed(1)}L`
+    : `${Math.round(n / 1000)}K`;
+}
+
 // Snappy spring: stiffness 420, damping 34
 const SNAPPY_SPRING = { type: "spring", stiffness: 420, damping: 34 };
 
@@ -29,6 +39,7 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
       <div className="flex items-center px-4 py-3 border-b border-[var(--border)] text-xs font-mono text-[var(--muted-2)] uppercase tracking-wider mb-2">
         <div className="w-12">Rank</div>
         <div className="flex-1">Skill</div>
+        <div className="w-28 hidden md:block text-right">Avg Salary</div>
         <div className="w-32 hidden md:block text-right">Remote</div>
         <div className="w-12 text-center ml-4">Track</div>
       </div>
@@ -82,6 +93,24 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
                     className="h-full rounded-full bg-linear-to-r from-[#FF2740] to-[#9E0019] group-hover:brightness-125 transition-[filter] duration-200"
                   />
                 </div>
+              </div>
+
+              {/* Avg Salary — INR disclosed only.
+                  Ordering: null → "—" (0 qualifying postings);
+                  limitedData → chip (1–4 postings);
+                  else → ₹value (≥ 5 postings). */}
+              <div className="w-28 hidden md:block font-mono text-sm text-right shrink-0">
+                {skill.avgSalary == null ? (
+                  <span className="text-[var(--muted-2)]">—</span>
+                ) : skill.limitedData ? (
+                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border border-[var(--border)] text-[var(--muted-2)] leading-none">
+                    limited data
+                  </span>
+                ) : (
+                  <span className="text-[var(--muted)]">
+                    ₹{fmtINR(skill.avgSalary)}
+                  </span>
+                )}
               </div>
 
               <div className="w-32 hidden md:block font-mono text-sm text-[var(--muted)] text-right">

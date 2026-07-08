@@ -203,7 +203,13 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
   const since = new Date();
   since.setMonth(since.getMonth() - Number(months));
 
-  const match = { postedAt: { $gte: since } };
+  const match = {
+    // Guard: only process documents whose fields are in the expected shape.
+    // Rejects any doc where postedAt was stored as a string/null (skips date
+    // math errors) and any doc with no required skills (skips $unwind bloat).
+    postedAt:       { $gte: since, $type: "date" },
+    requiredSkills: { $type: "array", $ne: [] },
+  };
   if (role) match.normalizedRole = role; // e.g. "backend", "frontend"
   if (remote === "remote") match.isRemote = true;
   else if (remote === "onsite") match.isRemote = false;
@@ -228,14 +234,45 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
             $group: {
               _id: "$requiredSkills",
               demand: { $sum: 1 },
-              // Disclosed-only average: $avg ignores nulls, so postings
-              // without an employer-disclosed salary never drag the figure.
+              // Disclosed INR-only average.  Qualifying conditions are IDENTICAL
+              // to disclosedCount below: salaryDisclosed + currency INR +
+              // numeric midpoint > 0.  This ensures both accumulators count
+              // the exact same set of documents — no inflation from docs whose
+              // midpoint is null or zero.
               avgSalary: {
                 $avg: {
                   $cond: [
-                    { $eq: ["$salaryDisclosed", true] },
+                    {
+                      $and: [
+                        { $eq: ["$salaryDisclosed", true] },
+                        { $eq: ["$salaryRange.currency", "INR"] },
+                        { $isNumber: "$salaryRange.midpoint" },
+                        { $gt: ["$salaryRange.midpoint", 0] },
+                      ],
+                    },
                     "$salaryRange.midpoint",
                     null,
+                  ],
+                },
+              },
+              // Count of postings that ACTUALLY contributed to avgSalary —
+              // the qualifying set is identical: disclosed + INR + numeric midpoint.
+              // Using the same guard prevents inflating disclosedCount with
+              // malformed docs whose midpoint is null/non-numeric (they don't
+              // affect avgSalary but would understate limitedData without this).
+              disclosedCount: {
+                $sum: {
+                  $cond: [
+                    {
+                      $and: [
+                        { $eq: ["$salaryDisclosed", true] },
+                        { $eq: ["$salaryRange.currency", "INR"] },
+                        { $isNumber: "$salaryRange.midpoint" },
+                        { $gt: ["$salaryRange.midpoint", 0] },
+                      ],
+                    },
+                    1,
+                    0,
                   ],
                 },
               },
@@ -250,6 +287,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
               skill: "$_id",
               demand: 1,
               avgSalary: { $round: ["$avgSalary", 0] },
+              disclosedCount: 1,
               remoteCount: 1,
             },
           },
@@ -259,7 +297,13 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
   ]);
 
   const totalJobs = facetResult?.totalJobs[0]?.count ?? 0;
-  const skills = facetResult?.skills ?? [];
+  // Annotate each skill with limitedData: true when fewer than 5 INR-disclosed
+  // postings contributed to avgSalary — flags statistically thin averages so
+  // the client can render a "limited data" chip instead of a misleading number.
+  const skills = (facetResult?.skills ?? []).map((s) => ({
+    ...s,
+    limitedData: (s.disclosedCount ?? 0) < 5,
+  }));
 
   // ── Velocity: snapshot-based count30 comparison ─────────────────────────────
   // Compares each skill's trailing-30-day count across two snapshot batches
