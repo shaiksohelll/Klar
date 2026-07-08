@@ -167,9 +167,8 @@ describe("ingestJSearch — symmetric prune", () => {
 });
 
 describe("ingestJSearch — bulkWrite partial success (class 5)", () => {
-  it("returns partial counts on BulkWriteError and still clears caches + prunes", async () => {
-    // Seed a stale jsearch row so the chunked prune has something to delete,
-    // proving the run did NOT abort after the partial bulkWrite.
+  it("returns partial counts on BulkWriteError, skips prune, but still clears caches", async () => {
+    // Seed a stale jsearch row to verify it is NOT pruned when bulkWriteError is set.
     await seedJob({
       source: "jsearch",
       externalId: "jsearch:stale-bw",
@@ -179,7 +178,7 @@ describe("ingestJSearch — bulkWrite partial success (class 5)", () => {
     stubFetchOk();
 
     // First bulkWrite (upsert, updateOne ops) throws a BulkWriteError carrying
-    // partial counts; the deleteOne prune batches delegate to the real in-memory Mongo.
+    // partial counts; prune should be SKIPPED because bulkWriteError is set.
     const bwErr = Object.assign(new Error("E11000 duplicate key"), {
       name: "BulkWriteError",
       result: { upsertedCount: 3, modifiedCount: 2, matchedCount: 5 },
@@ -204,12 +203,12 @@ describe("ingestJSearch — bulkWrite partial success (class 5)", () => {
     expect(res.upserted).toBe(3);
     expect(res.modified).toBe(2);
 
-    // The cache-clear block STILL RAN, including the previously-missing ROI clear.
+    // The cache-clear block STILL RAN, including the ROI clear.
     expect(clearSkillGapRoiCache).toHaveBeenCalled();
 
-    // The prune step STILL RAN (did not abort) and removed the stale row.
-    expect(res.removed).toBeGreaterThanOrEqual(1);
-    expect(await Job.findOne({ externalId: "jsearch:stale-bw" })).toBeNull();
+    // Prune was SKIPPED because bulkWriteError is set — stale row survives.
+    expect(res.removed).toBe(0);
+    expect(await Job.findOne({ externalId: "jsearch:stale-bw" })).not.toBeNull();
   }, 20_000);
 });
 
@@ -354,4 +353,50 @@ describe("ingestJSearch — prune failure surfaced in return value", () => {
     // Cache-clear still ran despite the prune failure.
     expect(clearSkillGapRoiCache).toHaveBeenCalled();
   }, 20_000);
+});
+
+describe("ingestJSearch — return shape completeness", () => {
+  it("normal run returns every expected field (no undefined)", async () => {
+    stubFetchOk();
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+
+    // The canonical field set every consumer depends on.
+    const expectedKeys = [
+      "requested", "fetched", "unique", "upserted", "modified",
+      "removed", "pruneFailures", "errors", "bulkWriteError",
+    ];
+    for (const key of expectedKeys) {
+      expect(res, `missing field "${key}"`).toHaveProperty(key);
+      expect(res[key], `field "${key}" should not be undefined`).not.toBeUndefined();
+    }
+  }, 20_000);
+
+  it("early-return (missing API key) has the same field set as the full return", async () => {
+    // The module-level const JSEARCH_API_KEY is captured at import time, so
+    // we can't trigger the early-return branch at runtime. Instead, verify
+    // the source literal includes every canonical field via a static read.
+    const fs = await import("node:fs/promises");
+    const src = await fs.readFile(
+      new URL("./jsearch.js", import.meta.url),
+      "utf8",
+    );
+
+    // Locate the early-return block: the line after "JSearch ingest skipped".
+    const earlyReturnMatch = src.match(
+      /JSearch ingest skipped[\s\S]*?return\s*\{([^}]+)\}/,
+    );
+    expect(earlyReturnMatch, "could not find early-return block in source").not.toBeNull();
+
+    const earlyReturnBody = earlyReturnMatch[1];
+    const expectedKeys = [
+      "requested", "fetched", "unique", "upserted", "modified",
+      "removed", "pruneFailures", "errors", "bulkWriteError",
+    ];
+    for (const key of expectedKeys) {
+      expect(
+        earlyReturnBody,
+        `early-return missing field "${key}"`,
+      ).toContain(key);
+    }
+  });
 });

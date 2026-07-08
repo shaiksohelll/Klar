@@ -85,18 +85,42 @@ run still proceeds to cache-clear (no abort), but the failure is now visible.
 - `Server/src/ingest/adzuna.js:187,229,322` — already had the counter (applied in prior commit)
 - `Server/src/ingest/jsearch.js:255,289,326` — added counter + surfaced in return
 
+### CodeRabbit Major — Prune guard ignores `bulkWriteError` → wrongly prunes failed upserts
+When `bulkWriteError` is set (a BulkWriteError with partial result), some jobs
+whose upsert failed this run still have an old `updatedAt`. The prune guard
+(`shouldPrune && errorCount === 0 && fetched > 0`) would match them as stale and
+delete them. This silently removes data that the run failed to refresh.
+
+Fix: add `!bulkWriteError` to the prune guard in BOTH ingesters:
+`if (shouldPrune && !hadFailures && !bulkWriteError && fetched > 0)` (adzuna)
+`if (shouldPrune && errorCount === 0 && !bulkWriteError && fetched > 0)` (jsearch).
+The cache-clear block still runs unconditionally when `bulkWriteError` is set.
+
+- `Server/src/ingest/adzuna.js:191-194` — guard + skip-warning updated
+- `Server/src/ingest/jsearch.js:256-259` — guard + skip-warning updated
+
+### CodeRabbit Minor — JSearch early-return shape incomplete
+The missing-API-key early return (`!JSEARCH_API_KEY`) omitted `removed`,
+`pruneFailures`, and `errors`, causing consumers to receive `undefined` for those
+fields.
+
+Fix: return the complete shape with all zero/empty defaults matching the full
+return's field set: `{ requested: 0, fetched: 0, unique: 0, upserted: 0,
+modified: 0, removed: 0, pruneFailures: 0, errors: 0, bulkWriteError: null }`.
+Adzuna's missing-key path throws (not a return), so no change was needed there.
+
+- `Server/src/ingest/jsearch.js:157` — early return now includes all 9 fields
+
 ## Tests
 
-Five test cases added to EACH ingest test file (10 new tests total across both
-rounds), matching the existing in-memory-Mongo + stubbed-`fetch` mocking style.
-Existing tests left intact.
+Existing tests updated + new tests added, matching the in-memory-Mongo +
+stubbed-`fetch` mocking style.
 
 `Server/src/ingest/adzuna.test.js` (now 11 tests):
 1. **bulkWrite partial success (class 5)** — mocks `Job.bulkWrite` to throw a
-   `BulkWriteError` (`name: "BulkWriteError"`, `result` with partial counts);
-   asserts the ingest RETURNS, `bulkWriteError` carries the partial counts,
-   `clearSkillGapRoiCache` is still called, and the chunked prune still runs
-   (stale row deleted).
+   `BulkWriteError`; asserts the ingest RETURNS, `bulkWriteError` carries the
+   partial counts, `clearSkillGapRoiCache` is still called, prune is SKIPPED
+   (`removed === 0`, stale row survives).
 2. **chunked delete >500 (class 12)** — seeds 1200 stale rows; asserts
    `removed === 1200` and exactly 3 deleteOne-batch `bulkWrite` calls
    (ceil(1200/500)).
@@ -110,8 +134,13 @@ Existing tests left intact.
    `bulkWrite` to throw with no usable partial result; asserts the return
    reports `pruneFailures > 0` AND `clearSkillGapRoiCache` still runs.
 
-`Server/src/ingest/jsearch.test.js` (now 8 tests): the same five production
-cases (3 + 2 new), adapted to JSearch's full-sweep + sequential-fetch shape.
+`Server/src/ingest/jsearch.test.js` (now 10 tests):
+- Same 5 production cases as adzuna (3 original + 2 concurrency), adapted to
+  JSearch's full-sweep + sequential-fetch shape. The bulkWrite partial-success
+  test now asserts prune is SKIPPED (stale row survives) matching adzuna.
+- **return shape completeness (2 tests)**: (a) normal run returns every expected
+  field with no `undefined` values, (b) static source read verifies the
+  early-return literal includes all 9 canonical field names.
 
 The ROI cache clear is spied via a module-level `vi.mock("../aggregations/skillGapRoi.js")`
 (ESM live bindings are read-only, so a runtime spy can't observe the imported
@@ -122,10 +151,10 @@ The ROI cache clear is spied via a module-level `vi.mock("../aggregations/skillG
 Full vitest suite (`cd Server; npm test` = `vitest run`):
 
 ```
- Test Files  25 passed (25)
-      Tests  309 passed (309)
-   Start at  14:07:47
-   Duration  60.02s
+ Test Files  26 passed (26)
+      Tests  322 passed (322)
+   Start at  14:37:15
+   Duration  64.02s
 ```
 
 All green — no regressions.

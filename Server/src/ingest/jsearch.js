@@ -154,7 +154,7 @@ export async function ingestJSearch({
       "⚠️  JSEARCH_API_KEY is not set — JSearch ingest skipped. " +
         "Add it to .env to enable this source.",
     );
-    return { requested: 0, fetched: 0, unique: 0, upserted: 0, modified: 0, bulkWriteError: null };
+    return { requested: 0, fetched: 0, unique: 0, upserted: 0, modified: 0, removed: 0, pruneFailures: 0, errors: 0, bulkWriteError: null };
   }
 
   // Build query strings: "frontend developer in in", "backend developer in in", …
@@ -253,10 +253,10 @@ export async function ingestJSearch({
   // or empty run can never wipe the collection.
   let removed = 0;
   let pruneBatchFailures = 0;
-  if (errorCount > 0 && shouldPrune) {
-    console.warn("JSearch prune skipped due to fetch failures");
+  if ((errorCount > 0 || bulkWriteError) && shouldPrune) {
+    console.warn("JSearch prune skipped due to fetch failures or bulkWrite error");
   }
-  if (shouldPrune && errorCount === 0 && fetched > 0) {
+  if (shouldPrune && errorCount === 0 && !bulkWriteError && fetched > 0) {
     // Chunked delete: a single unbounded deleteMany over a large stale
     // partition can hold a long-lived lock / spike WAL. Find the stale _ids,
     // then delete in batches of 500 with per-batch partial-success accounting.

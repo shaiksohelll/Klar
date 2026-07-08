@@ -188,10 +188,10 @@ export async function ingestAdzuna({
   // Skip pruning whenever any fetch failed: we only saw a partial snapshot of
   // the current market, so jobs that weren't refreshed this run should not be
   // deleted — they may still be live, we just couldn't reach Adzuna for them.
-  if (hadFailures && shouldPrune) {
-    console.warn("prune skipped due to fetch failures");
+  if ((hadFailures || bulkWriteError) && shouldPrune) {
+    console.warn("prune skipped due to fetch failures or bulkWrite error");
   }
-  if (shouldPrune && !hadFailures && fetched > 0) {
+  if (shouldPrune && !hadFailures && !bulkWriteError && fetched > 0) {
     // Chunked delete: a single unbounded deleteMany over a large stale
     // partition can hold a long-lived lock / spike WAL. Find the stale _ids,
     // then delete in batches of 500 with per-batch partial-success accounting.

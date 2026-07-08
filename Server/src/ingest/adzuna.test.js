@@ -158,9 +158,8 @@ describe("ingestAdzuna — daily snapshot is non-fatal", () => {
 });
 
 describe("ingestAdzuna — bulkWrite partial success (class 5)", () => {
-  it("returns partial counts on BulkWriteError and still clears caches + prunes", async () => {
-    // Seed a stale adzuna row so the chunked prune has something to delete,
-    // proving the run did NOT abort after the partial bulkWrite.
+  it("returns partial counts on BulkWriteError, skips prune, but still clears caches", async () => {
+    // Seed a stale adzuna row to verify it is NOT pruned when bulkWriteError is set.
     const stale = await Job.create({
       externalId: "stale-bw",
       source: "adzuna",
@@ -179,7 +178,7 @@ describe("ingestAdzuna — bulkWrite partial success (class 5)", () => {
     stubFetch([rawJob({ id: "bw-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
 
     // First bulkWrite (upsert, updateOne ops) throws a BulkWriteError carrying
-    // partial counts; the deleteOne prune batches delegate to the real in-memory Mongo.
+    // partial counts; prune should be SKIPPED because bulkWriteError is set.
     const bwErr = Object.assign(new Error("E11000 duplicate key"), {
       name: "BulkWriteError",
       result: { upsertedCount: 3, modifiedCount: 2, matchedCount: 5 },
@@ -209,12 +208,12 @@ describe("ingestAdzuna — bulkWrite partial success (class 5)", () => {
     expect(result.upserted).toBe(3);
     expect(result.modified).toBe(2);
 
-    // The cache-clear block STILL RAN, including the previously-missing ROI clear.
+    // The cache-clear block STILL RAN, including the ROI clear.
     expect(clearSkillGapRoiCache).toHaveBeenCalled();
 
-    // The prune step STILL RAN (did not abort) and removed the stale row.
-    expect(result.removed).toBeGreaterThanOrEqual(1);
-    expect(await Job.findOne({ externalId: "stale-bw" })).toBeNull();
+    // Prune was SKIPPED because bulkWriteError is set — stale row survives.
+    expect(result.removed).toBe(0);
+    expect(await Job.findOne({ externalId: "stale-bw" })).not.toBeNull();
   }, 20_000);
 });
 
