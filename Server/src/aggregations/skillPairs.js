@@ -48,7 +48,7 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
   // prepend the dedupe stages. This ensures the denominator matches the counts
   // computed in the pairs pipeline below.
   const baseCountResult = await Job.aggregate([
-    { $match: { requiredSkills: normalized } },
+    { $match: { requiredSkills: { $type: "array", $ne: [], $in: [normalized] } } },
     ...dedupeGroupStages(),
     { $count: "n" },
   ]);
@@ -62,7 +62,7 @@ export async function getSkillPairs(skill, { limit = 8 } = {}) {
 
   // Deduplicated pairs: match → dedupe → unwind → exclude self → group → sort → limit.
   const raw = await Job.aggregate([
-    { $match: { requiredSkills: normalized } },
+    { $match: { requiredSkills: { $type: "array", $ne: [], $in: [normalized] } } },
     ...dedupeGroupStages(),
     { $unwind: "$requiredSkills" },
     { $match: { requiredSkills: { $ne: normalized } } },

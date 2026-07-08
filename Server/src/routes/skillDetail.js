@@ -57,8 +57,27 @@ router.get("/:name", async (req, res, next) => {
     // is rejected with 400 before we reach here and never reaches the cache.
 
     const since = sinceDate(months);
-    const baseMatch = { requiredSkills: name, postedAt: { $gte: since } };
-    const windowMatch = { postedAt: { $gte: since } };
+    // Type guards (P0/P1 audit): a direct Mongo import / bulkWrite that skips
+    // Mongoose validation can persist a non-Date postedAt (which throws inside
+    // the $dateToString trend stage below) or a non-array requiredSkills (which
+    // $unwind silently miscounts). Both fields are constrained at $match —
+    // mirroring the guards in ingest/snapshot.js — while preserving the existing
+    // `$eq: name` (array-contains) and `$gte: since` semantics.
+    const baseMatch = {
+      requiredSkills: { $eq: name, $type: "array", $ne: [] },
+      postedAt: { $type: "date", $gte: since },
+    };
+    // windowMatch sizes the share DENOMINATOR (totalJobs). It must mirror the
+    // postedAt $type guard from baseMatch so a doc with a valid Date postedAt
+    // but a non-array requiredSkills is excluded here too — otherwise it would
+    // be dropped from `demand` (by baseMatch) yet still counted in `totalJobs`,
+    // deflating `share`. NOTE: requiredSkills uses $type:"array" ONLY (no
+    // $ne:[]): a well-formed job that legitimately lists zero skills must still
+    // count toward the denominator, preserving the existing share semantics.
+    const windowMatch = {
+      postedAt: { $type: "date", $gte: since },
+      requiredSkills: { $type: "array" },
+    };
 
     const [
       demand,
