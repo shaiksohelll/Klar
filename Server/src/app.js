@@ -364,21 +364,25 @@ app.post("/api/admin/backfill-skill-buckets", async (req, res, next) => {
   if (skillBucketsBackfillInProgress) {
     return res.status(200).json({ ok: true, message: "Backfill already in progress" });
   }
-  skillBucketsBackfillInProgress = true;
-  try {
-    const result = await backfillDailySkillBuckets();
-    if (result.ok) {
-      clearMomentumCache();
-      clearSkillForecastCache();
-      clearSkillGapRoiCache();
-    }
-    const status = result.ok ? 200 : 500;
-    res.status(status).json(result);
-  } catch (err) {
-    next(err);
-  } finally {
-    skillBucketsBackfillInProgress = false;
-  }
+skillBucketsBackfillInProgress = true;
+try {
+  const result = await backfillDailySkillBuckets();
+  // Invalidate downstream caches whenever the backfill RAN — not only on
+  // result.ok. The backfill can upsert/prune SkillSnapshot rows before a
+  // later step reports failure; gating on ok would leave computeSkillGapRoi
+  // (+ momentum/forecast) serving stale rankings off the old buckets.
+  // Clearing is cheap and safe; a stale cache isn't. Auth failures return
+  // above, so they still clear nothing.
+  clearMomentumCache();
+  clearSkillForecastCache();
+  clearSkillGapRoiCache();
+  const status = result.ok ? 200 : 500;
+  res.status(status).json(result);
+} catch (err) {
+  next(err);
+} finally {
+  skillBucketsBackfillInProgress = false;
+}
 });
 
 // ── Trending skills ────────────────────────────────────────────────
