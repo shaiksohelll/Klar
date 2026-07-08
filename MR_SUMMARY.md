@@ -85,6 +85,20 @@ run still proceeds to cache-clear (no abort), but the failure is now visible.
 - `Server/src/ingest/adzuna.js:187,229,322` — already had the counter (applied in prior commit)
 - `Server/src/ingest/jsearch.js:255,289,326` — added counter + surfaced in return
 
+### Greptile P1 + CodeAnt — Partial-result prune error hides behind `pruneFailures: 0`
+In the prune-batch catch, `pruneBatchFailures++` only ran in the `else` branch
+(no partial result). A `BulkWriteError` WITH a partial `err.result` accumulated
+the partial `deletedCount` but reported `pruneFailures: 0` — an incomplete prune
+looked clean.
+
+Fix: move `pruneBatchFailures++` so it runs on EVERY caught prune-batch error,
+regardless of whether a partial result is present. The partial `deletedCount` is
+still accumulated into `removed`; the counter ensures the incomplete prune is
+always visible.
+
+- `Server/src/ingest/adzuna.js:220-227` — single `pruneBatchFailures++` at top of catch
+- `Server/src/ingest/jsearch.js:286-293` — symmetric
+
 ### CodeRabbit Major — Prune guard ignores `bulkWriteError` → wrongly prunes failed upserts
 When `bulkWriteError` is set (a BulkWriteError with partial result), some jobs
 whose upsert failed this run still have an old `updatedAt`. The prune guard
@@ -116,7 +130,7 @@ Adzuna's missing-key path throws (not a return), so no change was needed there.
 Existing tests updated + new tests added, matching the in-memory-Mongo +
 stubbed-`fetch` mocking style.
 
-`Server/src/ingest/adzuna.test.js` (now 11 tests):
+`Server/src/ingest/adzuna.test.js` (now 12 tests):
 1. **bulkWrite partial success (class 5)** — mocks `Job.bulkWrite` to throw a
    `BulkWriteError`; asserts the ingest RETURNS, `bulkWriteError` carries the
    partial counts, `clearSkillGapRoiCache` is still called, prune is SKIPPED
@@ -130,14 +144,17 @@ stubbed-`fetch` mocking style.
    concurrent ingest refreshing it (`updatedAt` bumped to now) between
    `staleIds` read and the delete batch; asserts the refreshed row is NOT
    deleted (`removed === 0`).
-5. **prune failure surfaced in return value** — mocks the delete-batch
-   `bulkWrite` to throw with no usable partial result; asserts the return
-   reports `pruneFailures > 0` AND `clearSkillGapRoiCache` still runs.
+5. **prune failure (no partial result)** — mocks the delete-batch `bulkWrite` to
+   throw with no usable partial result; asserts `pruneFailures > 0` AND
+   `clearSkillGapRoiCache` still runs.
+6. **prune failure (WITH partial result)** — mocks the delete-batch `bulkWrite`
+   to throw a `BulkWriteError` with `result: { deletedCount: 480 }`; asserts
+   `removed === 480` AND `pruneFailures >= 1` (not 0).
 
-`Server/src/ingest/jsearch.test.js` (now 10 tests):
-- Same 5 production cases as adzuna (3 original + 2 concurrency), adapted to
-  JSearch's full-sweep + sequential-fetch shape. The bulkWrite partial-success
-  test now asserts prune is SKIPPED (stale row survives) matching adzuna.
+`Server/src/ingest/jsearch.test.js` (now 11 tests):
+- Same 6 production cases as adzuna (3 original + 3 prune/concurrency), adapted
+  to JSearch's full-sweep + sequential-fetch shape. The bulkWrite partial-success
+  test asserts prune is SKIPPED (stale row survives) matching adzuna.
 - **return shape completeness (2 tests)**: (a) normal run returns every expected
   field with no `undefined` values, (b) static source read verifies the
   early-return literal includes all 9 canonical field names.
@@ -152,9 +169,9 @@ Full vitest suite (`cd Server; npm test` = `vitest run`):
 
 ```
  Test Files  26 passed (26)
-      Tests  322 passed (322)
-   Start at  14:37:15
-   Duration  64.02s
+      Tests  324 passed (324)
+   Start at  15:09:40
+   Duration  74.39s
 ```
 
 All green — no regressions.
@@ -167,4 +184,5 @@ All green — no regressions.
 - `Server/src/ingest/snapshot.js` was READ-ONLY reference — NOT modified.
 - No other files touched.
 - Not merged, not pushed, not committed.
+
 

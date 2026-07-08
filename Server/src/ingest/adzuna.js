@@ -218,15 +218,13 @@ export async function ingestAdzuna({
         const delResult = await Job.bulkWrite(deleteOps, { ordered: false });
         removed += delResult.deletedCount || 0;
       } catch (batchErr) {
+        // ANY caught error is a batch failure — increment unconditionally so
+        // an incomplete prune never looks clean in the return value.
+        pruneBatchFailures++;
         // Partial-success: a BulkWriteError still carries a result.
         const partial = batchErr?.result;
         if (partial) {
           removed += partial.deletedCount ?? partial.nRemoved ?? 0;
-        } else {
-          // No usable partial result — the whole batch failed without count
-          // info. Surface the failure instead of silently swallowing it;
-          // cache-clear still proceeds below (we do NOT abort/throw).
-          pruneBatchFailures++;
         }
         console.warn(
           `Adzuna prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,

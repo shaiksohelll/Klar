@@ -353,6 +353,51 @@ describe("ingestJSearch — prune failure surfaced in return value", () => {
     // Cache-clear still ran despite the prune failure.
     expect(clearSkillGapRoiCache).toHaveBeenCalled();
   }, 20_000);
+
+  it("reports pruneFailures > 0 AND partial removed when a delete batch throws WITH a partial result", async () => {
+    // Seed a stale jsearch row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "jsearch:prune-partial-1",
+      source: "jsearch",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+      dedupeKey: makeDedupeKey("PartialCo", "Old Backend", "Bangalore"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // The deleteOne bulkWrite throws a BulkWriteError that CARRIES a partial
+    // result (e.g. 480 of 500 deleted). This is still a failed batch.
+    const partialErr = Object.assign(new Error("BulkWriteError partial"), {
+      name: "BulkWriteError",
+      result: { deletedCount: 480 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) throw partialErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The partial count is accumulated into removed.
+    expect(res.removed).toBe(480);
+    // The batch still counts as a failure — an incomplete prune is not clean.
+    expect(res.pruneFailures).toBeGreaterThanOrEqual(1);
+    // Cache-clear still ran.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
 });
 
 describe("ingestJSearch — return shape completeness", () => {

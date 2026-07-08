@@ -375,4 +375,53 @@ describe("ingestAdzuna — prune failure surfaced in return value", () => {
     // Cache-clear still ran despite the prune failure.
     expect(clearSkillGapRoiCache).toHaveBeenCalled();
   }, 20_000);
+
+  it("reports pruneFailures > 0 AND partial removed when a delete batch throws WITH a partial result", async () => {
+    // Seed a stale adzuna row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "prune-partial-1",
+      source: "adzuna",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "pp-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // The deleteOne bulkWrite throws a BulkWriteError that CARRIES a partial
+    // result (e.g. 480 of 500 deleted). This is still a failed batch.
+    const partialErr = Object.assign(new Error("BulkWriteError partial"), {
+      name: "BulkWriteError",
+      result: { deletedCount: 480 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) throw partialErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    bulkSpy.mockRestore();
+
+    // The partial count is accumulated into removed.
+    expect(result.removed).toBe(480);
+    // The batch still counts as a failure — an incomplete prune is not clean.
+    expect(result.pruneFailures).toBeGreaterThanOrEqual(1);
+    // Cache-clear still ran.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
 });
