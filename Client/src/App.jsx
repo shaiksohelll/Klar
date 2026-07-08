@@ -74,6 +74,9 @@ async function fetchTrending(role, win, remoteFilter, disclosedFilter, countryFi
     role: role === "All" ? "General" : role,
     velocity: s.velocity ?? null,
     trend: s.trend ?? "flat",
+    avgSalary: s.avgSalary ?? null,
+    disclosedCount: s.disclosedCount ?? 0,
+    limitedData: s.limitedData ?? false,
   }));
   return {
     skills,
