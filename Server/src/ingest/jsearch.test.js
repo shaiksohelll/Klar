@@ -20,6 +20,17 @@ vi.mock("./snapshot.js", () => ({
   recordDailySkillBuckets,
 }));
 
+// Spy on the skill-gap ROI cache clear — the 9th createTtlCache that ingestJSearch
+// previously missed. Mocked at module level so the imported binding in jsearch.js
+// is the spy (ESM live bindings are read-only, so a runtime spy can't see it).
+const { clearSkillGapRoiCache } = vi.hoisted(() => ({
+  clearSkillGapRoiCache: vi.fn(),
+}));
+vi.mock("../aggregations/skillGapRoi.js", () => ({
+  clearSkillGapRoiCache,
+  computeSkillGapRoi: vi.fn(),
+}));
+
 import Job from "../models/Job.js";
 import { makeDedupeKey } from "../lib/dedupe.js";
 import { ingestJSearch } from "./jsearch.js";
@@ -45,6 +56,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await Job.deleteMany({});
   recordDailySkillBuckets.mockClear();
+  clearSkillGapRoiCache.mockClear();
 });
 
 // Seed a Job row directly, controlling source + updatedAt (timestamps:true
@@ -152,4 +164,284 @@ describe("ingestJSearch — symmetric prune", () => {
     expect(res.removed).toBe(0);
     expect(await Job.findOne({ externalId: "jsearch:stale-3" })).not.toBeNull();
   }, 20_000);
+});
+
+describe("ingestJSearch — bulkWrite partial success (class 5)", () => {
+  it("returns partial counts on BulkWriteError, skips prune, but still clears caches", async () => {
+    // Seed a stale jsearch row to verify it is NOT pruned when bulkWriteError is set.
+    await seedJob({
+      source: "jsearch",
+      externalId: "jsearch:stale-bw",
+      updatedAt: new Date("2020-01-01"),
+    });
+
+    stubFetchOk();
+
+    // First bulkWrite (upsert, updateOne ops) throws a BulkWriteError carrying
+    // partial counts; prune should be SKIPPED because bulkWriteError is set.
+    const bwErr = Object.assign(new Error("E11000 duplicate key"), {
+      name: "BulkWriteError",
+      result: { upsertedCount: 3, modifiedCount: 2, matchedCount: 5 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.updateOne) throw bwErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The run RETURNED (did not throw) and surfaced the partial counts.
+    expect(res.bulkWriteError).toMatchObject({
+      upsertedCount: 3,
+      modifiedCount: 2,
+      matchedCount: 5,
+    });
+    expect(res.upserted).toBe(3);
+    expect(res.modified).toBe(2);
+
+    // The cache-clear block STILL RAN, including the ROI clear.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+
+    // Prune was SKIPPED because bulkWriteError is set — stale row survives.
+    expect(res.removed).toBe(0);
+    expect(await Job.findOne({ externalId: "jsearch:stale-bw" })).not.toBeNull();
+  }, 20_000);
+});
+
+describe("ingestJSearch — chunked stale delete (class 12)", () => {
+  it("deletes >500 stale rows in batches of 500", async () => {
+    // Seed 1200 stale jsearch rows with distinct externalIds + forced-old updatedAt.
+    const staleDocs = Array.from({ length: 1200 }, (_, i) => ({
+      externalId: `jsearch:stale-chunk-${i}`,
+      source: "jsearch",
+      title: "Old Role",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    }));
+    await Job.insertMany(staleDocs, { ordered: false });
+    // Force updatedAt into the past (timestamps:true sets it to now on insert).
+    await Job.updateMany(
+      { source: "jsearch" },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // Call-through spy: records every bulkWrite call while still hitting Mongo.
+    // First call = upsert (updateOne); the rest = 500-sized deleteOne batches.
+    const bulkSpy = vi.spyOn(Job, "bulkWrite");
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    const deleteBatchCalls = bulkSpy.mock.calls.filter(
+      ([ops]) => ops?.[0]?.deleteOne,
+    );
+    bulkSpy.mockRestore();
+
+    // ceil(1200 / 500) = 3 delete batches.
+    expect(deleteBatchCalls.length).toBe(3);
+    expect(res.removed).toBe(1200);
+    // Only the freshly-upserted row survives.
+    expect(await Job.countDocuments({ source: "jsearch" })).toBe(1);
+  }, 30_000);
+});
+
+describe("ingestJSearch — ROI cache clear (class 1)", () => {
+  it("clears the skill-gap ROI cache on a successful run", async () => {
+    stubFetchOk();
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    expect(res.bulkWriteError).toBeNull();
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
+});
+
+describe("ingestJSearch — concurrent refresh spares refreshed row", () => {
+  it("does NOT delete a row whose updatedAt was bumped after staleIds were read", async () => {
+    // Seed a stale jsearch row (updatedAt far in the past).
+    const stale = await Job.create({
+      externalId: "jsearch:concurrent-1",
+      source: "jsearch",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+      dedupeKey: makeDedupeKey("StaleCo", "Old Backend", "Bangalore"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // Intercept Job.bulkWrite: the first call with deleteOne ops is the prune
+    // batch. BEFORE it executes, bump the stale row's updatedAt to "now"
+    // (simulating a concurrent ingest that refreshed it). The source+updatedAt
+    // guard on the deleteOne filter should then cause the delete to be a no-op
+    // for that row.
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) {
+          // Simulate concurrent refresh: bump updatedAt to now.
+          await Job.updateOne(
+            { _id: stale._id },
+            { $set: { updatedAt: new Date() } },
+            { timestamps: false },
+          );
+        }
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The freshly-refreshed row must survive the prune.
+    const survived = await Job.findOne({ externalId: "jsearch:concurrent-1" }).lean();
+    expect(survived).not.toBeNull();
+    // removed should be 0 for the concurrent row (it no longer matched the filter).
+    expect(res.removed).toBe(0);
+  }, 20_000);
+});
+
+describe("ingestJSearch — prune failure surfaced in return value", () => {
+  it("reports pruneFailures > 0 when a delete batch throws with no usable partial result", async () => {
+    // Seed a stale jsearch row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "jsearch:prune-fail-1",
+      source: "jsearch",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+      dedupeKey: makeDedupeKey("StaleCo", "Old Backend", "Bangalore"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // Make only the deleteOne bulkWrite throw with NO partial result.
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) {
+          throw new Error("connection reset");
+        }
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The failure is surfaced — not swallowed.
+    expect(res.pruneFailures).toBeGreaterThan(0);
+    // Cache-clear still ran despite the prune failure.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
+
+  it("reports pruneFailures > 0 AND partial removed when a delete batch throws WITH a partial result", async () => {
+    // Seed a stale jsearch row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "jsearch:prune-partial-1",
+      source: "jsearch",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+      dedupeKey: makeDedupeKey("PartialCo", "Old Backend", "Bangalore"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // The deleteOne bulkWrite throws a BulkWriteError that CARRIES a partial
+    // result (e.g. 480 of 500 deleted). This is still a failed batch.
+    const partialErr = Object.assign(new Error("BulkWriteError partial"), {
+      name: "BulkWriteError",
+      result: { deletedCount: 480 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) throw partialErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The partial count is accumulated into removed.
+    expect(res.removed).toBe(480);
+    // The batch still counts as a failure — an incomplete prune is not clean.
+    expect(res.pruneFailures).toBeGreaterThanOrEqual(1);
+    // Cache-clear still ran.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
+});
+
+describe("ingestJSearch — return shape completeness", () => {
+  it("normal run returns every expected field (no undefined)", async () => {
+    stubFetchOk();
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+
+    // The canonical field set every consumer depends on.
+    const expectedKeys = [
+      "requested", "fetched", "unique", "upserted", "modified",
+      "removed", "pruneFailures", "errors", "bulkWriteError",
+    ];
+    for (const key of expectedKeys) {
+      expect(res, `missing field "${key}"`).toHaveProperty(key);
+      expect(res[key], `field "${key}" should not be undefined`).not.toBeUndefined();
+    }
+  }, 20_000);
+
+  it("early-return (missing API key) has the same field set as the full return", async () => {
+    // The module-level const JSEARCH_API_KEY is captured at import time, so
+    // we can't trigger the early-return branch at runtime. Instead, verify
+    // the source literal includes every canonical field via a static read.
+    const fs = await import("node:fs/promises");
+    const src = await fs.readFile(
+      new URL("./jsearch.js", import.meta.url),
+      "utf8",
+    );
+
+    // Locate the early-return block: the line after "JSearch ingest skipped".
+    const earlyReturnMatch = src.match(
+      /JSearch ingest skipped[\s\S]*?return\s*\{([^}]+)\}/,
+    );
+    expect(earlyReturnMatch, "could not find early-return block in source").not.toBeNull();
+
+    const earlyReturnBody = earlyReturnMatch[1];
+    const expectedKeys = [
+      "requested", "fetched", "unique", "upserted", "modified",
+      "removed", "pruneFailures", "errors", "bulkWriteError",
+    ];
+    for (const key of expectedKeys) {
+      expect(
+        earlyReturnBody,
+        `early-return missing field "${key}"`,
+      ).toContain(key);
+    }
+  });
 });

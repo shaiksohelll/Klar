@@ -12,6 +12,7 @@ import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
 import { clearMomentumCache } from "../aggregations/skillMomentum.js";
 import { clearSkillForecastCache } from "../aggregations/skillForecast.js";
+import { clearSkillGapRoiCache } from "../aggregations/skillGapRoi.js";
 import { recordDailySkillBuckets } from "./snapshot.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
@@ -153,25 +154,83 @@ export async function ingestAdzuna({
 
   let upserted = 0;
   let modified = 0;
+  let bulkWriteError = null;
   if (ops.length > 0) {
-    const result = await Job.bulkWrite(ops, { ordered: false });
-    upserted = result.upsertedCount || 0;
-    modified = result.modifiedCount || 0;
+    try {
+      const result = await Job.bulkWrite(ops, { ordered: false });
+      upserted = result.upsertedCount || 0;
+      modified = result.modifiedCount || 0;
+    } catch (err) {
+      // BulkWriteError (e.g. E11000 on {source,externalId} under concurrent
+      // runs) still carries a partial result under ordered:false. Surface the
+      // ops that landed instead of reporting total failure, and CONTINUE to the
+      // prune + cache-clear block. Mirrors recordDailySkillBuckets (snapshot.js).
+      const partial = err?.result;
+      if (partial) {
+        upserted = partial.upsertedCount ?? partial.nUpserted ?? 0;
+        modified = partial.modifiedCount ?? partial.nModified ?? 0;
+        bulkWriteError = {
+          upsertedCount: upserted,
+          modifiedCount: modified,
+          matchedCount: partial.matchedCount ?? partial.nMatched ?? 0,
+        };
+        console.warn(
+          `Adzuna bulkWrite partial success (${upserted} upserted, ${modified} modified) — ${err?.message}`,
+        );
+      } else {
+        throw err; // not a BulkWriteError — propagate unexpected errors.
+      }
+    }
   }
 
   let removed = 0;
+  let pruneBatchFailures = 0;
   // Skip pruning whenever any fetch failed: we only saw a partial snapshot of
   // the current market, so jobs that weren't refreshed this run should not be
   // deleted — they may still be live, we just couldn't reach Adzuna for them.
-  if (hadFailures && shouldPrune) {
-    console.warn("prune skipped due to fetch failures");
+  if ((hadFailures || bulkWriteError) && shouldPrune) {
+    console.warn("prune skipped due to fetch failures or bulkWrite error");
   }
-  if (shouldPrune && !hadFailures && fetched > 0) {
-    const pruneResult = await Job.deleteMany({
+  if (shouldPrune && !hadFailures && !bulkWriteError && fetched > 0) {
+    // Chunked delete: a single unbounded deleteMany over a large stale
+    // partition can hold a long-lived lock / spike WAL. Find the stale _ids,
+    // then delete in batches of 500 with per-batch partial-success accounting.
+    // Mirrors recordDailySkillBuckets' chunked prune (snapshot.js).
+    const staleIds = await Job.find({
       source: "adzuna",
       updatedAt: { $lt: runStartedAt },
-    });
-    removed = pruneResult.deletedCount || 0;
+    })
+      .select("_id")
+      .lean();
+    const BATCH = 500;
+    for (let i = 0; i < staleIds.length; i += BATCH) {
+      const batch = staleIds.slice(i, i + BATCH);
+      const deleteOps = batch.map((doc) => ({
+        deleteOne: {
+          filter: {
+            _id: doc._id,
+            source: "adzuna",
+            updatedAt: { $lt: runStartedAt },
+          },
+        },
+      }));
+      try {
+        const delResult = await Job.bulkWrite(deleteOps, { ordered: false });
+        removed += delResult.deletedCount || 0;
+      } catch (batchErr) {
+        // ANY caught error is a batch failure — increment unconditionally so
+        // an incomplete prune never looks clean in the return value.
+        pruneBatchFailures++;
+        // Partial-success: a BulkWriteError still carries a result.
+        const partial = batchErr?.result;
+        if (partial) {
+          removed += partial.deletedCount ?? partial.nRemoved ?? 0;
+        }
+        console.warn(
+          `Adzuna prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,
+        );
+      }
+    }
   }
 
   // Count once: used both as the snapshot safety guard and the return value.
@@ -247,6 +306,9 @@ export async function ingestAdzuna({
   // serve up to 6h of stale results after a normal ingest.
   clearMomentumCache();
   clearSkillForecastCache();
+  // ROI cache was the 9th createTtlCache; clearing it here stops the "Learn
+  // Next" recommendations from serving up to 6h of stale results after ingest.
+  clearSkillGapRoiCache();
   console.log("🗑️  Read caches cleared after ingest");
 
   return {
@@ -255,6 +317,8 @@ export async function ingestAdzuna({
     upserted,
     modified,
     removed,
+    pruneFailures: pruneBatchFailures,
     totalInDb,
+    bulkWriteError,
   };
 }

@@ -21,6 +21,17 @@ vi.mock("./snapshot.js", () => ({
   recordDailySkillBuckets,
 }));
 
+// Spy on the skill-gap ROI cache clear — the 9th createTtlCache that ingestAdzuna
+// previously missed. Mocked at module level so the imported binding in adzuna.js
+// is the spy (ESM live bindings are read-only, so a runtime spy can't see it).
+const { clearSkillGapRoiCache } = vi.hoisted(() => ({
+  clearSkillGapRoiCache: vi.fn(),
+}));
+vi.mock("../aggregations/skillGapRoi.js", () => ({
+  clearSkillGapRoiCache,
+  computeSkillGapRoi: vi.fn(),
+}));
+
 import Job from "../models/Job.js";
 import { ingestAdzuna } from "./adzuna.js";
 
@@ -46,6 +57,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await Job.deleteMany({});
+  clearSkillGapRoiCache.mockClear();
 });
 
 // Stub global.fetch to return a single-page Adzuna response containing exactly
@@ -143,4 +155,273 @@ describe("ingestAdzuna — daily snapshot is non-fatal", () => {
     const doc = await Job.findOne({ externalId: "green-1" }).lean();
     expect(doc).toBeTruthy();
   });
+});
+
+describe("ingestAdzuna — bulkWrite partial success (class 5)", () => {
+  it("returns partial counts on BulkWriteError, skips prune, but still clears caches", async () => {
+    // Seed a stale adzuna row to verify it is NOT pruned when bulkWriteError is set.
+    const stale = await Job.create({
+      externalId: "stale-bw",
+      source: "adzuna",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "bw-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // First bulkWrite (upsert, updateOne ops) throws a BulkWriteError carrying
+    // partial counts; prune should be SKIPPED because bulkWriteError is set.
+    const bwErr = Object.assign(new Error("E11000 duplicate key"), {
+      name: "BulkWriteError",
+      result: { upsertedCount: 3, modifiedCount: 2, matchedCount: 5 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.updateOne) throw bwErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    bulkSpy.mockRestore();
+
+    // The run RETURNED (did not throw) and surfaced the partial counts.
+    expect(result.bulkWriteError).toMatchObject({
+      upsertedCount: 3,
+      modifiedCount: 2,
+      matchedCount: 5,
+    });
+    expect(result.upserted).toBe(3);
+    expect(result.modified).toBe(2);
+
+    // The cache-clear block STILL RAN, including the ROI clear.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+
+    // Prune was SKIPPED because bulkWriteError is set — stale row survives.
+    expect(result.removed).toBe(0);
+    expect(await Job.findOne({ externalId: "stale-bw" })).not.toBeNull();
+  }, 20_000);
+});
+
+describe("ingestAdzuna — chunked stale delete (class 12)", () => {
+  it("deletes >500 stale rows in batches of 500", async () => {
+    // Seed 1200 stale adzuna rows with distinct externalIds + forced-old updatedAt.
+    const staleDocs = Array.from({ length: 1200 }, (_, i) => ({
+      externalId: `stale-chunk-${i}`,
+      source: "adzuna",
+      title: "Old Role",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    }));
+    await Job.insertMany(staleDocs, { ordered: false });
+    // Force updatedAt into the past (timestamps:true sets it to now on insert).
+    await Job.updateMany(
+      { source: "adzuna" },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "chunk-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // Call-through spy: records every bulkWrite call while still hitting Mongo.
+    // First call = upsert (updateOne); the rest = 500-sized deleteOne batches.
+    const bulkSpy = vi.spyOn(Job, "bulkWrite");
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    const deleteBatchCalls = bulkSpy.mock.calls.filter(
+      ([ops]) => ops?.[0]?.deleteOne,
+    );
+    bulkSpy.mockRestore();
+
+    // ceil(1200 / 500) = 3 delete batches.
+    expect(deleteBatchCalls.length).toBe(3);
+    expect(result.removed).toBe(1200);
+    // Only the freshly-upserted row survives.
+    expect(await Job.countDocuments({ source: "adzuna" })).toBe(1);
+  }, 30_000);
+});
+
+describe("ingestAdzuna — ROI cache clear (class 1)", () => {
+  it("clears the skill-gap ROI cache on a successful run", async () => {
+    stubFetch([rawJob({ id: "roi-1", salary_min: 100000, salary_is_predicted: 0 })]);
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+    });
+    expect(result.bulkWriteError).toBeNull();
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  });
+});
+
+describe("ingestAdzuna — concurrent refresh spares refreshed row", () => {
+  it("does NOT delete a row whose updatedAt was bumped after staleIds were read", async () => {
+    // Seed a stale adzuna row (updatedAt far in the past).
+    const stale = await Job.create({
+      externalId: "concurrent-1",
+      source: "adzuna",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "conc-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // Intercept Job.bulkWrite: the first call with deleteOne ops is the prune
+    // batch. BEFORE it executes, bump the stale row's updatedAt to "now"
+    // (simulating a concurrent ingest that refreshed it). The source+updatedAt
+    // guard on the deleteOne filter should then cause the delete to be a no-op
+    // for that row.
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) {
+          // Simulate concurrent refresh: bump updatedAt to now.
+          await Job.updateOne(
+            { _id: stale._id },
+            { $set: { updatedAt: new Date() } },
+            { timestamps: false },
+          );
+        }
+        return realBulkWrite(ops, opts);
+      });
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    bulkSpy.mockRestore();
+
+    // The freshly-refreshed row must survive the prune.
+    const survived = await Job.findOne({ externalId: "concurrent-1" }).lean();
+    expect(survived).not.toBeNull();
+    // removed should be 0 for the concurrent row (it no longer matched the filter).
+    expect(result.removed).toBe(0);
+  }, 20_000);
+});
+
+describe("ingestAdzuna — prune failure surfaced in return value", () => {
+  it("reports pruneFailures > 0 when a delete batch throws with no usable partial result", async () => {
+    // Seed a stale adzuna row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "prune-fail-1",
+      source: "adzuna",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "pf-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // Make only the deleteOne bulkWrite throw with NO partial result.
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) {
+          throw new Error("connection reset");
+        }
+        return realBulkWrite(ops, opts);
+      });
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    bulkSpy.mockRestore();
+
+    // The failure is surfaced — not swallowed.
+    expect(result.pruneFailures).toBeGreaterThan(0);
+    // Cache-clear still ran despite the prune failure.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
+
+  it("reports pruneFailures > 0 AND partial removed when a delete batch throws WITH a partial result", async () => {
+    // Seed a stale adzuna row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "prune-partial-1",
+      source: "adzuna",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetch([rawJob({ id: "pp-fresh", salary_min: 100000, salary_is_predicted: 0 })]);
+
+    // The deleteOne bulkWrite throws a BulkWriteError that CARRIES a partial
+    // result (e.g. 480 of 500 deleted). This is still a failed batch.
+    const partialErr = Object.assign(new Error("BulkWriteError partial"), {
+      name: "BulkWriteError",
+      result: { deletedCount: 480 },
+    });
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) throw partialErr;
+        return realBulkWrite(ops, opts);
+      });
+
+    const result = await ingestAdzuna({
+      what: "backend developer",
+      country: "in",
+      pages: 1,
+      prune: true,
+    });
+    bulkSpy.mockRestore();
+
+    // The partial count is accumulated into removed.
+    expect(result.removed).toBe(480);
+    // The batch still counts as a failure — an incomplete prune is not clean.
+    expect(result.pruneFailures).toBeGreaterThanOrEqual(1);
+    // Cache-clear still ran.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
 });

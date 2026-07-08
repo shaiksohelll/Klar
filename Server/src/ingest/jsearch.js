@@ -10,6 +10,7 @@ import { clearSalaryCache } from "../aggregations/salaryInsights.js";
 import { clearAtlasCache } from "../aggregations/atlas.js";
 import { clearMomentumCache } from "../aggregations/skillMomentum.js";
 import { clearSkillForecastCache } from "../aggregations/skillForecast.js";
+import { clearSkillGapRoiCache } from "../aggregations/skillGapRoi.js";
 import { recordDailySkillBuckets } from "./snapshot.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
@@ -153,7 +154,7 @@ export async function ingestJSearch({
       "⚠️  JSEARCH_API_KEY is not set — JSearch ingest skipped. " +
         "Add it to .env to enable this source.",
     );
-    return { requested: 0, fetched: 0, unique: 0, upserted: 0, modified: 0 };
+    return { requested: 0, fetched: 0, unique: 0, upserted: 0, modified: 0, removed: 0, pruneFailures: 0, errors: 0, bulkWriteError: null };
   }
 
   // Build query strings: "frontend developer in in", "backend developer in in", …
@@ -207,6 +208,7 @@ export async function ingestJSearch({
   // bulkWrite — same upsert strategy as Adzuna
   let upserted = 0;
   let modified = 0;
+  let bulkWriteError = null;
   if (docsById.size > 0) {
     const ops = [...docsById.values()].map((doc) => ({
       updateOne: {
@@ -215,9 +217,32 @@ export async function ingestJSearch({
         upsert: true,
       },
     }));
-    const result = await Job.bulkWrite(ops, { ordered: false });
-    upserted = result.upsertedCount || 0;
-    modified = result.modifiedCount || 0;
+    try {
+      const result = await Job.bulkWrite(ops, { ordered: false });
+      upserted = result.upsertedCount || 0;
+      modified = result.modifiedCount || 0;
+    } catch (err) {
+      // BulkWriteError (e.g. E11000 on {source,externalId} under concurrent
+      // runs) still carries a partial result under ordered:false. Surface the
+      // ops that landed instead of reporting total failure, and CONTINUE to the
+      // prune + cache-clear block. Mirrors recordDailySkillBuckets (snapshot.js)
+      // and ingestAdzuna.
+      const partial = err?.result;
+      if (partial) {
+        upserted = partial.upsertedCount ?? partial.nUpserted ?? 0;
+        modified = partial.modifiedCount ?? partial.nModified ?? 0;
+        bulkWriteError = {
+          upsertedCount: upserted,
+          modifiedCount: modified,
+          matchedCount: partial.matchedCount ?? partial.nMatched ?? 0,
+        };
+        console.warn(
+          `JSearch bulkWrite partial success (${upserted} upserted, ${modified} modified) — ${err?.message}`,
+        );
+      } else {
+        throw err; // not a BulkWriteError — propagate unexpected errors.
+      }
+    }
   }
 
   // ── Prune stale rows (symmetric with ingestAdzuna) ─────────────────────
@@ -227,15 +252,51 @@ export async function ingestJSearch({
   // any query failed (partial snapshot) or nothing was fetched, so a failed
   // or empty run can never wipe the collection.
   let removed = 0;
-  if (errorCount > 0 && shouldPrune) {
-    console.warn("JSearch prune skipped due to fetch failures");
+  let pruneBatchFailures = 0;
+  if ((errorCount > 0 || bulkWriteError) && shouldPrune) {
+    console.warn("JSearch prune skipped due to fetch failures or bulkWrite error");
   }
-  if (shouldPrune && errorCount === 0 && fetched > 0) {
-    const pruneResult = await Job.deleteMany({
+  if (shouldPrune && errorCount === 0 && !bulkWriteError && fetched > 0) {
+    // Chunked delete: a single unbounded deleteMany over a large stale
+    // partition can hold a long-lived lock / spike WAL. Find the stale _ids,
+    // then delete in batches of 500 with per-batch partial-success accounting.
+    // Mirrors recordDailySkillBuckets' chunked prune (snapshot.js) and
+    // ingestAdzuna.
+    const staleIds = await Job.find({
       source: "jsearch",
       updatedAt: { $lt: runStartedAt },
-    });
-    removed = pruneResult.deletedCount || 0;
+    })
+      .select("_id")
+      .lean();
+    const BATCH = 500;
+    for (let i = 0; i < staleIds.length; i += BATCH) {
+      const batch = staleIds.slice(i, i + BATCH);
+      const deleteOps = batch.map((doc) => ({
+        deleteOne: {
+          filter: {
+            _id: doc._id,
+            source: "jsearch",
+            updatedAt: { $lt: runStartedAt },
+          },
+        },
+      }));
+      try {
+        const delResult = await Job.bulkWrite(deleteOps, { ordered: false });
+        removed += delResult.deletedCount || 0;
+      } catch (batchErr) {
+        // ANY caught error is a batch failure — increment unconditionally so
+        // an incomplete prune never looks clean in the return value.
+        pruneBatchFailures++;
+        // Partial-success: a BulkWriteError still carries a result.
+        const partial = batchErr?.result;
+        if (partial) {
+          removed += partial.deletedCount ?? partial.nRemoved ?? 0;
+        }
+        console.warn(
+          `JSearch prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,
+        );
+      }
+    }
   }
 
   // ── Day-bucketed daily-flow rows (Trends/Foresight history) ────────────
@@ -261,6 +322,9 @@ export async function ingestJSearch({
   // to 6h of stale results after a normal ingest.
   clearMomentumCache();
   clearSkillForecastCache();
+  // ROI cache was the 9th createTtlCache; clearing it here stops the "Learn
+  // Next" recommendations from serving up to 6h of stale results after ingest.
+  clearSkillGapRoiCache();
 
   const summary = {
     requested: queries.length,
@@ -269,7 +333,9 @@ export async function ingestJSearch({
     upserted,
     modified,
     removed,
+    pruneFailures: pruneBatchFailures,
     errors: errorCount,
+    bulkWriteError,
   };
   console.log("🔄 JSearch ingest:", summary);
   return summary;
