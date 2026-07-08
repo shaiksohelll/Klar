@@ -10,20 +10,21 @@ import { ingestJSearch } from "./ingest/jsearch.js";
 import { backfillDailySkillBuckets } from "./ingest/snapshot.js";
 import { clearMomentumCache } from "./aggregations/skillMomentum.js";
 import { clearSkillForecastCache } from "./aggregations/skillForecast.js";
-import { getTrendingSkills, getAllSkills } from "./aggregations/trendingSkills.js";
+import { getTrendingSkills, getAllSkills, clearTrendingCaches } from "./aggregations/trendingSkills.js";
 import { computeSkillMomentum } from "./aggregations/skillMomentum.js";
 import { computeSkillForecast } from "./aggregations/skillForecast.js";
-import { computeSkillGapRoi } from "./aggregations/skillGapRoi.js";
-import { getTopCompanies } from "./aggregations/topCompanies.js";
-import { getSalaryInsights } from "./aggregations/salaryInsights.js";
-import { getAtlas } from "./aggregations/atlas.js";
+import { computeSkillGapRoi, clearSkillGapRoiCache } from "./aggregations/skillGapRoi.js";
+import { getTopCompanies, clearCompaniesCache } from "./aggregations/topCompanies.js";
+import { getSalaryInsights, clearSalaryCache } from "./aggregations/salaryInsights.js";
+import { getAtlas, clearAtlasCache } from "./aggregations/atlas.js";
 import { relocationRoi, currencyForCountry } from "./lib/costOfLiving.js";
 import { resolveSkill, resolveRole, KNOWN_ROLES } from "./lib/validate.js";
 import { makeDedupeKey, normalizeLocation } from "./lib/dedupe.js";
 import { geocodeCity, geocodeById, searchCities } from "./lib/geocode.js";
 import { computeResumeGap } from "./lib/resumeGap.js";
 import watchlistRouter from "./routes/watchlist.js";
-import skillDetailRouter from "./routes/skillDetail.js";
+import skillDetailRouter, { clearDetailCache } from "./routes/skillDetail.js";
+import { clearPairsCache } from "./aggregations/skillPairs.js";
 import Job from "./models/Job.js";
 import { SALARY_BAND_IDS } from "./lib/salaryBands.js";
 import Watchlist from "./models/Watchlist.js";
@@ -258,11 +259,34 @@ app.post("/api/admin/backfill-dedupe", async (req, res, next) => {
       });
     }
     let updated = 0;
+    let bulkWriteError = null;
     if (ops.length > 0) {
-      const result = await Job.bulkWrite(ops, { ordered: false });
-      updated = result.modifiedCount || 0;
+      try {
+        const result = await Job.bulkWrite(ops, { ordered: false });
+        updated = result.modifiedCount || 0;
+      } catch (bwErr) {
+        // Surface partial counts from BulkWriteError instead of losing them.
+        const partial = bwErr?.result;
+        if (partial) {
+          updated = partial.modifiedCount ?? partial.nModified ?? 0;
+          bulkWriteError = {
+            modifiedCount: updated,
+            matchedCount: partial.matchedCount ?? partial.nMatched ?? 0,
+          };
+        } else {
+          throw bwErr; // non-BulkWrite error — rethrow to central handler
+        }
+      }
     }
-    res.json({ ok: true, processed: ops.length, updated });
+    // ── Invalidate affected caches ───────────────────────────────────────
+    clearAtlasCache();
+    clearSalaryCache();
+    clearPairsCache();
+    clearCompaniesCache();
+    clearTrendingCaches();
+    clearDetailCache();
+    clearSkillGapRoiCache();
+    res.json({ ok: true, processed: ops.length, updated, bulkWriteError });
   } catch (err) {
     next(err);
   }
@@ -293,11 +317,29 @@ app.post("/api/admin/backfill-geo", async (req, res, next) => {
       });
     }
     let updated = 0;
+    let bulkWriteError = null;
     if (ops.length > 0) {
-      const result = await Job.bulkWrite(ops, { ordered: false });
-      updated = result.modifiedCount || 0;
+      try {
+        const result = await Job.bulkWrite(ops, { ordered: false });
+        updated = result.modifiedCount || 0;
+      } catch (bwErr) {
+        const partial = bwErr?.result;
+        if (partial) {
+          updated = partial.modifiedCount ?? partial.nModified ?? 0;
+          bulkWriteError = {
+            modifiedCount: updated,
+            matchedCount: partial.matchedCount ?? partial.nMatched ?? 0,
+          };
+        } else {
+          throw bwErr;
+        }
+      }
     }
-    res.json({ ok: true, processed: ops.length, updated });
+    // ── Invalidate affected caches ───────────────────────────────────────
+    clearAtlasCache();
+    clearTrendingCaches();
+    clearCountriesCache();
+    res.json({ ok: true, processed: ops.length, updated, bulkWriteError });
   } catch (err) {
     next(err);
   }
@@ -328,6 +370,7 @@ app.post("/api/admin/backfill-skill-buckets", async (req, res, next) => {
     if (result.ok) {
       clearMomentumCache();
       clearSkillForecastCache();
+      clearSkillGapRoiCache();
     }
     const status = result.ok ? 200 : 500;
     res.status(status).json(result);

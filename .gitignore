@@ -20,3 +20,5 @@ client/dist/
 # Misc
 *.local
 coverage/
+
+.qoder/
