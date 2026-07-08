@@ -261,3 +261,97 @@ describe("ingestJSearch — ROI cache clear (class 1)", () => {
     expect(clearSkillGapRoiCache).toHaveBeenCalled();
   }, 20_000);
 });
+
+describe("ingestJSearch — concurrent refresh spares refreshed row", () => {
+  it("does NOT delete a row whose updatedAt was bumped after staleIds were read", async () => {
+    // Seed a stale jsearch row (updatedAt far in the past).
+    const stale = await Job.create({
+      externalId: "jsearch:concurrent-1",
+      source: "jsearch",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+      dedupeKey: makeDedupeKey("StaleCo", "Old Backend", "Bangalore"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // Intercept Job.bulkWrite: the first call with deleteOne ops is the prune
+    // batch. BEFORE it executes, bump the stale row's updatedAt to "now"
+    // (simulating a concurrent ingest that refreshed it). The source+updatedAt
+    // guard on the deleteOne filter should then cause the delete to be a no-op
+    // for that row.
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) {
+          // Simulate concurrent refresh: bump updatedAt to now.
+          await Job.updateOne(
+            { _id: stale._id },
+            { $set: { updatedAt: new Date() } },
+            { timestamps: false },
+          );
+        }
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The freshly-refreshed row must survive the prune.
+    const survived = await Job.findOne({ externalId: "jsearch:concurrent-1" }).lean();
+    expect(survived).not.toBeNull();
+    // removed should be 0 for the concurrent row (it no longer matched the filter).
+    expect(res.removed).toBe(0);
+  }, 20_000);
+});
+
+describe("ingestJSearch — prune failure surfaced in return value", () => {
+  it("reports pruneFailures > 0 when a delete batch throws with no usable partial result", async () => {
+    // Seed a stale jsearch row so the prune path runs.
+    const stale = await Job.create({
+      externalId: "jsearch:prune-fail-1",
+      source: "jsearch",
+      title: "Old Backend",
+      normalizedRole: "backend",
+      requiredSkills: ["node.js"],
+      location: "Bangalore",
+      postedAt: new Date("2020-01-01"),
+      dedupeKey: makeDedupeKey("StaleCo", "Old Backend", "Bangalore"),
+    });
+    await Job.updateOne(
+      { _id: stale._id },
+      { $set: { updatedAt: new Date("2020-01-01") } },
+      { timestamps: false },
+    );
+
+    stubFetchOk();
+
+    // Make only the deleteOne bulkWrite throw with NO partial result.
+    const realBulkWrite = Job.bulkWrite.bind(Job);
+    const bulkSpy = vi
+      .spyOn(Job, "bulkWrite")
+      .mockImplementation(async (ops, opts) => {
+        if (ops?.[0]?.deleteOne) {
+          throw new Error("connection reset");
+        }
+        return realBulkWrite(ops, opts);
+      });
+
+    const res = await ingestJSearch({ country: "in", pages: 1 });
+    bulkSpy.mockRestore();
+
+    // The failure is surfaced — not swallowed.
+    expect(res.pruneFailures).toBeGreaterThan(0);
+    // Cache-clear still ran despite the prune failure.
+    expect(clearSkillGapRoiCache).toHaveBeenCalled();
+  }, 20_000);
+});

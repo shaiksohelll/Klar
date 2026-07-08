@@ -252,6 +252,7 @@ export async function ingestJSearch({
   // any query failed (partial snapshot) or nothing was fetched, so a failed
   // or empty run can never wipe the collection.
   let removed = 0;
+  let pruneBatchFailures = 0;
   if (errorCount > 0 && shouldPrune) {
     console.warn("JSearch prune skipped due to fetch failures");
   }
@@ -271,7 +272,13 @@ export async function ingestJSearch({
     for (let i = 0; i < staleIds.length; i += BATCH) {
       const batch = staleIds.slice(i, i + BATCH);
       const deleteOps = batch.map((doc) => ({
-        deleteOne: { filter: { _id: doc._id } },
+        deleteOne: {
+          filter: {
+            _id: doc._id,
+            source: "jsearch",
+            updatedAt: { $lt: runStartedAt },
+          },
+        },
       }));
       try {
         const delResult = await Job.bulkWrite(deleteOps, { ordered: false });
@@ -281,6 +288,11 @@ export async function ingestJSearch({
         const partial = batchErr?.result;
         if (partial) {
           removed += partial.deletedCount ?? partial.nRemoved ?? 0;
+        } else {
+          // No usable partial result — the whole batch failed without count
+          // info. Surface the failure instead of silently swallowing it;
+          // cache-clear still proceeds below (we do NOT abort/throw).
+          pruneBatchFailures++;
         }
         console.warn(
           `JSearch prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,
@@ -323,6 +335,7 @@ export async function ingestJSearch({
     upserted,
     modified,
     removed,
+    pruneFailures: pruneBatchFailures,
     errors: errorCount,
     bulkWriteError,
   };

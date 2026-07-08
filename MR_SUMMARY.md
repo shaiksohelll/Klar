@@ -57,13 +57,41 @@ Fix: import `clearSkillGapRoiCache` from `../aggregations/skillGapRoi.js`
 - `Server/src/ingest/adzuna.js` — import `:15`, call `:301`
 - `Server/src/ingest/jsearch.js` — import `:13`, call `:317`
 
+### Greptile P1 — Fresh rows deleted by prune → full stale predicate in deleteOne
+Between reading `staleIds` (via `Job.find({ source, updatedAt: { $lt: runStartedAt } })`)
+and executing the batched `bulkWrite` of `deleteOne` ops, a concurrent ingest can
+refresh a row (same `_id`, newer `updatedAt`). The original `_id`-only filter
+(`deleteOne: { filter: { _id: doc._id } }`) still matched and deleted the
+now-fresh row.
+
+Fix: each `deleteOne` filter now carries the full stale predicate:
+`{ _id: doc._id, source: "<adzuna|jsearch>", updatedAt: { $lt: runStartedAt } }`.
+A refreshed row (`updatedAt >= runStartedAt`) no longer matches and is correctly
+spared; `deletedCount` reflects only rows still stale at delete time.
+
+- `Server/src/ingest/adzuna.js:208-216` — already had the full predicate (applied in prior commit)
+- `Server/src/ingest/jsearch.js:273-281` — updated from bare `_id` to full predicate
+
+### Greptile P1 — Prune failure silently reports success → pruneBatchFailures counter
+When a delete-batch `bulkWrite` throws WITHOUT a usable partial `err.result`, the
+catch block previously only logged and continued. The ingest function returned
+success with `removed: 0` while stale rows remained — the failure was invisible.
+
+Fix: accumulate a `pruneBatchFailures` counter (increment when a batch throws with
+no usable partial result). Surface it in the return value as `pruneFailures`,
+mirroring the `bulkWriteError` partial-count surfacing already in the file. The
+run still proceeds to cache-clear (no abort), but the failure is now visible.
+
+- `Server/src/ingest/adzuna.js:187,229,322` — already had the counter (applied in prior commit)
+- `Server/src/ingest/jsearch.js:255,289,326` — added counter + surfaced in return
+
 ## Tests
 
-Three test cases added to EACH ingest test file (6 new tests total), matching
-the existing in-memory-Mongo + stubbed-`fetch` mocking style. Existing tests
-left intact.
+Five test cases added to EACH ingest test file (10 new tests total across both
+rounds), matching the existing in-memory-Mongo + stubbed-`fetch` mocking style.
+Existing tests left intact.
 
-`Server/src/ingest/adzuna.test.js` (now 9 tests):
+`Server/src/ingest/adzuna.test.js` (now 11 tests):
 1. **bulkWrite partial success (class 5)** — mocks `Job.bulkWrite` to throw a
    `BulkWriteError` (`name: "BulkWriteError"`, `result` with partial counts);
    asserts the ingest RETURNS, `bulkWriteError` carries the partial counts,
@@ -74,9 +102,16 @@ left intact.
    (ceil(1200/500)).
 3. **ROI cache clear on success (class 1)** — asserts `clearSkillGapRoiCache`
    is called on a normal successful run.
+4. **concurrent refresh spares refreshed row** — seeds a stale row, simulates a
+   concurrent ingest refreshing it (`updatedAt` bumped to now) between
+   `staleIds` read and the delete batch; asserts the refreshed row is NOT
+   deleted (`removed === 0`).
+5. **prune failure surfaced in return value** — mocks the delete-batch
+   `bulkWrite` to throw with no usable partial result; asserts the return
+   reports `pruneFailures > 0` AND `clearSkillGapRoiCache` still runs.
 
-`Server/src/ingest/jsearch.test.js` (now 6 tests): the same three cases,
-adapted to JSearch's full-sweep + sequential-fetch shape.
+`Server/src/ingest/jsearch.test.js` (now 8 tests): the same five production
+cases (3 + 2 new), adapted to JSearch's full-sweep + sequential-fetch shape.
 
 The ROI cache clear is spied via a module-level `vi.mock("../aggregations/skillGapRoi.js")`
 (ESM live bindings are read-only, so a runtime spy can't observe the imported
@@ -88,9 +123,9 @@ Full vitest suite (`cd Server; npm test` = `vitest run`):
 
 ```
  Test Files  25 passed (25)
-      Tests  305 passed (305)
-   Start at  23:25:43
-   Duration  61.59s
+      Tests  309 passed (309)
+   Start at  14:07:47
+   Duration  60.02s
 ```
 
 All green — no regressions.
@@ -103,3 +138,4 @@ All green — no regressions.
 - `Server/src/ingest/snapshot.js` was READ-ONLY reference — NOT modified.
 - No other files touched.
 - Not merged, not pushed, not committed.
+

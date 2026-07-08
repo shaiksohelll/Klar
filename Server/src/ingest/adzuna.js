@@ -184,6 +184,7 @@ export async function ingestAdzuna({
   }
 
   let removed = 0;
+  let pruneBatchFailures = 0;
   // Skip pruning whenever any fetch failed: we only saw a partial snapshot of
   // the current market, so jobs that weren't refreshed this run should not be
   // deleted — they may still be live, we just couldn't reach Adzuna for them.
@@ -205,7 +206,13 @@ export async function ingestAdzuna({
     for (let i = 0; i < staleIds.length; i += BATCH) {
       const batch = staleIds.slice(i, i + BATCH);
       const deleteOps = batch.map((doc) => ({
-        deleteOne: { filter: { _id: doc._id } },
+        deleteOne: {
+          filter: {
+            _id: doc._id,
+            source: "adzuna",
+            updatedAt: { $lt: runStartedAt },
+          },
+        },
       }));
       try {
         const delResult = await Job.bulkWrite(deleteOps, { ordered: false });
@@ -215,6 +222,11 @@ export async function ingestAdzuna({
         const partial = batchErr?.result;
         if (partial) {
           removed += partial.deletedCount ?? partial.nRemoved ?? 0;
+        } else {
+          // No usable partial result — the whole batch failed without count
+          // info. Surface the failure instead of silently swallowing it;
+          // cache-clear still proceeds below (we do NOT abort/throw).
+          pruneBatchFailures++;
         }
         console.warn(
           `Adzuna prune batch ${Math.floor(i / BATCH) + 1} failed — ${batchErr?.message}`,
@@ -307,6 +319,7 @@ export async function ingestAdzuna({
     upserted,
     modified,
     removed,
+    pruneFailures: pruneBatchFailures,
     totalInDb,
     bulkWriteError,
   };
