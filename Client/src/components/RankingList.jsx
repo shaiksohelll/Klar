@@ -35,13 +35,15 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
 
   return (
     <div className="w-full">
-      {/* Header row */}
-      <div className="flex items-center px-4 py-3 border-b border-[var(--border)] text-xs font-mono text-[var(--muted-2)] uppercase tracking-wider mb-2">
-        <div className="w-12">Rank</div>
-        <div className="flex-1">Skill</div>
-        <div className="w-28 hidden md:block text-right">Avg Salary</div>
-        <div className="w-32 hidden md:block text-right">Remote</div>
-        <div className="w-12 text-center ml-4">Track</div>
+      {/* Header row — same flex + gap + column widths as the data rows so they align */}
+      <div className="flex items-center gap-x-3 px-4 py-3 border-b border-[var(--border)] text-xs font-mono text-[var(--muted-2)] uppercase tracking-wider mb-2">
+        <div className="w-10 shrink-0">Rank</div>
+        <div className="flex-1 min-w-0">Skill</div>
+        <div className="w-28 shrink-0 hidden md:block text-right">
+          Avg Salary
+        </div>
+        <div className="w-16 shrink-0 hidden md:block text-right">Remote</div>
+        <div className="w-12 shrink-0 text-center">Track</div>
       </div>
 
       <div className="space-y-1">
@@ -65,22 +67,22 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
               onClick={() => onSelect(skill)}
               whileHover={rowHover}
               transition={rowTransition}
-              className="flex items-center px-4 py-3 rounded-lg cursor-pointer group relative overflow-hidden"
+              className="flex items-center gap-x-3 px-4 py-3 rounded-lg cursor-pointer group relative"
             >
-              <div className="w-12 font-mono text-[var(--muted-2)] group-hover:text-[var(--text)] transition-colors">
+              <div className="w-10 shrink-0 font-mono text-[var(--muted-2)] group-hover:text-[var(--text)] transition-colors">
                 {String(index + 1).padStart(2, "0")}
               </div>
 
-              <div className="flex-1 pr-4 relative">
+              <div className="flex-1 min-w-0 relative">
                 <div className="flex items-center gap-2">
-                  <span className="font-sans font-medium text-[var(--text)] group-hover:text-[var(--text)] transition-colors">
+                  <span className="font-sans font-medium text-[var(--text)] transition-colors">
                     {displayName(skill.name)}
                   </span>
                   <VelocityBadge
                     velocity={skill.velocity}
                     trend={skill.trend}
                   />
-                  <div className="font-mono text-xs text-[var(--muted-2)] opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="font-mono text-xs text-[var(--muted-2)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     {skill.count.toLocaleString()}
                   </div>
                 </div>
@@ -96,28 +98,28 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
               </div>
 
               {/* Avg Salary — INR disclosed only.
-                  Ordering: null → "—" (0 qualifying postings);
+                  null → "—" (0 qualifying postings);
                   limitedData → chip (1–4 postings);
                   else → ₹value (≥ 5 postings). */}
-              <div className="w-28 hidden md:block font-mono text-sm text-right shrink-0">
+              <div className="w-28 shrink-0 hidden md:block font-mono text-sm text-right">
                 {skill.avgSalary == null ? (
                   <span className="text-[var(--muted-2)]">—</span>
                 ) : skill.limitedData ? (
-                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border border-[var(--border)] text-[var(--muted-2)] leading-none">
+                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border border-[var(--border)] text-[var(--muted-2)] leading-none whitespace-nowrap">
                     limited data
                   </span>
                 ) : (
-                  <span className="text-[var(--muted)]">
+                  <span className="text-[var(--muted)] whitespace-nowrap">
                     ₹{fmtINR(skill.avgSalary)}
                   </span>
                 )}
               </div>
 
-              <div className="w-32 hidden md:block font-mono text-sm text-[var(--muted)] text-right">
+              <div className="w-16 shrink-0 hidden md:block font-mono text-sm text-[var(--muted)] text-right">
                 {skill.remoteCount.toLocaleString()}
               </div>
 
-              <div className="w-12 ml-4 flex justify-center">
+              <div className="w-12 shrink-0 flex justify-center">
                 {/* Star pop — scales 1.2x with snappy spring on track */}
                 <motion.button
                   onClick={(e) => {
@@ -133,7 +135,7 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
                   className={`p-2 rounded-full transition-colors ${
                     isTracked
                       ? "text-[var(--accent)] bg-[#EB0029]/10"
-                      : "text-[var(--muted-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
+                      : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]"
                   }`}
                 >
                   <StarIcon filled={isTracked} className="w-4 h-4" />
