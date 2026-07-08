@@ -75,12 +75,11 @@ vi.mock("./aggregations/skillGapRoi.js", () => ({
   computeSkillGapRoi: vi.fn().mockResolvedValue({}),
   clearSkillGapRoiCache: vi.fn(),
 }));
-vi.mock("./routes/skillDetail.js", () => {
+vi.mock("./routes/skillDetail.js", async () => {
   const { Router } = await import("express");
   const r = Router();
   return { default: r, clearDetailCache: vi.fn() };
 });
-
 // ── Import AFTER env + mocks are set ───────────────────────────────────────
 const { default: app, clearCountriesCache } = await import("./app.js");
 const { default: request } = await import("supertest");
