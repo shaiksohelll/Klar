@@ -41,22 +41,36 @@ let seq = 0;
  * Builds a Job document with sensible defaults.
  * postedAt defaults to now so the default 12-month window always includes it.
  * Each call gets a unique externalId via the `seq` counter.
+ *
+ * Two ways to set the salary:
+ *   - Pass `midpoint` + `currency` → shorthand; builds { min, max, midpoint, currency }.
+ *   - Pass `salaryRange` explicitly → used as-is (allows null/zero midpoint tests
+ *     that must reach the $isNumber / $gt:0 guards in the aggregation).
  */
 function makeJob(overrides = {}) {
   const {
-    source         = "adzuna",
-    companyName    = `TestCo${++seq}`,
-    title          = "Developer",
-    location       = "Bangalore",
-    normalizedRole = "backend",
+    source          = "adzuna",
+    companyName     = `TestCo${++seq}`,
+    title           = "Developer",
+    location        = "Bangalore",
+    normalizedRole  = "backend",
     salaryDisclosed = true,
-    midpoint       = null,
-    currency       = "INR",
-    requiredSkills = ["react"],
-    postedAt       = new Date(),
+    midpoint        = null,
+    currency        = "INR",
+    salaryRange     = undefined,   // explicit override — takes precedence over midpoint
+    requiredSkills  = ["react"],
+    postedAt        = new Date(),
   } = overrides;
 
-  const hasSalary = midpoint != null;
+  // If caller supplied an explicit salaryRange (even {midpoint:null,...}), use it.
+  // Otherwise fall back to the shorthand: non-null midpoint → build object, null → null.
+  const resolvedSalaryRange =
+    salaryRange !== undefined
+      ? salaryRange
+      : midpoint != null
+        ? { min: midpoint, max: midpoint, midpoint, currency }
+        : null;
+
   return {
     externalId:      `${source}:sal${seq}`,
     source,
@@ -65,9 +79,7 @@ function makeJob(overrides = {}) {
     companyName,
     isRemote:        false,
     requiredSkills,
-    salaryRange:     hasSalary
-      ? { min: midpoint, max: midpoint, midpoint, currency }
-      : null,
+    salaryRange:     resolvedSalaryRange,
     salaryDisclosed,
     location,
     redirectUrl:     "",
@@ -187,22 +199,47 @@ describe("getTrendingSkills — avgSalary integrity", () => {
     expect(skill.limitedData).toBe(true); // 0 < 5
   });
 
-  it("does not count a disclosed-INR doc with null midpoint toward disclosedCount", async () => {
-    // This doc is disclosed+INR but has no midpoint → must NOT inflate disclosedCount,
-    // which would cause limitedData to be understated relative to avgSalary's contributors.
+  it("excludes disclosed-INR doc with null midpoint from both avgSalary and disclosedCount", async () => {
+    // Uses explicit salaryRange override so the doc reaches the $isNumber guard
+    // (makeJob({midpoint:null}) would set salaryRange:null, excluding the doc
+    // before the guard via the currency check — not what we want to test here).
     await Job.create([
       makeJob({ midpoint: 1_000_000, currency: "INR", salaryDisclosed: true }),
-      // Disclosed + INR but null midpoint — must not be counted.
-      makeJob({ midpoint: null, currency: "INR", salaryDisclosed: true }),
+      // Disclosed + INR + salaryRange present, but midpoint is null — excluded by $isNumber.
+      makeJob({
+        salaryDisclosed: true,
+        salaryRange: { min: null, max: null, midpoint: null, currency: "INR" },
+      }),
     ]);
 
     const res = await getTrendingSkills({ months: 12, limit: 10 });
     const skill = res.skills.find((s) => s.skill === "react");
 
     expect(skill).toBeDefined();
-    // Only 1 doc has a valid midpoint — disclosedCount must be 1, not 2.
+    // Null-midpoint doc must not inflate disclosedCount or skew avgSalary.
     expect(skill.disclosedCount).toBe(1);
     expect(skill.avgSalary).toBe(1_000_000);
+    expect(skill.limitedData).toBe(true); // 1 < 5
+  });
+
+  it("excludes disclosed-INR doc with zero midpoint from both avgSalary and disclosedCount", async () => {
+    // A midpoint of 0 passes $isNumber but fails $gt:0 — must be excluded.
+    await Job.create([
+      makeJob({ midpoint: 2_000_000, currency: "INR", salaryDisclosed: true }),
+      // Disclosed + INR + numeric midpoint, but zero — excluded by $gt:0.
+      makeJob({
+        salaryDisclosed: true,
+        salaryRange: { min: 0, max: 0, midpoint: 0, currency: "INR" },
+      }),
+    ]);
+
+    const res = await getTrendingSkills({ months: 12, limit: 10 });
+    const skill = res.skills.find((s) => s.skill === "react");
+
+    expect(skill).toBeDefined();
+    // Zero-midpoint doc must not inflate disclosedCount or pull avgSalary toward 0.
+    expect(skill.disclosedCount).toBe(1);
+    expect(skill.avgSalary).toBe(2_000_000);
     expect(skill.limitedData).toBe(true); // 1 < 5
   });
 });

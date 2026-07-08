@@ -14,6 +14,13 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=18",
+    "mongodb": ">=5.2"
+  },
+  "_comments": {
+    "engines.mongodb": "MongoDB >= 5.2 required for the $top group accumulator used in dedupeGroupStages() (see Server/src/lib/dedupe.js)"
+  },
   "dependencies": {
     "@clerk/express": "^2.1.23",
     "@sentry/node": "^10.63.0",

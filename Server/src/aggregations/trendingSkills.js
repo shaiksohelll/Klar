@@ -234,10 +234,11 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
             $group: {
               _id: "$requiredSkills",
               demand: { $sum: 1 },
-              // Disclosed INR-only average: both salaryDisclosed AND currency
-              // must be "INR" — excludes predicted salaries and non-INR roles.
-              // $avg ignores nulls, so jobs without a qualifying salary never
-              // drag the figure.
+              // Disclosed INR-only average.  Qualifying conditions are IDENTICAL
+              // to disclosedCount below: salaryDisclosed + currency INR +
+              // numeric midpoint > 0.  This ensures both accumulators count
+              // the exact same set of documents — no inflation from docs whose
+              // midpoint is null or zero.
               avgSalary: {
                 $avg: {
                   $cond: [
@@ -245,6 +246,8 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
                       $and: [
                         { $eq: ["$salaryDisclosed", true] },
                         { $eq: ["$salaryRange.currency", "INR"] },
+                        { $isNumber: "$salaryRange.midpoint" },
+                        { $gt: ["$salaryRange.midpoint", 0] },
                       ],
                     },
                     "$salaryRange.midpoint",

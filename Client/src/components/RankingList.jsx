@@ -95,18 +95,21 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
                 </div>
               </div>
 
-              {/* Avg Salary — INR disclosed only; "limited data" chip when < 5 postings */}
+              {/* Avg Salary — INR disclosed only.
+                  Ordering: null → "—" (0 qualifying postings);
+                  limitedData → chip (1–4 postings);
+                  else → ₹value (≥ 5 postings). */}
               <div className="w-28 hidden md:block font-mono text-sm text-right shrink-0">
-                {skill.limitedData ? (
+                {skill.avgSalary == null ? (
+                  <span className="text-[var(--muted-2)]">—</span>
+                ) : skill.limitedData ? (
                   <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border border-[var(--border)] text-[var(--muted-2)] leading-none">
                     limited data
                   </span>
-                ) : skill.avgSalary != null ? (
+                ) : (
                   <span className="text-[var(--muted)]">
                     ₹{fmtINR(skill.avgSalary)}
                   </span>
-                ) : (
-                  <span className="text-[var(--muted-2)]">—</span>
                 )}
               </div>
 
