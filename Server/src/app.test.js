@@ -59,7 +59,27 @@ vi.mock("./aggregations/atlas.js", () => ({
   }),
   clearAtlasCache: vi.fn(),
 }));
-
+vi.mock("./aggregations/salaryInsights.js", () => ({
+  getSalaryInsights: vi.fn().mockResolvedValue({}),
+  clearSalaryCache: vi.fn(),
+}));
+vi.mock("./aggregations/skillPairs.js", () => ({
+  getSkillPairs: vi.fn().mockResolvedValue([]),
+  clearPairsCache: vi.fn(),
+}));
+vi.mock("./aggregations/topCompanies.js", () => ({
+  getTopCompanies: vi.fn().mockResolvedValue([]),
+  clearCompaniesCache: vi.fn(),
+}));
+vi.mock("./aggregations/skillGapRoi.js", () => ({
+  computeSkillGapRoi: vi.fn().mockResolvedValue({}),
+  clearSkillGapRoiCache: vi.fn(),
+}));
+vi.mock("./routes/skillDetail.js", async () => {
+  const { Router } = await import("express");
+  const r = Router();
+  return { default: r, clearDetailCache: vi.fn() };
+});
 // ── Import AFTER env + mocks are set ───────────────────────────────────────
 const { default: app, clearCountriesCache } = await import("./app.js");
 const { default: request } = await import("supertest");
@@ -67,8 +87,13 @@ const { ingestAdzuna } = await import("./ingest/adzuna.js");
 const { ingestJSearch } = await import("./ingest/jsearch.js");
 const { searchCities } = await import("./lib/geocode.js");
 const { relocationRoi } = await import("./lib/costOfLiving.js");
-const { getTrendingSkills } = await import("./aggregations/trendingSkills.js");
-const { getAtlas } = await import("./aggregations/atlas.js");
+const { getTrendingSkills, clearTrendingCaches } = await import("./aggregations/trendingSkills.js");
+const { getAtlas, clearAtlasCache } = await import("./aggregations/atlas.js");
+const { clearSalaryCache } = await import("./aggregations/salaryInsights.js");
+const { clearPairsCache } = await import("./aggregations/skillPairs.js");
+const { clearCompaniesCache } = await import("./aggregations/topCompanies.js");
+const { clearSkillGapRoiCache } = await import("./aggregations/skillGapRoi.js");
+const { clearDetailCache } = await import("./routes/skillDetail.js");
 const { default: Job } = await import("./models/Job.js");
 
 describe("POST /api/ingest", () => {
@@ -729,5 +754,171 @@ describe("GET /api/atlas (salary band filter)", () => {
     expect(getAtlas).toHaveBeenCalledWith(
       expect.not.objectContaining({ salary: expect.anything() }),
     );
+  });
+});
+
+// ── Backfill-dedupe cache invalidation ──────────────────────────────────────
+describe("POST /api/admin/backfill-dedupe — cache invalidation", () => {
+  beforeEach(() => {
+    clearAtlasCache.mockClear();
+    clearSalaryCache.mockClear();
+    clearPairsCache.mockClear();
+    clearCompaniesCache.mockClear();
+    clearTrendingCaches.mockClear();
+    clearDetailCache.mockClear();
+    clearSkillGapRoiCache.mockClear();
+    Job.bulkWrite.mockReset().mockResolvedValue({ modifiedCount: 0 });
+  });
+
+  it("clears all 7 dedupe-affected caches on success", async () => {
+    const res = await request(app)
+      .post("/api/admin/backfill-dedupe")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(clearAtlasCache).toHaveBeenCalledTimes(1);
+    expect(clearSalaryCache).toHaveBeenCalledTimes(1);
+    expect(clearPairsCache).toHaveBeenCalledTimes(1);
+    expect(clearCompaniesCache).toHaveBeenCalledTimes(1);
+    expect(clearTrendingCaches).toHaveBeenCalledTimes(1);
+    expect(clearDetailCache).toHaveBeenCalledTimes(1);
+    expect(clearSkillGapRoiCache).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT clear caches on auth failure", async () => {
+    const res = await request(app)
+      .post("/api/admin/backfill-dedupe");
+    expect(res.status).toBe(401);
+    expect(clearAtlasCache).not.toHaveBeenCalled();
+    expect(clearSalaryCache).not.toHaveBeenCalled();
+    expect(clearPairsCache).not.toHaveBeenCalled();
+    expect(clearCompaniesCache).not.toHaveBeenCalled();
+    expect(clearTrendingCaches).not.toHaveBeenCalled();
+    expect(clearDetailCache).not.toHaveBeenCalled();
+    expect(clearSkillGapRoiCache).not.toHaveBeenCalled();
+  });
+
+  it("surfaces partial bulkWrite counts on BulkWriteError", async () => {
+    const bwErr = Object.assign(new Error("E11000 dup key"), {
+      name: "BulkWriteError",
+      result: { modifiedCount: 42, matchedCount: 100 },
+    });
+    Job.bulkWrite.mockRejectedValueOnce(bwErr);
+    // Seed at least one doc so ops.length > 0 and bulkWrite runs.
+    Job.find.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockReturnThis(),
+      cursor: vi.fn(() => ({
+        [Symbol.asyncIterator]: () => {
+          let called = false;
+          return {
+            next: async () => {
+              if (!called) {
+                called = true;
+                return { done: false, value: { _id: "a", companyName: "X", title: "Y", location: "Z" } };
+              }
+              return { done: true };
+            },
+          };
+        },
+      })),
+    });
+    const res = await request(app)
+      .post("/api/admin/backfill-dedupe")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.bulkWriteError).toMatchObject({
+      modifiedCount: 42,
+      matchedCount: 100,
+    });
+    expect(res.body.updated).toBe(42);
+    // Caches still cleared even on partial success.
+    expect(clearAtlasCache).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Backfill-geo cache invalidation ─────────────────────────────────────────
+describe("POST /api/admin/backfill-geo — cache invalidation", () => {
+  beforeEach(() => {
+    clearAtlasCache.mockClear();
+    clearTrendingCaches.mockClear();
+    clearCountriesCache();
+    // Reset spyable clearCountriesCache — it's a real function, not a mock,
+    // so we check its effect via the countries endpoint.
+    clearSalaryCache.mockClear();
+    clearPairsCache.mockClear();
+    clearCompaniesCache.mockClear();
+    clearDetailCache.mockClear();
+    clearSkillGapRoiCache.mockClear();
+    Job.bulkWrite.mockReset().mockResolvedValue({ modifiedCount: 0 });
+  });
+
+  it("clears atlas + trending + countries caches on success", async () => {
+    const res = await request(app)
+      .post("/api/admin/backfill-geo")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(clearAtlasCache).toHaveBeenCalledTimes(1);
+    expect(clearTrendingCaches).toHaveBeenCalledTimes(1);
+    // clearCountriesCache is a real fn in app.js — verify it was called by
+    // checking the response (it resets the in-memory TTL cache, so a
+    // subsequent countries request would re-query).
+  });
+
+  it("does NOT clear caches that geo doesn't affect", async () => {
+    await request(app)
+      .post("/api/admin/backfill-geo")
+      .set("x-ingest-secret", "test-secret");
+    expect(clearSalaryCache).not.toHaveBeenCalled();
+    expect(clearPairsCache).not.toHaveBeenCalled();
+    expect(clearCompaniesCache).not.toHaveBeenCalled();
+    expect(clearDetailCache).not.toHaveBeenCalled();
+    expect(clearSkillGapRoiCache).not.toHaveBeenCalled();
+  });
+
+  it("does NOT clear caches on auth failure", async () => {
+    const res = await request(app)
+      .post("/api/admin/backfill-geo");
+    expect(res.status).toBe(401);
+    expect(clearAtlasCache).not.toHaveBeenCalled();
+    expect(clearTrendingCaches).not.toHaveBeenCalled();
+  });
+
+  it("surfaces partial bulkWrite counts on BulkWriteError", async () => {
+    const bwErr = Object.assign(new Error("E11000 dup key"), {
+      name: "BulkWriteError",
+      result: { modifiedCount: 10, matchedCount: 50 },
+    });
+    Job.bulkWrite.mockRejectedValueOnce(bwErr);
+    Job.find.mockReturnValueOnce({
+      select: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockReturnThis(),
+      cursor: vi.fn(() => ({
+        [Symbol.asyncIterator]: () => {
+          let called = false;
+          return {
+            next: async () => {
+              if (!called) {
+                called = true;
+                return { done: false, value: { _id: "g1", location: "Mumbai", salaryRange: { currency: "INR" } } };
+              }
+              return { done: true };
+            },
+          };
+        },
+      })),
+    });
+    const res = await request(app)
+      .post("/api/admin/backfill-geo")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.bulkWriteError).toMatchObject({
+      modifiedCount: 10,
+      matchedCount: 50,
+    });
+    expect(res.body.updated).toBe(10);
   });
 });

@@ -22,9 +22,14 @@ vi.mock("./ingest/snapshot.js", () => ({ backfillDailySkillBuckets }));
 
 const clearMomentumCache = vi.fn();
 const clearSkillForecastCache = vi.fn();
+const clearSkillGapRoiCache = vi.fn();
 vi.mock("./aggregations/skillMomentum.js", () => ({ clearMomentumCache }));
 vi.mock("./aggregations/skillForecast.js", () => ({
   clearSkillForecastCache,
+}));
+vi.mock("./aggregations/skillGapRoi.js", () => ({
+  computeSkillGapRoi: vi.fn().mockResolvedValue({}),
+  clearSkillGapRoiCache,
 }));
 
 vi.mock("./models/Job.js", () => ({
@@ -46,6 +51,7 @@ beforeEach(() => {
   backfillDailySkillBuckets.mockReset();
   clearMomentumCache.mockReset();
   clearSkillForecastCache.mockReset();
+  clearSkillGapRoiCache.mockReset();
 });
 
 describe("POST /api/admin/backfill-skill-buckets - auth", () => {
@@ -86,25 +92,29 @@ describe("POST /api/admin/backfill-skill-buckets - authorized", () => {
     expect(backfillDailySkillBuckets).toHaveBeenCalledTimes(1);
     expect(clearMomentumCache).toHaveBeenCalledTimes(1);
     expect(clearSkillForecastCache).toHaveBeenCalledTimes(1);
+    expect(clearSkillGapRoiCache).toHaveBeenCalledTimes(1);
   });
 
-  it("500s on caught failure and keeps caches", async () => {
-    backfillDailySkillBuckets.mockResolvedValue({
-      ok: false,
-      buckets: 0,
-      minDate: null,
-      maxDate: null,
-      distinctSkills: 0,
-      error: "boom",
-    });
-    const res = await request(app)
-      .post("/api/admin/backfill-skill-buckets")
-      .set("x-ingest-secret", "test-secret");
-    expect(res.status).toBe(500);
-    expect(res.body.ok).toBe(false);
-    expect(clearMomentumCache).not.toHaveBeenCalled();
-    expect(clearSkillForecastCache).not.toHaveBeenCalled();
+it("500s on a returned failure but STILL clears caches (greptile P1: backfill may have written rows before reporting failure)", async () => {
+  backfillDailySkillBuckets.mockResolvedValue({
+    ok: false,
+    buckets: 0,
+    minDate: null,
+    maxDate: null,
+    distinctSkills: 0,
+    error: "boom",
   });
+
+  const res = await request(app)
+    .post("/api/admin/backfill-skill-buckets")
+    .set("x-ingest-secret", "test-secret");
+
+  expect(res.status).toBe(500);
+  expect(res.body.ok).toBe(false);
+  expect(clearMomentumCache).toHaveBeenCalledTimes(1);
+  expect(clearSkillForecastCache).toHaveBeenCalledTimes(1);
+  expect(clearSkillGapRoiCache).toHaveBeenCalledTimes(1);
+});
 
   it("500s via central handler when backfill throws", async () => {
     backfillDailySkillBuckets.mockRejectedValue(
@@ -116,6 +126,7 @@ describe("POST /api/admin/backfill-skill-buckets - authorized", () => {
     expect(res.status).toBe(500);
     expect(res.body.ok).toBe(false);
     expect(clearMomentumCache).not.toHaveBeenCalled();
+    expect(clearSkillGapRoiCache).not.toHaveBeenCalled();
   });
 
   it("skips (200) a second backfill in progress", async () => {
