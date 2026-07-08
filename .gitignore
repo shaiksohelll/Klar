@@ -22,3 +22,4 @@ client/dist/
 coverage/
 
 .qoder/
+.replit
