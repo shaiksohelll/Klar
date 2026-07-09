@@ -65,7 +65,7 @@ export default function SkillLeaderboard({
   const [expandedId, setExpandedId] = useState(null);
 
   const maxCount = useMemo(
-    () => (skills.length ? Math.max(...skills.map((s) => s.count)) : 1),
+    () => (skills.length ? skills.reduce((m, s) => (s.count > m ? s.count : m), 0) : 1),
     [skills],
   );
   const leadId = useMemo(() => {
