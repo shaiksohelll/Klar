@@ -3,6 +3,7 @@ import express from "express";
 import request from "supertest";
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
+import { makeDedupeKey } from "../lib/dedupe.js";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 // skillDetail issues several aggregate() calls + a Job.find() and calls
@@ -25,15 +26,24 @@ vi.mock("../models/Job.js", async (importOriginal) => {
   };
   return {
     default: {
-      // Capture the $match of the FIRST aggregate call (the demand pipeline,
-      // whose baseMatch.postedAt.$gte reflects the clamped months window and
-      // whose requiredSkills now carries the $type guards). In LIVE_DB mode the
-      // spy delegates to the real model so the pipelines run against the
-      // in-memory Mongo; otherwise a canned result keeps the clamp tests DB-free
-      // (and safe under fake timers).
+      // Capture the $match of the first BASEMATCH-SHAPED pipeline (identified
+      // by requiredSkills.$eq — only baseMatch, used by topCompanies/
+      // relatedSkills/trend, has that shape). demand/remoteCount now dedupe
+      // over windowBase first and attribute via a POST-dedupe $match, so their
+      // pre-dedupe $match no longer carries $eq; skipping those keeps this
+      // capture pointed at baseMatch, whose postedAt.$gte reflects the same
+      // clamped months window and whose requiredSkills carries the $type
+      // guards under test below. In LIVE_DB mode the spy delegates to the real
+      // model so the pipelines run against the in-memory Mongo; otherwise a
+      // canned result keeps the clamp tests DB-free (and safe under fake timers).
       aggregate: vi.fn((pipeline) => {
         const match = pipeline?.find?.((s) => s && s.$match)?.$match;
-        if (match && match.postedAt && capturedMatch === undefined) {
+        if (
+          match &&
+          match.postedAt &&
+          match.requiredSkills?.$eq !== undefined &&
+          capturedMatch === undefined
+        ) {
           capturedMatch = match;
         }
         if (LIVE_DB) {
@@ -50,9 +60,17 @@ vi.mock("../aggregations/skillPairs.js", () => ({
   getSkillPairs: vi.fn().mockResolvedValue({ skill: "react", baseCount: 0, pairs: [] }),
 }));
 
-vi.mock("../lib/dedupe.js", () => ({
-  dedupeGroupStages: () => [],
-}));
+vi.mock("../lib/dedupe.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    // In LIVE_DB mode delegate to the REAL dedupe stages so the
+    // dedupe-then-attribute pipelines actually dedupe against the in-memory
+    // Mongo; otherwise keep the canned no-op so the DB-free clamp tests are
+    // unaffected.
+    dedupeGroupStages: () => (LIVE_DB ? actual.dedupeGroupStages() : []),
+  };
+});
 
 import skillDetailRouter, { clearDetailCache } from "./skillDetail.js";
 
@@ -157,6 +175,109 @@ function rawJob(overrides = {}) {
     ...overrides,
   };
 }
+
+// ── dedupe-then-attribute coherence (drawer must match the ranking list) ────
+// The ranking list dedupes the WHOLE window first, then attributes each
+// deduped representative to the skills it lists. The drawer previously
+// filtered to the skill BEFORE dedupe, which can count a doc whose deduped
+// representative (the newest twin, chosen by dedupeGroupStages' postedAt
+// sort) doesn't actually list the skill — as long as an older, since-merged
+// twin did. This proves that scenario is no longer counted.
+describe("GET /api/skill/:name — dedupe-then-attribute coherence", () => {
+  beforeEach(async () => {
+    capturedMatch = undefined;
+    LIVE_DB = true;
+    clearDetailCache();
+    await jobsCol().deleteMany({});
+  });
+
+  afterEach(() => {
+    LIVE_DB = false;
+  });
+
+  it("does NOT count a skill when the deduped representative doesn't list it, even though an older twin did", async () => {
+    const companyName = "Acme Corp";
+    const title = "Backend Developer";
+    const location = "Bangalore";
+    const dedupeKey = makeDedupeKey(companyName, title, location);
+
+    // Older twin (JSearch): lists "react" — but is NOT the deduped
+    // representative because dedupeGroupStages() sorts postedAt desc first.
+    await jobsCol().insertOne(
+      rawJob({
+        externalId: "jsearch:twin-old",
+        source: "jsearch",
+        companyName,
+        title,
+        location,
+        requiredSkills: ["react"],
+        dedupeKey,
+        postedAt: new Date("2026-01-01"),
+      }),
+    );
+    // Newer twin (Adzuna): does NOT list "react" — this is the deduped
+    // representative that survives dedupeGroupStages() for this dedupeKey.
+    await jobsCol().insertOne(
+      rawJob({
+        externalId: "adzuna:twin-new",
+        source: "adzuna",
+        companyName,
+        title,
+        location,
+        requiredSkills: ["node.js"],
+        dedupeKey,
+        postedAt: new Date("2026-02-01"),
+      }),
+    );
+
+    const res = await request(makeApp()).get("/api/skill/react");
+
+    expect(res.status).toBe(200);
+    // The deduped representative (Adzuna's newer twin) doesn't list "react",
+    // so demand/remoteCount for "react" must be 0 — matching how the
+    // ranking list would attribute this dedupeKey's single representative.
+    expect(res.body.demand).toBe(0);
+    expect(res.body.remoteCount).toBe(0);
+  });
+
+  it("counts a skill exactly once when both twins list it (no double count from the twin)", async () => {
+    const companyName = "Globex Inc";
+    const title = "Frontend Developer";
+    const location = "Pune";
+    const dedupeKey = makeDedupeKey(companyName, title, location);
+
+    await jobsCol().insertOne(
+      rawJob({
+        externalId: "jsearch:twin-old2",
+        source: "jsearch",
+        companyName,
+        title,
+        location,
+        requiredSkills: ["react"],
+        dedupeKey,
+        postedAt: new Date("2026-01-01"),
+      }),
+    );
+    await jobsCol().insertOne(
+      rawJob({
+        externalId: "adzuna:twin-new2",
+        source: "adzuna",
+        companyName,
+        title,
+        location,
+        requiredSkills: ["react"],
+        dedupeKey,
+        postedAt: new Date("2026-02-01"),
+      }),
+    );
+
+    const res = await request(makeApp()).get("/api/skill/react");
+
+    expect(res.status).toBe(200);
+    // Two source documents, one dedupeKey → one deduped representative → demand 1.
+    expect(res.body.demand).toBe(1);
+  });
+});
 
 describe("GET /api/skill/:name — baseMatch type guards exclude malformed docs", () => {
   beforeEach(async () => {
