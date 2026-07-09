@@ -1,0 +1,50 @@
+In Server/src/aggregations/trendingSkills.js, inside getTrendingSkills only:
+
+1. In the `skills` facet $group, REMOVE the INR-only `avgSalary` and `disclosedCount`
+   accumulators. Add instead:
+     salarySamples: {
+       $push: {
+         $cond: [
+           { $and: [
+             { $eq: ["$salaryDisclosed", true] },
+             { $isNumber: "$salaryRange.midpoint" },
+             { $gt: ["$salaryRange.midpoint", 0] },
+           ]},
+           { c: "$salaryRange.currency", m: "$salaryRange.midpoint" },
+           "$$REMOVE",
+         ],
+       },
+     },
+   (keep remoteCount as-is.)
+
+2. In the $project after $limit, drop avgSalary/disclosedCount and keep salarySamples:
+     $project: { _id: 0, skill: "$_id", demand: 1, remoteCount: 1, salarySamples: 1 }
+
+3. Replace the existing `const skills = (facetResult?.skills ?? []).map(...)` with a
+   version that picks each skill's PRIMARY (most-sampled) currency and averages within it:
+     const skills = (facetResult?.skills ?? []).map((s) => {
+       const { salarySamples = [], ...rest } = s;
+       const byCur = new Map(); // currency -> { count, sum }
+       for (const x of salarySamples) {
+         if (!x || x.c == null || typeof x.m !== "number") continue;
+         const e = byCur.get(x.c) ?? { count: 0, sum: 0 };
+         e.count++; e.sum += x.m; byCur.set(x.c, e);
+       }
+       let salaryCurrency = null, avgSalary = null, disclosedCount = 0;
+       for (const [cur, { count, sum }] of byCur) {
+         // tie-break deterministically: higher count, then larger sum, then currency name
+         if (count > disclosedCount ||
+            (count === disclosedCount && salaryCurrency != null &&
+             (sum > byCur.get(salaryCurrency).sum ||
+              (sum === byCur.get(salaryCurrency).sum && cur < salaryCurrency)))) {
+           disclosedCount = count; salaryCurrency = cur;
+           avgSalary = Math.round(sum / count);
+         }
+       }
+       return { ...rest, salaryCurrency, avgSalary, disclosedCount, limitedData: disclosedCount < 5 };
+     });
+   Downstream noVelocity()/velocityMap spread ...s, so the new fields carry through — no other pipeline edits.
+
+4. Update/extend the trendingSkills test: a skill with 6 USD-disclosed + 2 INR postings must
+   return salaryCurrency:"USD", avgSalary = round(avg of the 6 USD midpoints), limitedData:false.
+   A skill with 3 disclosed total → limitedData:true. Zero disclosed → avgSalary:null.

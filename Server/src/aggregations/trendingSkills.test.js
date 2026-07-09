@@ -1,11 +1,16 @@
 // ── trendingSkills salary-integrity tests ─────────────────────────────────────
 //
 // Verifies that getTrendingSkills:
-//   1. avgSalary is the mean of DISCLOSED INR midpoints only (hand-computed).
+//   1. avgSalary is the mean of disclosed midpoints within a single currency
+//      (hand-computed) when only one currency is present.
 //   2. Predicted (salaryDisclosed: false) jobs are excluded from avgSalary.
-//   3. Non-INR jobs (e.g. currency: "USD") are excluded from avgSalary.
-//   4. limitedData: true when disclosedCount < 5; false when disclosedCount >= 5.
-//   5. avgSalary: null when no disclosed-INR postings exist for the skill.
+//   3. When multiple currencies are disclosed for a skill, the PRIMARY
+//      (most-sampled) currency is selected and averaged in isolation —
+//      other-currency samples never mix into that average.
+//   4. limitedData: true when the primary currency's disclosedCount < 5;
+//      false when disclosedCount >= 5.
+//   5. avgSalary/salaryCurrency: null when no disclosed postings with a
+//      valid midpoint exist for the skill.
 //   6. fmtINR — Indian lakh/K formatting contract (pure function; no DB).
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
@@ -91,7 +96,7 @@ function makeJob(overrides = {}) {
 // ── 1. Disclosed INR average — hand-computed fixture ──────────────────────────
 
 describe("getTrendingSkills — avgSalary integrity", () => {
-  it("computes the mean of disclosed INR midpoints only (hand-computed)", async () => {
+  it("computes the mean of disclosed midpoints when only one currency is present (hand-computed)", async () => {
     // Three distinct jobs (distinct company → no dedupe merge), each requiring
     // "react", all disclosed INR.
     // Hand-computed mean: (1_000_000 + 2_000_000 + 3_000_000) / 3 = 2_000_000
@@ -105,6 +110,7 @@ describe("getTrendingSkills — avgSalary integrity", () => {
     const skill = res.skills.find((s) => s.skill === "react");
 
     expect(skill).toBeDefined();
+    expect(skill.salaryCurrency).toBe("INR");
     expect(skill.avgSalary).toBe(2_000_000);
   });
 
@@ -125,29 +131,37 @@ describe("getTrendingSkills — avgSalary integrity", () => {
     expect(skill.avgSalary).toBe(2_000_000);
   });
 
-  // ── 3. Non-INR jobs excluded ─────────────────────────────────────────────────
+  // ── 3. Primary-currency selection when multiple currencies are disclosed ─────
 
-  it("excludes non-INR disclosed jobs from avgSalary", async () => {
+  it("picks the PRIMARY (most-sampled) currency and averages only within it", async () => {
+    // 6 USD-disclosed + 2 INR-disclosed postings for the same skill.
+    // USD has more samples (6 > 2), so it must win as salaryCurrency, and the
+    // 2 INR samples must never mix into the USD average.
+    const usdMidpoints = [100_000, 110_000, 120_000, 130_000, 140_000, 150_000];
     await Job.create([
-      // Only this one should contribute.
-      makeJob({ midpoint: 2_000_000, currency: "INR",  salaryDisclosed: true }),
-      // Disclosed USD — must be excluded from INR avg.
-      makeJob({ midpoint:   200_000, currency: "USD",  salaryDisclosed: true }),
-      // Disclosed GBP — must be excluded from INR avg.
-      makeJob({ midpoint:   150_000, currency: "GBP",  salaryDisclosed: true }),
+      ...usdMidpoints.map((m) => makeJob({ midpoint: m, currency: "USD" })),
+      makeJob({ midpoint: 2_000_000, currency: "INR" }),
+      makeJob({ midpoint: 3_000_000, currency: "INR" }),
     ]);
 
     const res = await getTrendingSkills({ months: 12, limit: 10 });
     const skill = res.skills.find((s) => s.skill === "react");
 
+    const expectedAvg = Math.round(
+      usdMidpoints.reduce((a, b) => a + b, 0) / usdMidpoints.length
+    );
+
     expect(skill).toBeDefined();
-    expect(skill.avgSalary).toBe(2_000_000);
+    expect(skill.salaryCurrency).toBe("USD");
+    expect(skill.avgSalary).toBe(expectedAvg);
+    expect(skill.disclosedCount).toBe(6);
+    expect(skill.limitedData).toBe(false); // 6 >= 5
   });
 
   // ── 4. limitedData threshold ─────────────────────────────────────────────────
 
-  it("sets limitedData: true when disclosedCount < 5", async () => {
-    // 3 disclosed INR jobs — below the threshold of 5.
+  it("sets limitedData: true when the primary currency's disclosedCount < 5", async () => {
+    // 3 disclosed jobs, all the same currency — below the threshold of 5.
     await Job.create([
       makeJob({ midpoint: 1_000_000 }),
       makeJob({ midpoint: 2_000_000 }),
@@ -162,8 +176,8 @@ describe("getTrendingSkills — avgSalary integrity", () => {
     expect(skill.limitedData).toBe(true);
   });
 
-  it("sets limitedData: false when disclosedCount >= 5", async () => {
-    // Exactly 5 disclosed INR jobs — at the threshold, limitedData must be false.
+  it("sets limitedData: false when the primary currency's disclosedCount >= 5", async () => {
+    // Exactly 5 disclosed jobs, all the same currency — at the threshold, limitedData must be false.
     await Job.create([
       makeJob({ midpoint: 1_000_000 }),
       makeJob({ midpoint: 2_000_000 }),
@@ -180,13 +194,12 @@ describe("getTrendingSkills — avgSalary integrity", () => {
     expect(skill.limitedData).toBe(false);
   });
 
-  // ── 5. Null avgSalary when no qualifying postings exist ──────────────────────
+  // ── 5. Null avgSalary/salaryCurrency when no qualifying postings exist ───────
 
-  it("sets avgSalary: null when no disclosed-INR postings exist for the skill", async () => {
+  it("sets avgSalary/salaryCurrency: null when no disclosed postings with a valid midpoint exist for the skill", async () => {
     await Job.create([
-      // Disclosed but USD.
-      makeJob({ midpoint: 100_000, currency: "USD", salaryDisclosed: true }),
-      // INR but undisclosed.
+      // Undisclosed — excluded regardless of currency.
+      makeJob({ midpoint: 100_000, currency: "USD", salaryDisclosed: false }),
       makeJob({ midpoint: 2_000_000, currency: "INR", salaryDisclosed: false }),
     ]);
 
@@ -195,6 +208,7 @@ describe("getTrendingSkills — avgSalary integrity", () => {
 
     expect(skill).toBeDefined();
     expect(skill.avgSalary).toBeNull();
+    expect(skill.salaryCurrency).toBeNull();
     expect(skill.disclosedCount).toBe(0);
     expect(skill.limitedData).toBe(true); // 0 < 5
   });
