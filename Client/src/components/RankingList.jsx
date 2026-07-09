@@ -2,16 +2,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { StarIcon } from "./icons";
 import { VelocityBadge } from "./VelocityBadge";
 import { displayName } from "../lib/displayName";
-
-// Format an INR midpoint (stored in full rupees) into a compact lakh/K string.
-// Matches the convention used in SkillDrawer: 1500000 → "15L", 75000 → "75K".
-function fmtINR(n) {
-  if (n == null || !isFinite(n)) return null;
-  const l = n / 100_000;
-  return l >= 1
-    ? `${l % 1 === 0 ? l : l.toFixed(1)}L`
-    : `${Math.round(n / 1000)}K`;
-}
+import { fmtMoney } from "../utils/format";
 
 // Snappy spring: stiffness 420, damping 34
 const SNAPPY_SPRING = { type: "spring", stiffness: 420, damping: 34 };
@@ -97,22 +88,28 @@ export function RankingList({ skills, maxCount, onSelect, onTrack, tracked }) {
                 </div>
               </div>
 
-              {/* Avg Salary — INR disclosed only.
+              {/* Avg Salary — disclosed only, currency-aware via fmtMoney.
                   null → "—" (0 qualifying postings);
-                  limitedData → chip (1–4 postings);
-                  else → ₹value (≥ 5 postings). */}
+                  limitedData → same money value, muted + "~" prefix + tooltip. */}
               <div className="w-28 shrink-0 hidden md:block font-mono text-sm text-right">
-                {skill.avgSalary == null ? (
-                  <span className="text-[var(--muted-2)]">—</span>
-                ) : skill.limitedData ? (
-                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border border-[var(--border)] text-[var(--muted-2)] leading-none whitespace-nowrap">
-                    limited data
-                  </span>
-                ) : (
-                  <span className="text-[var(--muted)] whitespace-nowrap">
-                    ₹{fmtINR(skill.avgSalary)}
-                  </span>
-                )}
+                {(() => {
+                  const money = fmtMoney(skill.avgSalary, skill.salaryCurrency);
+                  return money == null ? (
+                    <span className="text-[var(--muted-2)]">—</span>
+                  ) : (
+                    <span
+                      className={`whitespace-nowrap ${skill.limitedData ? "text-[var(--muted-2)]" : "text-[var(--muted)]"}`}
+                      title={
+                        skill.limitedData
+                          ? `Avg of ${skill.disclosedCount} disclosed postings`
+                          : undefined
+                      }
+                    >
+                      {skill.limitedData ? "~" : ""}
+                      {money}
+                    </span>
+                  );
+                })()}
               </div>
 
               <div className="w-16 shrink-0 hidden md:block font-mono text-sm text-[var(--muted)] text-right">
