@@ -75,7 +75,7 @@ async function fetchTrending(role, win, remoteFilter, disclosedFilter, countryFi
     velocity: s.velocity ?? null,
     trend: s.trend ?? "flat",
     avgSalary: s.avgSalary ?? null,
-    salaryCurrency: s.salaryCurrency,
+    salaryCurrency: s.salaryCurrency ?? null,
     disclosedCount: s.disclosedCount ?? 0,
     limitedData: s.limitedData ?? false,
   }));

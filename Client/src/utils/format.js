@@ -17,8 +17,9 @@ const INTL = (n) => {
 
 const SYMBOL = { INR: "₹", USD: "$", EUR: "€", GBP: "£" };
 
-export function fmtMoney(n, currency = "USD") {
+export function fmtMoney(n, currency) {
   if (n == null || !isFinite(n)) return null;
-  const sym = SYMBOL[currency] ?? `${currency} `;
-  return currency === "INR" ? `${sym}${INR(n)}` : `${sym}${INTL(n)}`;
+  const cur = currency || "INR";
+  const sym = SYMBOL[cur] ?? `${cur} `;
+  return cur === "INR" ? `${sym}${INR(n)}` : `${sym}${INTL(n)}`;
 }
