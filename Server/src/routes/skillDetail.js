@@ -78,6 +78,17 @@ router.get("/:name", async (req, res, next) => {
       postedAt: { $type: "date", $gte: since },
       requiredSkills: { $type: "array" },
     };
+    // windowBase dedupes the WHOLE window first, then attributes to this skill —
+    // matching how the ranking list counts (dedupe-then-attribute), instead of
+    // filtering to the skill before dedupe. Filtering first can drop a doc whose
+    // deduped representative doesn't list the skill even though a since-merged
+    // twin did, or double-count/miss postings depending on which twin survives
+    // dedupe — so demand/remoteCount must dedupe over the full window, then
+    // $match on requiredSkills against the deduped output.
+    const windowBase = {
+      postedAt: { $type: "date", $gte: since },
+      requiredSkills: { $type: "array", $ne: [] },
+    };
 
     const [
       demand,
@@ -89,12 +100,18 @@ router.get("/:name", async (req, res, next) => {
       recent,
       pairsResult,
     ] = await Promise.all([
-      // demand: deduplicated count of postings that require this skill
-      countAgg([{ $match: baseMatch }, ...dedupeGroupStages()]),
-      // remoteCount: deduplicated count of remote postings for this skill
+      // demand: dedupe the full window, THEN attribute to this skill —
+      // coherent with how trendingSkills.js computes demand for the ranking list.
       countAgg([
-        { $match: { ...baseMatch, isRemote: true } },
+        { $match: windowBase },
         ...dedupeGroupStages(),
+        { $match: { requiredSkills: name } },
+      ]),
+      // remoteCount: same dedupe-then-attribute order, plus isRemote.
+      countAgg([
+        { $match: windowBase },
+        ...dedupeGroupStages(),
+        { $match: { requiredSkills: name, isRemote: true } },
       ]),
       // totalJobs: deduplicated count of ALL postings in the window
       countAgg([{ $match: windowMatch }, ...dedupeGroupStages()]),
