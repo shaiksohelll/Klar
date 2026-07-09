@@ -234,45 +234,24 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
             $group: {
               _id: "$requiredSkills",
               demand: { $sum: 1 },
-              // Disclosed INR-only average.  Qualifying conditions are IDENTICAL
-              // to disclosedCount below: salaryDisclosed + currency INR +
-              // numeric midpoint > 0.  This ensures both accumulators count
-              // the exact same set of documents — no inflation from docs whose
-              // midpoint is null or zero.
-              avgSalary: {
-                $avg: {
+              // Collect each qualifying (disclosed, numeric, positive midpoint)
+              // posting's currency+midpoint pair. Currency mixing is resolved
+              // downstream by picking each skill's PRIMARY (most-sampled)
+              // currency and averaging only within it — an INR-only average
+              // silently dropped every non-INR disclosed posting; this keeps
+              // them and reports whichever currency actually dominates the skill.
+              salarySamples: {
+                $push: {
                   $cond: [
                     {
                       $and: [
                         { $eq: ["$salaryDisclosed", true] },
-                        { $eq: ["$salaryRange.currency", "INR"] },
                         { $isNumber: "$salaryRange.midpoint" },
                         { $gt: ["$salaryRange.midpoint", 0] },
                       ],
                     },
-                    "$salaryRange.midpoint",
-                    null,
-                  ],
-                },
-              },
-              // Count of postings that ACTUALLY contributed to avgSalary —
-              // the qualifying set is identical: disclosed + INR + numeric midpoint.
-              // Using the same guard prevents inflating disclosedCount with
-              // malformed docs whose midpoint is null/non-numeric (they don't
-              // affect avgSalary but would understate limitedData without this).
-              disclosedCount: {
-                $sum: {
-                  $cond: [
-                    {
-                      $and: [
-                        { $eq: ["$salaryDisclosed", true] },
-                        { $eq: ["$salaryRange.currency", "INR"] },
-                        { $isNumber: "$salaryRange.midpoint" },
-                        { $gt: ["$salaryRange.midpoint", 0] },
-                      ],
-                    },
-                    1,
-                    0,
+                    { c: "$salaryRange.currency", m: "$salaryRange.midpoint" },
+                    "$$REMOVE",
                   ],
                 },
               },
@@ -286,9 +265,8 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
               _id: 0,
               skill: "$_id",
               demand: 1,
-              avgSalary: { $round: ["$avgSalary", 0] },
-              disclosedCount: 1,
               remoteCount: 1,
+              salarySamples: 1,
             },
           },
         ],
@@ -297,13 +275,31 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
   ]);
 
   const totalJobs = facetResult?.totalJobs[0]?.count ?? 0;
-  // Annotate each skill with limitedData: true when fewer than 5 INR-disclosed
-  // postings contributed to avgSalary — flags statistically thin averages so
-  // the client can render a "limited data" chip instead of a misleading number.
-  const skills = (facetResult?.skills ?? []).map((s) => ({
-    ...s,
-    limitedData: (s.disclosedCount ?? 0) < 5,
-  }));
+  // For each skill, pick the PRIMARY currency (the one with the most disclosed
+  // samples) and average only within it — mixing currencies in one average
+  // would produce a meaningless number. limitedData flags skills where the
+  // primary currency's sample count is still statistically thin (< 5).
+  const skills = (facetResult?.skills ?? []).map((s) => {
+    const { salarySamples = [], ...rest } = s;
+    const byCur = new Map(); // currency -> { count, sum }
+    for (const x of salarySamples) {
+      if (!x || x.c == null || typeof x.m !== "number") continue;
+      const e = byCur.get(x.c) ?? { count: 0, sum: 0 };
+      e.count++; e.sum += x.m; byCur.set(x.c, e);
+    }
+    let salaryCurrency = null, avgSalary = null, disclosedCount = 0;
+    for (const [cur, { count, sum }] of byCur) {
+      // Tie-break deterministically: higher count, then larger sum, then currency name.
+      if (count > disclosedCount ||
+         (count === disclosedCount && salaryCurrency != null &&
+          (sum > byCur.get(salaryCurrency).sum ||
+           (sum === byCur.get(salaryCurrency).sum && cur < salaryCurrency)))) {
+        disclosedCount = count; salaryCurrency = cur;
+        avgSalary = Math.round(sum / count);
+      }
+    }
+    return { ...rest, salaryCurrency, avgSalary, disclosedCount, limitedData: disclosedCount < 5 };
+  });
 
   // ── Velocity: snapshot-based count30 comparison ─────────────────────────────
   // Compares each skill's trailing-30-day count across two snapshot batches
