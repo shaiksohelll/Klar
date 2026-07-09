@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Component } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from "react";
 import axios from "axios";
 import {
   UserButton,
@@ -6,7 +6,6 @@ import {
   useAuth,
   useClerk,
 } from "@clerk/clerk-react";
-import Silk from "./components/Silk";
 import { Outlet, useLocation } from "react-router-dom";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -23,16 +22,6 @@ const PageLoader = () => (
     <div className="w-6 h-6 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
   </div>
 );
-
-// Tiny error boundary for the Silk WebGL background. If WebGL init fails
-// (unsupported browser, disabled hardware accel, headless/test), the app just
-// loses its background instead of crashing.
-class SilkBoundary extends Component {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  componentDidCatch(err) { console.warn("Silk background disabled:", err); }
-  render() { return this.state.failed ? null : this.props.children; }
-}
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const ALL_WINDOWS = ["3M", "6M", "12M"];
@@ -371,17 +360,18 @@ export default function App() {
     getToken,
   };
 
+  const isHome = location.pathname === "/";
+
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[#EB0029]/30 selection:text-white pb-24 overflow-x-hidden">
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-200 h-100 bg-[var(--accent)] rounded-[100%] blur-[150px] opacity-[0.07] pointer-events-none" />
-      {/* Silk ambient background */}
-      <SilkBoundary>
-        <div className="fixed inset-0 pointer-events-none">
-          <Silk color="#EB0029" speed={5} scale={1} noiseIntensity={1.5} rotation={0} />
-          {/* keep this overlay so text stays readable */}
-          <div className="absolute inset-0 bg-black/50" />
-        </div>
-      </SilkBoundary>
+    <div
+      className={`bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[#EB0029]/30 selection:text-white overflow-x-hidden ${
+        isHome ? "min-h-screen md:h-screen md:overflow-hidden flex flex-col" : "min-h-screen pb-24"
+      }`}
+    >
+      {/* Cinematic atmosphere: radial vignette + red halo, then a faint film
+          grain over the near-black base. Purely decorative, behind content. */}
+      <div className="atmos-vignette fixed inset-0 pointer-events-none z-0" aria-hidden="true" />
+      <div className="atmos-grain fixed inset-0 pointer-events-none z-0" aria-hidden="true" />
 
       <Nav
         freshness={lastUpdated ? timeAgo(lastUpdated) : null}
@@ -431,20 +421,24 @@ export default function App() {
         </div>
       </Sheet>
 
-      <ErrorBoundary key={location.pathname}>
-        <Suspense fallback={<PageLoader />}>
-          <Outlet context={outletContext} />
-        </Suspense>
-      </ErrorBoundary>
+      <div className={isHome ? "relative z-10 flex-1 min-h-0 flex flex-col" : "relative z-10"}>
+        <ErrorBoundary key={location.pathname}>
+          <Suspense fallback={<PageLoader />}>
+            <Outlet context={outletContext} />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
 
-      <footer className="max-w-6xl mx-auto px-6 mt-32 pt-8 border-t border-[var(--border)] flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="font-space font-bold text-xl tracking-tight text-[var(--text)] flex items-baseline opacity-50">
-          <Brand />
-        </div>
-        <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider text-center md:text-right">
-          A snapshot of current demand, not a prediction.
-        </div>
-      </footer>
+      {!isHome && (
+        <footer className="max-w-6xl mx-auto px-6 mt-32 pt-8 border-t border-[var(--border)] flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+          <div className="font-space font-bold text-xl tracking-tight text-[var(--text)] flex items-baseline opacity-50">
+            <Brand />
+          </div>
+          <div className="font-mono text-xs text-[var(--muted-2)] uppercase tracking-wider text-center md:text-right">
+            A snapshot of current demand, not a prediction.
+          </div>
+        </footer>
+      )}
 
       <SkillDrawer
         skill={selectedSkill}

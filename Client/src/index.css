@@ -62,7 +62,7 @@
   --panel: #121216;
   --surface-2: #1e1e24;
   --text: #f4f4f6;
-  --muted: #9a9aa6;
+  --muted: #a8a8b4;
   --muted-2: #5c5c66;
   --border: #232329;
 
@@ -306,4 +306,71 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Atmosphere — cinematic near-black. A faint radial vignette pulls focus to
+   center; a fixed film-grain layer adds analog texture. Both are decorative,
+   pointer-events-none, and sit behind all content (see App background stack).
+   ──────────────────────────────────────────────────────────────────────── */
+.atmos-vignette {
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(235, 0, 41, 0.10) 0%, transparent 45%),
+    radial-gradient(100% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+[data-theme="light"] .atmos-vignette {
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(235, 0, 41, 0.06) 0%, transparent 45%),
+    radial-gradient(100% 100% at 50% 50%, transparent 60%, rgba(16, 16, 26, 0.06) 100%);
+}
+.atmos-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+}
+
+/* ── Leaderboard: the data-as-object language ──────────────────────────────
+   One list where each row IS the datum. Hovering a row dims its siblings via
+   pure CSS (no React re-render) so motion stays a detail, not the interface. */
+.klar-board:hover .klar-row {
+  opacity: 0.85;
+  transition: opacity var(--d-3) var(--ease-fluid);
+}
+.klar-board:hover .klar-row:hover,
+.klar-board .klar-row[data-expanded="true"] {
+  opacity: 1;
+}
+.klar-row {
+  transition: opacity var(--d-3) var(--ease-fluid);
+}
+.klar-row:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-red);
+}
+/* Red glow reserved for the #1 bar — the single loudest signal on screen. */
+.klar-bar-lead {
+  box-shadow: 0 0 24px 0 rgba(235, 0, 41, 0.45);
+}
+/* Subtle pulse for a rising-velocity marker. Motion as a detail. */
+@keyframes klar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.klar-pulse {
+  animation: klar-pulse 2.2s var(--ease-fluid) infinite;
+}
+/* Internal scroll region for the one-viewport leaderboard. Custom slim rail. */
+.klar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-2) transparent;
+}
+.klar-scroll::-webkit-scrollbar { width: 8px; }
+.klar-scroll::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 999px;
+}
+.klar-scroll::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .klar-pulse { animation: none; }
 }

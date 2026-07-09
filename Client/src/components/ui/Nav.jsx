@@ -236,8 +236,8 @@ export default function Nav({
         <div className="flex items-center gap-3">
           {freshness && (
             <span className="mr-1 hidden items-center gap-1.5 border-r border-[var(--border)] pr-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--muted-2)] sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-              Updated {freshness}
+              <span className="klar-pulse h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+              Fresh jobs · updated {freshness}
             </span>
           )}
           <div className="hidden md:block">
