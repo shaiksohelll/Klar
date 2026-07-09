@@ -4,7 +4,8 @@
 
 const INR = (n) => {
   const l = n / 100_000;
-  return l >= 1 ? `${l % 1 === 0 ? l : l.toFixed(1)}L` : `${Math.round(n / 1000)}K`;
+  if (l >= 1) return `${l % 1 === 0 ? l : l.toFixed(1)}L`;
+  return n >= 1000 ? `${Math.round(n / 1000)}K` : `${Math.round(n)}`;
 };
 
 const INTL = (n) => {
@@ -12,7 +13,7 @@ const INTL = (n) => {
     const m = n / 1_000_000;
     return `${m % 1 === 0 ? m : m.toFixed(1)}M`;
   }
-  return `${Math.round(n / 1000)}K`;
+  return n >= 1000 ? `${Math.round(n / 1000)}K` : `${Math.round(n)}`;
 };
 
 const SYMBOL = { INR: "₹", USD: "$", EUR: "€", GBP: "£" };
