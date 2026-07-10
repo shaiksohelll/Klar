@@ -26,7 +26,7 @@ const IS_LOCAL_TARGET = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test
 export default defineConfig(({ command }) => {
   // Only warn during `vite dev` (serve) — not on build or other tooling.
   if (command === 'serve' && !IS_LOCAL_TARGET) {
-    // eslint-disable-next-line no-undef
+    
     console.warn(
       `\n\x1b[33m⚠  [vite] Dev proxy → REMOTE target: ${API_PROXY_TARGET}` +
       `\n   Mutating requests (POST/DELETE) will hit this backend's real data.` +
