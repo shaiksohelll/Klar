@@ -19,41 +19,45 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // eslint-disable-next-line no-undef
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'http://localhost:5000'
 
-// A remote proxy target must never be silent — a hosted API means real data.
+// A remote proxy target means real data — flag it so it's never silent.
 const IS_LOCAL_TARGET = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(API_PROXY_TARGET)
-if (!IS_LOCAL_TARGET) {
-  // eslint-disable-next-line no-undef
-  console.warn(
-    `\n\x1b[33m⚠  [vite] Dev proxy → REMOTE target: ${API_PROXY_TARGET}` +
-    `\n   Mutating requests (POST/DELETE) will hit this backend's real data.` +
-    `\n   Unset API_PROXY_TARGET to use the safe local default (http://localhost:5000).\x1b[0m\n`
-  )
-}
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
+export default defineConfig(({ command }) => {
+  // Only warn during `vite dev` (serve) — not on build or other tooling.
+  if (command === 'serve' && !IS_LOCAL_TARGET) {
     // eslint-disable-next-line no-undef
-    alias: process.env.VITE_E2E_MOCK_AUTH === 'true' ? {
-      '@clerk/clerk-react': path.resolve(__dirname, './src/lib/mockClerk.jsx'),
-    } : {},
-  },
-  server: {
-    proxy: {
-      '/proxy': {
-        target: API_PROXY_TARGET,
-        changeOrigin: true,
-        secure: true,
-        rewrite: (p) => p.replace(/^\/proxy/, ''),
-        configure: (proxy) => {
-          // Strip the browser Origin so the API treats this as a
-          // server-to-server call and skips its CORS allowlist check.
-          proxy.on('proxyReq', (proxyReq) => {
-            proxyReq.removeHeader('origin')
-          })
+    console.warn(
+      `\n\x1b[33m⚠  [vite] Dev proxy → REMOTE target: ${API_PROXY_TARGET}` +
+      `\n   Mutating requests (POST/DELETE) will hit this backend's real data.` +
+      `\n   Unset API_PROXY_TARGET to use the safe local default (http://localhost:5000).\x1b[0m\n`
+    )
+  }
+
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      // eslint-disable-next-line no-undef
+      alias: process.env.VITE_E2E_MOCK_AUTH === 'true' ? {
+        '@clerk/clerk-react': path.resolve(__dirname, './src/lib/mockClerk.jsx'),
+      } : {},
+    },
+    server: {
+      proxy: {
+        '/proxy': {
+          target: API_PROXY_TARGET,
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p) => p.replace(/^\/proxy/, ''),
+          configure: (proxy) => {
+            // Strip the browser Origin so the API treats this as a
+            // server-to-server call and skips its CORS allowlist check.
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('origin')
+            })
+          },
         },
       },
     },
-  },
+  }
 })
