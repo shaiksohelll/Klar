@@ -34,7 +34,12 @@ class SilkBoundary extends Component {
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+// In dev, route through the Vite `/proxy` so requests reach the API
+// server-to-server (no browser Origin header) and pass its "no origin = allow"
+// CORS branch. In prod, hit the configured API URL directly.
+const API = import.meta.env.DEV
+  ? "/proxy"
+  : import.meta.env.VITE_API_URL || "http://localhost:5000";
 const ALL_WINDOWS = ["3M", "6M", "12M"];
 
 
@@ -221,7 +226,10 @@ export default function App() {
   );
 
   const maxCount = useMemo(
-    () => (sorted.length ? Math.max(...sorted.map((s) => s.count)) : 1),
+    () =>
+  sorted.length
+    ? sorted.reduce((m, s) => (s.count > m ? s.count : m), 0)
+    : 1,
     [sorted],
   );
 
