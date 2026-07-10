@@ -228,7 +228,7 @@ export default function App() {
   const maxCount = useMemo(
     () =>
   sorted.length
-    ? sorted.reduce((m, s) => (s.count > m ? s.count : m), 0)
+    ? Math.max(1, sorted.reduce((m, s) => (s.count > m ? s.count : m), 0))
     : 1,
     [sorted],
   );
