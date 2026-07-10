@@ -22,14 +22,14 @@
     "engines.mongodb": "MongoDB >= 5.2 required for the $top group accumulator used in dedupeGroupStages() (see Server/src/lib/dedupe.js)"
   },
   "dependencies": {
-    "@clerk/express": "^2.1.23",
-    "@sentry/node": "^10.63.0",
+    "@clerk/express": "^2.1.39",
+    "@sentry/node": "^10.65.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "mongoose": "^9.6.3"
+    "mongoose": "^9.7.4"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.2",
