@@ -3,6 +3,7 @@ import SkillSnapshot from "../models/SkillSnapshot.js";
 import { dedupeGroupStages } from "../lib/dedupe.js";
 import { createTtlCache } from "../lib/ttlCache.js";
 import { salaryBandMatch, SALARY_BAND_IDS } from "../lib/salaryBands.js";
+import { displayName } from "../lib/displayName.js";
 
 // ── In-memory TTL cache for getAllSkills ────────────────────────────────────
 // Key: months (number). Value: { data, expiresAt }.
@@ -67,7 +68,12 @@ async function _loadVelocityContext() {
       );
 
       if (gapDays < 2) {
-        const ctx = { gapDays, tooClose: true };
+        const ctx = {
+          gapDays,
+          tooClose: true,
+          latestCapturedAt,
+          baselineCapturedAt,
+        };
         if (gen === _cacheGeneration) {
           _velocityCtxCache = { value: ctx, expiresAt: Date.now() + TRENDING_TTL_MS };
         }
@@ -86,7 +92,14 @@ async function _loadVelocityContext() {
       const nowMap = new Map(nowDocs.map(({ skill, count30 }) => [skill, count30]));
       const baseMap = new Map(baseDocs.map(({ skill, count30 }) => [skill, count30]));
 
-      const ctx = { gapDays, tooClose: false, nowMap, baseMap };
+      const ctx = {
+        gapDays,
+        tooClose: false,
+        latestCapturedAt,
+        baselineCapturedAt,
+        nowMap,
+        baseMap,
+      };
       // Only cache if no clear happened while we were loading.
       // If gen drifted, return the result to THIS caller (no wasted work)
       // but leave the cache empty so the next request reloads fresh.
@@ -164,7 +177,7 @@ export async function getAllSkills({ months = 12 } = {}) {
               remoteCount: { $sum: { $cond: ["$isRemote", 1, 0] } },
             },
           },
-          { $sort: { demand: -1 } },
+          { $sort: { demand: -1, _id: 1 } },
           {
             $project: {
               _id: 0,
@@ -178,9 +191,14 @@ export async function getAllSkills({ months = 12 } = {}) {
     },
   ]);
 
-  const skills = (facetResult?.skills ?? []).map((s) => ({
-    ...s,
-    remoteShare: s.demand > 0 ? s.remoteCount / s.demand : 0,
+  const skills = (facetResult?.skills ?? []).map((item, index) => ({
+    skillId: item.skill,
+    skill: item.skill,
+    label: displayName(item.skill),
+    rank: index + 1,
+    demand: item.demand,
+    remoteCount: item.remoteCount,
+    remoteShare: item.demand > 0 ? item.remoteCount / item.demand : 0,
   }));
 
   ALL_SKILLS_CACHE.set(key, skills);
@@ -258,7 +276,7 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
               remoteCount: { $sum: { $cond: ["$isRemote", 1, 0] } },
             },
           },
-          { $sort: { demand: -1 } },
+          { $sort: { demand: -1, _id: 1 } },
           { $limit: Number(limit) },
           {
             $project: {
@@ -301,6 +319,18 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
     return { ...rest, salaryCurrency, avgSalary, disclosedCount, limitedData: disclosedCount < 5 };
   });
 
+  // Normalize the public ranking contract once, after Mongo has produced the
+  // authoritative order. `skill` stays temporarily for backward compatibility;
+  // every new consumer must use skillId for identity and label for presentation.
+  const finalizeSkills = (skillList) =>
+    skillList.map((item, index) => ({
+      ...item,
+      skillId: item.skill,
+      label: displayName(item.skill),
+      rank: index + 1,
+      remoteShare: item.demand > 0 ? item.remoteCount / item.demand : 0,
+    }));
+
   // ── Velocity: snapshot-based count30 comparison ─────────────────────────────
   // Compares each skill's trailing-30-day count across two snapshot batches
   // instead of using raw job postedAt buckets, which produce inflated percentages
@@ -312,7 +342,13 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
 
   // Helper: stamp every skill with safe null-velocity defaults and return.
   const noVelocity = (skillList) =>
-    skillList.map((s) => ({ ...s, velocity: null, trend: "flat" }));
+    finalizeSkills(
+      skillList.map((item) => ({
+        ...item,
+        velocity: null,
+        trend: "flat",
+      })),
+    );
 
   const velocityCtx = await _loadVelocityContext();
 
@@ -325,6 +361,10 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
       skills: noVelocity(skills),
       velocityReady: false,
       velocityBasisDays: velocityCtx?.gapDays ?? null,
+      velocityAsOf: velocityCtx?.latestCapturedAt?.toISOString() ?? null,
+      velocityBaselineAt:
+        velocityCtx?.baselineCapturedAt?.toISOString() ?? null,
+      velocityScope: "global",
     };
     if (requestGeneration === _cacheGeneration) TRENDING_CACHE.set(cacheKey, result);
     return result;
@@ -363,9 +403,12 @@ export async function getTrendingSkills({ role, months = 12, limit = 25, remote,
     totalJobs,
     role: role || "all",
     months: Number(months),
-    skills: skillsWithVelocity,
+    skills: finalizeSkills(skillsWithVelocity),
     velocityReady: true,
     velocityBasisDays: gapDays,
+    velocityAsOf: velocityCtx.latestCapturedAt.toISOString(),
+    velocityBaselineAt: velocityCtx.baselineCapturedAt.toISOString(),
+    velocityScope: "global",
   };
   if (requestGeneration === _cacheGeneration) TRENDING_CACHE.set(cacheKey, result);
   return result;
