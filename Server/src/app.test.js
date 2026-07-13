@@ -180,6 +180,35 @@ describe("POST /api/ingest", () => {
       expect(ingestJSearch).toHaveBeenCalled();
     });
   });
+
+  it("logs a source as skipped (not complete) when its result is a refusal", async () => {
+    vi.clearAllMocks();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+    ingestJSearch.mockResolvedValueOnce({ fetched: 3, upserted: 1 });
+
+    const res = await request(app)
+      .post("/api/ingest")
+      .set("x-ingest-secret", "test-secret");
+
+    // Response contract is unchanged: 202 regardless of what the background
+    // per-source runs eventually report.
+    expect(res.status).toBe(202);
+
+    await vi.waitFor(() => {
+      expect(ingestAdzuna).toHaveBeenCalled();
+      expect(ingestJSearch).toHaveBeenCalled();
+    });
+    // Let the background IIFE's .finally() / log lines run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const calls = logSpy.mock.calls.map((args) => args[0]);
+    expect(calls).toContain("Adzuna ingestion skipped");
+    expect(calls).not.toContain("Adzuna ingestion complete");
+    expect(calls).toContain("JSearch ingestion complete");
+
+    logSpy.mockRestore();
+  });
 });
 
 describe("POST /api/ingest/adzuna", () => {
@@ -204,6 +233,64 @@ describe("POST /api/ingest/adzuna", () => {
       .get("/api/ingest/adzuna")
       .set("x-ingest-secret", "test-secret");
     expect(res.status).toBe(404);
+  });
+
+  it("returns 409 (not 200 ok:true) when refused for overlap", async () => {
+    vi.clearAllMocks();
+    ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+    const res = await request(app)
+      .post("/api/ingest/adzuna")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "overlap" });
+  });
+
+  it("returns 503 (not 200 ok:true) when refused for begin-failed", async () => {
+    vi.clearAllMocks();
+    ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "begin-failed" });
+    const res = await request(app)
+      .post("/api/ingest/adzuna")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "begin-failed" });
+  });
+});
+
+describe("POST /api/ingest/jsearch", () => {
+  it("rejects with 401 when no secret header is provided", async () => {
+    const res = await request(app).post("/api/ingest/jsearch");
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ ok: false, error: "Unauthorized" });
+  });
+
+  it("runs JSearch ingestion with a valid secret", async () => {
+    vi.clearAllMocks();
+    const res = await request(app)
+      .post("/api/ingest/jsearch")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, fetched: 0, upserted: 0 });
+    expect(ingestJSearch).toHaveBeenCalled();
+  });
+
+  it("returns 409 (not 200 ok:true) when refused for overlap", async () => {
+    vi.clearAllMocks();
+    ingestJSearch.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+    const res = await request(app)
+      .post("/api/ingest/jsearch")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "overlap" });
+  });
+
+  it("returns 503 (not 200 ok:true) when refused for begin-failed", async () => {
+    vi.clearAllMocks();
+    ingestJSearch.mockResolvedValueOnce({ skipped: true, reason: "begin-failed" });
+    const res = await request(app)
+      .post("/api/ingest/jsearch")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "begin-failed" });
   });
 });
 

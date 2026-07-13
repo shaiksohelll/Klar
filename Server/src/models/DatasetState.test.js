@@ -221,9 +221,10 @@ describe("DatasetState", () => {
     expect(result).toMatchObject({ skipped: true, reason: "begin-failed" });
 
     findOneAndUpdateSpy.mockRestore();
-    // No DatasetState doc was ever created/mutated by the failed begin — the
-    // singleton upsert (DatasetState.updateOne) ran, but the conditional
-    // findOneAndUpdate that would have claimed the run never landed.
+    // The singleton upsert (DatasetState.updateOne) may still have created/
+    // initialized the doc — that part isn't mocked. What matters, and what
+    // the assertions below prove, is that the run CLAIM never landed: no
+    // version bump, no runningSources entry, source still "idle".
     const meta = await getDatasetMetadataInternal();
     expect(meta.version).toBe(0);
     expect(meta.runningSources).toEqual([]);
@@ -339,6 +340,49 @@ describe("DatasetState", () => {
     expect(meta.sources.adzuna.lastSuccessAt).toBeNull();
     expect(meta.sources.adzuna.lastPartialAt).toBeNull();
     expect(meta.runningSources).toEqual([]);
+  });
+
+  it("sets a generic public-safe lastError on an all-failed run so hasError reads true, then clears it on the next success", async () => {
+    await trackDatasetRun("adzuna", async () => ({
+      requested: 5,
+      fetched: 0,
+      unique: 0,
+      upserted: 0,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 5,
+      bulkWriteError: null,
+    }));
+
+    // Internal reader: generic message only, no provider/request detail leaked.
+    const internal = await getDatasetMetadataInternal();
+    expect(internal.sources.adzuna.status).toBe("failed");
+    expect(internal.sources.adzuna.lastError).toBe("All source requests failed");
+
+    // Public reader: hasError must be true whenever status is "failed" — same
+    // invariant the throw path (failDatasetRun) already upholds.
+    const pub = await getPublicDatasetMetadata();
+    expect(pub.sources.adzuna.status).toBe("failed");
+    expect(pub.sources.adzuna.hasError).toBe(true);
+    expect(pub.sources.adzuna).not.toHaveProperty("lastError");
+
+    // A subsequent successful run clears lastError (existing $set null on
+    // every completeDatasetRun call) and hasError flips back to false.
+    await trackDatasetRun("adzuna", async () => ({
+      requested: 5,
+      fetched: 5,
+      unique: 5,
+      upserted: 5,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 0,
+      bulkWriteError: null,
+    }));
+    const pubAfter = await getPublicDatasetMetadata();
+    expect(pubAfter.sources.adzuna.status).toBe("succeeded");
+    expect(pubAfter.sources.adzuna.hasError).toBe(false);
   });
 
   it("still classifies a mixed success/error run as partial (not failed)", async () => {

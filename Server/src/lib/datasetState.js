@@ -24,6 +24,12 @@ function assertSource(source) {
 // "running" AND its lastAttemptAt is within this window. Anything older is
 // presumed crashed (process killed, deploy restart, etc.) — the flag must not
 // stay wedged forever, so a stale run is eligible for takeover.
+//
+// Measured worst-case run duration is ~70s (JSearch, all 6 role queries
+// hitting their 10s fetch timeout back-to-back with the mandatory 1.2s
+// inter-request delay). This window exists for CRASH recovery, not slow-run
+// tolerance — 30 min is ~25x that worst case on purpose. Revisit this value
+// if the ingest cadence ever moves to sub-30-min intervals.
 export const STALE_RUN_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
 function safeError(error) {
@@ -139,7 +145,13 @@ async function completeDatasetRun(run, result) {
   // classified "failed" — record lastFailureAt exactly like the throw path
   // (failDatasetRun) does, so downstream freshness reads treat it the same
   // way. version/asOf are NOT advanced (advancesDataset stays false).
-  if (status === "failed") set[`${prefix}.lastFailureAt`] = completedAt;
+  // lastError is also set here (generic, no provider detail) so the public
+  // hasError flag — which is just Boolean(lastError) — reads true whenever
+  // status is "failed", matching the throw path's behavior.
+  if (status === "failed") {
+    set[`${prefix}.lastFailureAt`] = completedAt;
+    set[`${prefix}.lastError`] = "All source requests failed";
+  }
   if (advancesDataset) set.asOf = completedAt;
 
   const update = { $set: set, $pull: { runningSources: run.source } };

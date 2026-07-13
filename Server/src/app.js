@@ -186,6 +186,12 @@ app.post("/api/ingest/adzuna", async (req, res, next) => {
       5,
     );
     const result = await ingestAdzuna({ what, country, pages });
+    // A refused run (overlap / begin-failed) must NOT report success — the
+    // caller needs to distinguish "nothing ran" from a real ingest result.
+    if (result?.skipped) {
+      const status = result.reason === "overlap" ? 409 : 503;
+      return res.status(status).json({ ok: false, skipped: true, reason: result.reason });
+    }
     res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
@@ -204,6 +210,12 @@ app.post("/api/ingest/jsearch", async (req, res, next) => {
     const pages = Math.min(Math.max(Number.parseInt(req.query.pages, 10) || 1, 1), 3);
     const datePosted = req.query.date_posted || "month";
     const result = await ingestJSearch({ country, pages, datePosted });
+    // A refused run (overlap / begin-failed) must NOT report success — the
+    // caller needs to distinguish "nothing ran" from a real ingest result.
+    if (result?.skipped) {
+      const status = result.reason === "overlap" ? 409 : 503;
+      return res.status(status).json({ ok: false, skipped: true, reason: result.reason });
+    }
     res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
@@ -232,8 +244,10 @@ app.post("/api/ingest", (req, res) => {
     ]);
     const [adzuna, jsearch] = results;
     if (adzuna.status === "rejected") console.error("Adzuna ingestion failed", adzuna.reason);
+    else if (adzuna.value?.skipped) console.log("Adzuna ingestion skipped", adzuna.value);
     else console.log("Adzuna ingestion complete", adzuna.value);
     if (jsearch.status === "rejected") console.error("JSearch ingestion failed", jsearch.reason);
+    else if (jsearch.value?.skipped) console.log("JSearch ingestion skipped", jsearch.value);
     else console.log("JSearch ingestion complete", jsearch.value);
   })().finally(() => { ingestionInProgress = false; });
 });
