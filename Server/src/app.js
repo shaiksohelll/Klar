@@ -28,6 +28,7 @@ import { clearPairsCache } from "./aggregations/skillPairs.js";
 import Job from "./models/Job.js";
 import { SALARY_BAND_IDS } from "./lib/salaryBands.js";
 import Watchlist from "./models/Watchlist.js";
+import { getPublicDatasetMetadata, emptyPublicDatasetMetadata } from "./lib/datasetState.js";
 
 // ── Shared query-param parsers ─────────────────────────────────────────────
 
@@ -185,6 +186,12 @@ app.post("/api/ingest/adzuna", async (req, res, next) => {
       5,
     );
     const result = await ingestAdzuna({ what, country, pages });
+    // A refused run (overlap / begin-failed) must NOT report success — the
+    // caller needs to distinguish "nothing ran" from a real ingest result.
+    if (result?.skipped) {
+      const status = result.reason === "overlap" ? 409 : 503;
+      return res.status(status).json({ ok: false, skipped: true, reason: result.reason });
+    }
     res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
@@ -203,6 +210,12 @@ app.post("/api/ingest/jsearch", async (req, res, next) => {
     const pages = Math.min(Math.max(Number.parseInt(req.query.pages, 10) || 1, 1), 3);
     const datePosted = req.query.date_posted || "month";
     const result = await ingestJSearch({ country, pages, datePosted });
+    // A refused run (overlap / begin-failed) must NOT report success — the
+    // caller needs to distinguish "nothing ran" from a real ingest result.
+    if (result?.skipped) {
+      const status = result.reason === "overlap" ? 409 : 503;
+      return res.status(status).json({ ok: false, skipped: true, reason: result.reason });
+    }
     res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
@@ -231,8 +244,10 @@ app.post("/api/ingest", (req, res) => {
     ]);
     const [adzuna, jsearch] = results;
     if (adzuna.status === "rejected") console.error("Adzuna ingestion failed", adzuna.reason);
+    else if (adzuna.value?.skipped) console.log("Adzuna ingestion skipped", adzuna.value);
     else console.log("Adzuna ingestion complete", adzuna.value);
     if (jsearch.status === "rejected") console.error("JSearch ingestion failed", jsearch.reason);
+    else if (jsearch.value?.skipped) console.log("JSearch ingestion skipped", jsearch.value);
     else console.log("JSearch ingestion complete", jsearch.value);
   })().finally(() => { ingestionInProgress = false; });
 });
@@ -406,12 +421,56 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
     const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, ...(sp.salary ? { salary: sp.salary } : {}) });
-    // Most recently touched job = how fresh the dataset is.
-    const newest = await Job.findOne()
-      .sort({ updatedAt: -1 })
-      .select("updatedAt")
-      .lean();
-    res.json({ ok: true, ...result, lastUpdated: newest?.updatedAt || null });
+
+    // ── Dataset-state metadata (canonical freshness truth) ─────────────────
+    // Public-safe view only: no runId / lastError / provider bodies / Mongo
+    // detail ever reach the client. A read failure must NOT break ranking, so
+    // fall back to the honest empty contract and log server-side only.
+    let dataset;
+    try {
+      dataset = await getPublicDatasetMetadata();
+    } catch (err) {
+      console.warn(`dataset metadata read failed: ${err?.message}`);
+      dataset = emptyPublicDatasetMetadata();
+      // Conservative: a metadata read failure must never claim the dataset is
+      // safely idle — we cannot know the real state, so assume in-progress.
+      dataset.ingestionInProgress = true;
+    }
+
+    // Freshness precedence: canonical DatasetState.asOf first; before the first
+    // tracked ingest (asOf === null) fall back to the newest Job updatedAt.
+    // Never the browser fetch time — the fallback stays distinct from
+    // DatasetState truth. Only run the fallback query when it can actually
+    // matter (asOf is null) — this is a hot path, so skip the extra Job
+    // lookup entirely once DatasetState has a real asOf. A failure here must
+    // NOT break ranking either — same fail-safe posture as the dataset-state
+    // read above: fall back to null and log server-side only.
+    let newestJobUpdatedAt = null;
+    if (dataset.asOf == null) {
+      try {
+        const newest = await Job.findOne()
+          .sort({ updatedAt: -1 })
+          .select("updatedAt")
+          .lean();
+        newestJobUpdatedAt = newest?.updatedAt || null;
+      } catch (err) {
+        console.warn(`newest Job fallback query failed: ${err?.message}`);
+        newestJobUpdatedAt = null;
+      }
+    }
+
+    // COMPARABILITY INVARIANT: a dataset version is eligible for client
+    // rank-change comparison ONLY when dataset.ingestionInProgress === false.
+    // The version may advance once per completed source run, so during a
+    // combined ingest an intermediate version can exist while the other source
+    // is still running. A future client must not fire final rank-change
+    // announcements or resolve animations while ingestionInProgress is true.
+    res.json({
+      ok: true,
+      ...result,
+      lastUpdated: dataset.asOf ?? newestJobUpdatedAt ?? null,
+      dataset,
+    });
   } catch (err) {
     next(err);
   }

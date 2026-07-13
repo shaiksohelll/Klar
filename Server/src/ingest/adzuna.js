@@ -14,6 +14,7 @@ import { clearMomentumCache } from "../aggregations/skillMomentum.js";
 import { clearSkillForecastCache } from "../aggregations/skillForecast.js";
 import { clearSkillGapRoiCache } from "../aggregations/skillGapRoi.js";
 import { recordDailySkillBuckets } from "./snapshot.js";
+import { trackDatasetRun } from "../lib/datasetState.js";
 
 const APP_ID = process.env.ADZUNA_APP_ID;
 const APP_KEY = process.env.ADZUNA_APP_KEY;
@@ -95,7 +96,7 @@ function mapJob(raw, country) {
   };
 }
 
-export async function ingestAdzuna({
+async function ingestAdzunaImpl({
   what,
   queries,
   country = "in",
@@ -127,9 +128,11 @@ export async function ingestAdzuna({
   );
 
   let hadFailures = false;
+  let fetchErrorCount = 0;
   for (let i = 0; i < responses.length; i++) {
     if (responses[i].status === "rejected") {
       hadFailures = true;
+      fetchErrorCount++;
       console.warn(
         `Adzuna fetch failed [term="${fetchJobs[i].term}" page=${fetchJobs[i].page}]:`,
         responses[i].reason?.message,
@@ -312,13 +315,19 @@ export async function ingestAdzuna({
   console.log("🗑️  Read caches cleared after ingest");
 
   return {
+    requested: fetchJobs.length,
     fetched,
     unique: docsById.size,
     upserted,
     modified,
     removed,
     pruneFailures: pruneBatchFailures,
+    errors: fetchErrorCount,
     totalInDb,
     bulkWriteError,
   };
+}
+
+export async function ingestAdzuna(options = {}) {
+  return trackDatasetRun("adzuna", () => ingestAdzunaImpl(options));
 }

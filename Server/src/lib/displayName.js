@@ -12,19 +12,27 @@
  */
 
 const KNOWN_NAMES = {
-  html: "HTML",
-  css: "CSS",
-  aws: "AWS",
-  gcp: "GCP",
-  "ci/cd": "CI/CD",
-  sql: "SQL",
+  ".net": ".NET",
   api: "API",
-  typescript: "TypeScript",
+  "aws": "AWS",
+  "c#": "C#",
+  "c++": "C++",
+  "ci/cd": "CI/CD",
+  "css": "CSS",
+  "gcp": "GCP",
+  html: "HTML",
   javascript: "JavaScript",
+  mysql: "MySQL",
+  "next.js": "Next.js",
   node: "Node.js",
   nodejs: "Node.js",
   "node.js": "Node.js",
   php: "PHP",
+  postgresql: "PostgreSQL",
+  rest: "REST",
+  sass: "Sass",
+  sql: "SQL",
+  typescript: "TypeScript",
 };
 
 export function displayName(raw) {

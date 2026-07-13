@@ -80,6 +80,53 @@ vi.mock("./routes/skillDetail.js", async () => {
   const r = Router();
   return { default: r, clearDetailCache: vi.fn() };
 });
+// ── Mock DatasetState reader (no live Mongo in these route tests) ──────────
+// Returns only the public-safe shape; emptyPublicDatasetMetadata mirrors the
+// real fail-safe fallback the route uses when the read throws.
+const PUBLIC_SOURCE_IDLE = {
+  status: "idle",
+  lastAttemptAt: null,
+  lastCompletedAt: null,
+  lastSuccessAt: null,
+  lastPartialAt: null,
+  lastFailureAt: null,
+  hasError: false,
+};
+vi.mock("./lib/datasetState.js", () => ({
+  getPublicDatasetMetadata: vi.fn().mockResolvedValue({
+    version: 3,
+    asOf: "2024-06-01T00:00:00.000Z",
+    ingestionInProgress: false,
+    runningSources: [],
+    sources: {
+      adzuna: {
+        status: "succeeded",
+        lastAttemptAt: "2024-06-01T00:00:00.000Z",
+        lastCompletedAt: "2024-06-01T00:00:00.000Z",
+        lastSuccessAt: "2024-06-01T00:00:00.000Z",
+        lastPartialAt: null,
+        lastFailureAt: null,
+        hasError: false,
+      },
+      jsearch: {
+        status: "idle",
+        lastAttemptAt: null,
+        lastCompletedAt: null,
+        lastSuccessAt: null,
+        lastPartialAt: null,
+        lastFailureAt: null,
+        hasError: false,
+      },
+    },
+  }),
+  emptyPublicDatasetMetadata: () => ({
+    version: 0,
+    asOf: null,
+    ingestionInProgress: false,
+    runningSources: [],
+    sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
+  }),
+}));
 // ── Import AFTER env + mocks are set ───────────────────────────────────────
 const { default: app, clearCountriesCache } = await import("./app.js");
 const { default: request } = await import("supertest");
@@ -95,6 +142,7 @@ const { clearCompaniesCache } = await import("./aggregations/topCompanies.js");
 const { clearSkillGapRoiCache } = await import("./aggregations/skillGapRoi.js");
 const { clearDetailCache } = await import("./routes/skillDetail.js");
 const { default: Job } = await import("./models/Job.js");
+const { getPublicDatasetMetadata } = await import("./lib/datasetState.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -132,6 +180,39 @@ describe("POST /api/ingest", () => {
       expect(ingestJSearch).toHaveBeenCalled();
     });
   });
+
+  it("logs a source as skipped (not complete) when its result is a refusal", async () => {
+    vi.clearAllMocks();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+      ingestJSearch.mockResolvedValueOnce({ fetched: 3, upserted: 1 });
+
+      const res = await request(app)
+        .post("/api/ingest")
+        .set("x-ingest-secret", "test-secret");
+
+      // Response contract is unchanged: 202 regardless of what the background
+      // per-source runs eventually report.
+      expect(res.status).toBe(202);
+
+      await vi.waitFor(() => {
+        expect(ingestAdzuna).toHaveBeenCalled();
+        expect(ingestJSearch).toHaveBeenCalled();
+      });
+      // Let the background IIFE's .finally() / log lines run.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const calls = logSpy.mock.calls.map((args) => args[0]);
+      expect(calls).toContain("Adzuna ingestion skipped");
+      expect(calls).not.toContain("Adzuna ingestion complete");
+      expect(calls).toContain("JSearch ingestion complete");
+    } finally {
+      // try/finally so a failed assertion above still restores console.log
+      // instead of leaking the mock into later tests.
+      logSpy.mockRestore();
+    }
+  });
 });
 
 describe("POST /api/ingest/adzuna", () => {
@@ -156,6 +237,64 @@ describe("POST /api/ingest/adzuna", () => {
       .get("/api/ingest/adzuna")
       .set("x-ingest-secret", "test-secret");
     expect(res.status).toBe(404);
+  });
+
+  it("returns 409 (not 200 ok:true) when refused for overlap", async () => {
+    vi.clearAllMocks();
+    ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+    const res = await request(app)
+      .post("/api/ingest/adzuna")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "overlap" });
+  });
+
+  it("returns 503 (not 200 ok:true) when refused for begin-failed", async () => {
+    vi.clearAllMocks();
+    ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "begin-failed" });
+    const res = await request(app)
+      .post("/api/ingest/adzuna")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "begin-failed" });
+  });
+});
+
+describe("POST /api/ingest/jsearch", () => {
+  it("rejects with 401 when no secret header is provided", async () => {
+    const res = await request(app).post("/api/ingest/jsearch");
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ ok: false, error: "Unauthorized" });
+  });
+
+  it("runs JSearch ingestion with a valid secret", async () => {
+    vi.clearAllMocks();
+    const res = await request(app)
+      .post("/api/ingest/jsearch")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, fetched: 0, upserted: 0 });
+    expect(ingestJSearch).toHaveBeenCalled();
+  });
+
+  it("returns 409 (not 200 ok:true) when refused for overlap", async () => {
+    vi.clearAllMocks();
+    ingestJSearch.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+    const res = await request(app)
+      .post("/api/ingest/jsearch")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "overlap" });
+  });
+
+  it("returns 503 (not 200 ok:true) when refused for begin-failed", async () => {
+    vi.clearAllMocks();
+    ingestJSearch.mockResolvedValueOnce({ skipped: true, reason: "begin-failed" });
+    const res = await request(app)
+      .post("/api/ingest/jsearch")
+      .set("x-ingest-secret", "test-secret");
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ ok: false, skipped: true, reason: "begin-failed" });
   });
 });
 
@@ -920,5 +1059,148 @@ describe("POST /api/admin/backfill-geo — cache invalidation", () => {
       matchedCount: 50,
     });
     expect(res.body.updated).toBe(10);
+  });
+});
+
+// ── DatasetState integration on /api/skills/trending (Gate 0.2B) ──────────
+describe("GET /api/skills/trending (dataset metadata)", () => {
+  beforeEach(() => {
+    // Restore the default public metadata resolution between tests so a
+    // *Once override in one test never bleeds into the next.
+    getPublicDatasetMetadata.mockResolvedValue({
+      version: 3,
+      asOf: "2024-06-01T00:00:00.000Z",
+      ingestionInProgress: false,
+      runningSources: [],
+      sources: {
+        adzuna: {
+          status: "succeeded",
+          lastAttemptAt: "2024-06-01T00:00:00.000Z",
+          lastCompletedAt: "2024-06-01T00:00:00.000Z",
+          lastSuccessAt: "2024-06-01T00:00:00.000Z",
+          lastPartialAt: null,
+          lastFailureAt: null,
+          hasError: false,
+        },
+        jsearch: {
+          status: "idle",
+          lastAttemptAt: null,
+          lastCompletedAt: null,
+          lastSuccessAt: null,
+          lastPartialAt: null,
+          lastFailureAt: null,
+          hasError: false,
+        },
+      },
+    });
+  });
+
+  it("includes a public-safe dataset object in the response", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.dataset).toBeDefined();
+    expect(res.body.dataset).toMatchObject({
+      version: 3,
+      asOf: "2024-06-01T00:00:00.000Z",
+      ingestionInProgress: false,
+      runningSources: [],
+    });
+    expect(res.body.dataset.sources.adzuna.status).toBe("succeeded");
+    expect(res.body.dataset.sources.jsearch.status).toBe("idle");
+  });
+
+  it("prefers dataset.asOf for lastUpdated over the newest Job updatedAt, and skips the fallback query", async () => {
+    // asOf is present (default mock: "2024-06-01T00:00:00.000Z") — the hot
+    // path must skip the newest-Job-updatedAt fallback query entirely.
+    Job.findOne.mockClear();
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    // Job mock's newest updatedAt is 2024-01-01; asOf (2024-06-01) must win.
+    expect(res.body.lastUpdated).toBe("2024-06-01T00:00:00.000Z");
+    expect(Job.findOne).not.toHaveBeenCalled();
+  });
+
+  it("falls back to newest Job updatedAt when dataset.asOf is null, and runs the fallback query", async () => {
+    getPublicDatasetMetadata.mockResolvedValueOnce({
+      version: 0,
+      asOf: null,
+      ingestionInProgress: false,
+      runningSources: [],
+      sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
+    });
+    Job.findOne.mockClear();
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");
+    expect(res.body.dataset.asOf).toBeNull();
+    expect(Job.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("still serves ranking (200) when the metadata read throws", async () => {
+    getPublicDatasetMetadata.mockRejectedValueOnce(new Error("mongo down"));
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // Ranking payload intact.
+    expect(typeof res.body.totalJobs).toBe("number");
+    // Fallback dataset: version/asOf stay at the honest empty values, but
+    // ingestionInProgress is forced true (conservative — a metadata read
+    // failure must never claim the dataset is safely idle).
+    expect(res.body.dataset).toMatchObject({ version: 0, asOf: null, ingestionInProgress: true });
+    expect(JSON.stringify(res.body)).not.toContain("mongo down");
+    // asOf null → freshness falls back to newest Job updatedAt.
+    expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");
+  });
+
+  it("still returns 200 with lastUpdated: null when the newest-Job fallback query itself throws", async () => {
+    // asOf is null so the fallback query runs; Job.findOne's own chain throws
+    // (simulating a transient DB error on that specific lookup). The route
+    // must not 500 — it should log server-side and fall back to null.
+    getPublicDatasetMetadata.mockResolvedValueOnce({
+      version: 0,
+      asOf: null,
+      ingestionInProgress: false,
+      runningSources: [],
+      sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
+    });
+    Job.findOne.mockReturnValueOnce({
+      sort: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockRejectedValue(new Error("Job fallback query boom")),
+    });
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.dataset.asOf).toBeNull();
+    expect(res.body.lastUpdated).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain("Job fallback query boom");
+  });
+
+  it("never exposes lastError, runId, or internal summaries in dataset", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    for (const src of ["adzuna", "jsearch"]) {
+      const s = res.body.dataset.sources[src];
+      expect(s).toHaveProperty("hasError");
+      expect(s).not.toHaveProperty("lastError");
+      expect(s).not.toHaveProperty("runId");
+      expect(s).not.toHaveProperty("lastSummary");
+    }
+    const serialized = JSON.stringify(res.body.dataset);
+    expect(serialized).not.toContain("lastError");
+    expect(serialized).not.toContain("runId");
+    expect(serialized).not.toContain("lastSummary");
+  });
+
+  it("keeps existing trending response fields intact alongside dataset", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.totalJobs).toBe(100);
+    expect(Array.isArray(res.body.skills)).toBe(true);
+    expect(res.body.velocityReady).toBe(true);
+    expect(res.body).toHaveProperty("lastUpdated");
+    expect(res.body).toHaveProperty("dataset");
   });
 });
