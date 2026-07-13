@@ -432,6 +432,9 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     } catch (err) {
       console.warn(`dataset metadata read failed: ${err?.message}`);
       dataset = emptyPublicDatasetMetadata();
+      // Conservative: a metadata read failure must never claim the dataset is
+      // safely idle — we cannot know the real state, so assume in-progress.
+      dataset.ingestionInProgress = true;
     }
 
     // Freshness precedence: canonical DatasetState.asOf first; before the first

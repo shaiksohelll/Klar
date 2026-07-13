@@ -602,4 +602,76 @@ describe("DatasetState", () => {
     expect(meta.sources.adzuna.status).toBe("succeeded");
     expect(meta.version).toBe(1);
   });
+
+  // ── Fix H2: heartbeat in-flight guard ───────────────────────────────────
+
+  it("does not start a second heartbeat write while the first is still pending", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    // Track how many times updateOne is called by the heartbeat.
+    // beginDatasetRun calls updateOne once (upsert-or-create), so we let
+    // that through and then start counting heartbeat calls.
+    const original = DatasetState.updateOne.bind(DatasetState);
+    let beginCallDone = false;
+    let heartbeatCallCount = 0;
+    let resolveFirstHeartbeat;
+
+    const updateOneSpy = vi
+      .spyOn(DatasetState, "updateOne")
+      .mockImplementation((...args) => {
+        if (!beginCallDone) {
+          beginCallDone = true;
+          return original(...args);
+        }
+        heartbeatCallCount++;
+        if (heartbeatCallCount === 1) {
+          // First heartbeat: return a promise that stays pending until we
+          // explicitly resolve it, simulating a slow Mongo write.
+          return new Promise((resolve) => {
+            resolveFirstHeartbeat = resolve;
+          });
+        }
+        // Subsequent heartbeat calls go through normally.
+        return original(...args);
+      });
+
+    const workPromise = trackDatasetRun("adzuna", async () => {
+      // Tick 1: triggers the first heartbeat (stays pending).
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 100);
+      expect(heartbeatCallCount).toBe(1);
+
+      // Tick 2: fires while tick 1 is still pending — must be skipped.
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS);
+      expect(heartbeatCallCount).toBe(1); // still 1, no second write started
+
+      // Settle tick 1.
+      resolveFirstHeartbeat();
+      await vi.advanceTimersByTimeAsync(0); // flush microtasks
+
+      // Tick 3: tick 1 has settled, so this tick should fire a new write.
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS);
+      expect(heartbeatCallCount).toBe(2); // now 2
+
+      return {
+        requested: 1,
+        fetched: 1,
+        unique: 1,
+        upserted: 1,
+        modified: 0,
+        removed: 0,
+        pruneFailures: 0,
+        errors: 0,
+        bulkWriteError: null,
+      };
+    });
+
+    const result = await workPromise;
+
+    vi.useRealTimers();
+    updateOneSpy.mockRestore();
+
+    expect(result).toMatchObject({ fetched: 1 });
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.sources.adzuna.status).toBe("succeeded");
+  });
 });

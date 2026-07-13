@@ -1144,8 +1144,10 @@ describe("GET /api/skills/trending (dataset metadata)", () => {
     expect(res.body.ok).toBe(true);
     // Ranking payload intact.
     expect(typeof res.body.totalJobs).toBe("number");
-    // Fallback dataset is the honest empty contract, not the leaked error.
-    expect(res.body.dataset).toMatchObject({ version: 0, asOf: null, ingestionInProgress: false });
+    // Fallback dataset: version/asOf stay at the honest empty values, but
+    // ingestionInProgress is forced true (conservative — a metadata read
+    // failure must never claim the dataset is safely idle).
+    expect(res.body.dataset).toMatchObject({ version: 0, asOf: null, ingestionInProgress: true });
     expect(JSON.stringify(res.body)).not.toContain("mongo down");
     // asOf null → freshness falls back to newest Job updatedAt.
     expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");

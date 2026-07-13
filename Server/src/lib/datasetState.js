@@ -236,7 +236,10 @@ export async function trackDatasetRun(source, work) {
   // can't keep a shutting-down process alive, and cleared in finally so it
   // can never outlive the run.
   const prefix = `sources.${source}`;
+  let heartbeatInFlight = false;
   const heartbeat = setInterval(async () => {
+    if (heartbeatInFlight) return; // previous write still pending — skip this tick
+    heartbeatInFlight = true;
     try {
       await DatasetState.updateOne(
         { _id: DATASET_ID, [`${prefix}.runId`]: run.runId },
@@ -244,6 +247,8 @@ export async function trackDatasetRun(source, work) {
       );
     } catch (err) {
       console.warn(`heartbeat write failed [${source}]:`, safeError(err));
+    } finally {
+      heartbeatInFlight = false;
     }
   }, HEARTBEAT_INTERVAL_MS);
   heartbeat.unref();
