@@ -425,14 +425,21 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     // Never the browser fetch time — the fallback stays distinct from
     // DatasetState truth. Only run the fallback query when it can actually
     // matter (asOf is null) — this is a hot path, so skip the extra Job
-    // lookup entirely once DatasetState has a real asOf.
+    // lookup entirely once DatasetState has a real asOf. A failure here must
+    // NOT break ranking either — same fail-safe posture as the dataset-state
+    // read above: fall back to null and log server-side only.
     let newestJobUpdatedAt = null;
     if (dataset.asOf == null) {
-      const newest = await Job.findOne()
-        .sort({ updatedAt: -1 })
-        .select("updatedAt")
-        .lean();
-      newestJobUpdatedAt = newest?.updatedAt || null;
+      try {
+        const newest = await Job.findOne()
+          .sort({ updatedAt: -1 })
+          .select("updatedAt")
+          .lean();
+        newestJobUpdatedAt = newest?.updatedAt || null;
+      } catch (err) {
+        console.warn(`newest Job fallback query failed: ${err?.message}`);
+        newestJobUpdatedAt = null;
+      }
     }
 
     // COMPARABILITY INVARIANT: a dataset version is eligible for client

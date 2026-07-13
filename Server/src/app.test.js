@@ -1060,6 +1060,30 @@ describe("GET /api/skills/trending (dataset metadata)", () => {
     expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");
   });
 
+  it("still returns 200 with lastUpdated: null when the newest-Job fallback query itself throws", async () => {
+    // asOf is null so the fallback query runs; Job.findOne's own chain throws
+    // (simulating a transient DB error on that specific lookup). The route
+    // must not 500 — it should log server-side and fall back to null.
+    getPublicDatasetMetadata.mockResolvedValueOnce({
+      version: 0,
+      asOf: null,
+      ingestionInProgress: false,
+      runningSources: [],
+      sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
+    });
+    Job.findOne.mockReturnValueOnce({
+      sort: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockRejectedValue(new Error("Job fallback query boom")),
+    });
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.dataset.asOf).toBeNull();
+    expect(res.body.lastUpdated).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain("Job fallback query boom");
+  });
+
   it("never exposes lastError, runId, or internal summaries in dataset", async () => {
     const res = await request(app).get("/api/skills/trending");
     expect(res.status).toBe(200);

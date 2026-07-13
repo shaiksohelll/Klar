@@ -40,8 +40,15 @@ function sanitizeSummary(result) {
 
 function classifyResult(source, result) {
   if (source === "jsearch" && Number(result?.requested ?? 0) === 0) return "skipped";
+  const requested = Number(result?.requested ?? 0);
+  const errors = Number(result?.errors ?? 0);
+  // Total failure: every request errored out (and there was at least one
+  // request to make). Nothing usable landed, so this must NOT be reported as
+  // "partial" — a run with zero real progress should read as failed, not
+  // advance version/asOf, and record lastFailureAt like the throw path does.
+  if (requested > 0 && errors >= requested) return "failed";
   const hasProblems =
-    Number(result?.errors ?? 0) > 0 ||
+    errors > 0 ||
     Number(result?.pruneFailures ?? 0) > 0 ||
     Boolean(result?.bulkWriteError);
   return hasProblems ? "partial" : "succeeded";
@@ -128,6 +135,11 @@ async function completeDatasetRun(run, result) {
   };
   if (status === "succeeded") set[`${prefix}.lastSuccessAt`] = completedAt;
   if (status === "partial") set[`${prefix}.lastPartialAt`] = completedAt;
+  // A run that returned (didn't throw) but had every request fail is
+  // classified "failed" — record lastFailureAt exactly like the throw path
+  // (failDatasetRun) does, so downstream freshness reads treat it the same
+  // way. version/asOf are NOT advanced (advancesDataset stays false).
+  if (status === "failed") set[`${prefix}.lastFailureAt`] = completedAt;
   if (advancesDataset) set.asOf = completedAt;
 
   const update = { $set: set, $pull: { runningSources: run.source } };
@@ -160,12 +172,31 @@ async function failDatasetRun(run, error) {
   ).lean();
 }
 
+/**
+ * APPROVED CONTRACT AMENDMENT (fail-closed on begin failure):
+ * If beginDatasetRun itself throws (e.g. a DatasetState write/connectivity
+ * error), the run is REFUSED — `work` is never invoked — rather than running
+ * it untracked. An untracked run would write real Job data (and burn
+ * provider quota) with no DatasetState record at all: no runningSources
+ * entry, no way to later mark it failed/succeeded, and no overlap protection
+ * for a second attempt. Refusing is strictly safer than silently ingesting
+ * off the books.
+ *
+ * This is intentionally asymmetric with the completion/failure paths below:
+ * once a run has legitimately started (beginDatasetRun succeeded), a
+ * completeDatasetRun/failDatasetRun write failure stays fail-OPEN (logged,
+ * swallowed, ingest result still returned, version does not advance) because
+ * `work` has already run and its real-world side effects (Job writes,
+ * provider calls) cannot be undone — dropping the result on top of that
+ * would only destroy the one copy of evidence that the run happened.
+ */
 export async function trackDatasetRun(source, work) {
   let run;
   try {
     run = await beginDatasetRun(source);
   } catch (error) {
     console.warn(`dataset state begin failed [${source}]:`, safeError(error));
+    return { skipped: true, reason: "begin-failed" };
   }
 
   if (run?.skipped) {

@@ -201,6 +201,78 @@ describe("DatasetState", () => {
     expect(result).toMatchObject({ skipped: true, reason: "overlap" });
   });
 
+  // AMENDED CONTRACT (approved): if beginDatasetRun itself throws (write/
+  // connectivity failure), trackDatasetRun now REFUSES the run — fail-closed
+  // — instead of running `work` untracked. Previously this path swallowed the
+  // begin error and ran `work` anyway (fail-open), which is what made an
+  // untracked ingest possible: real Job writes + provider quota burned with
+  // no DatasetState record at all. There was no prior test pinning that
+  // fail-open behavior; this test is the first to cover the begin-failure
+  // path and it encodes the NEW fail-closed contract.
+  it("refuses the run (fail-closed) and never calls work() when beginDatasetRun itself throws", async () => {
+    const findOneAndUpdateSpy = vi
+      .spyOn(DatasetState, "findOneAndUpdate")
+      .mockRejectedValueOnce(new Error("mongo blip"));
+    const work = vi.fn().mockResolvedValue({ fetched: 1, errors: 0, pruneFailures: 0, bulkWriteError: null });
+
+    const result = await trackDatasetRun("adzuna", work);
+
+    expect(work).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ skipped: true, reason: "begin-failed" });
+
+    findOneAndUpdateSpy.mockRestore();
+    // No DatasetState doc was ever created/mutated by the failed begin — the
+    // singleton upsert (DatasetState.updateOne) ran, but the conditional
+    // findOneAndUpdate that would have claimed the run never landed.
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(0);
+    expect(meta.runningSources).toEqual([]);
+    expect(meta.sources.adzuna.status).toBe("idle");
+  });
+
+  // Contrast case: once a run has legitimately STARTED, a completion-path
+  // write failure stays fail-OPEN — `work` has already run (real side
+  // effects happened), so the ingest result is still returned and only the
+  // DatasetState write is logged/swallowed. Version must not advance since
+  // the write that would have advanced it is exactly what failed.
+  it("stays fail-open (returns the result) when the COMPLETION write fails after work() already ran", async () => {
+    // beginDatasetRun's own findOneAndUpdate (call #1) must succeed so the
+    // run legitimately starts; only completeDatasetRun's findOneAndUpdate
+    // (call #2, keyed on runId) fails. Pass call #1 through to the real
+    // implementation and reject only call #2.
+    const original = DatasetState.findOneAndUpdate.bind(DatasetState);
+    let callCount = 0;
+    const findOneAndUpdateSpy = vi
+      .spyOn(DatasetState, "findOneAndUpdate")
+      .mockImplementation((...args) => {
+        callCount++;
+        if (callCount === 2) return Promise.reject(new Error("mongo blip mid-run"));
+        return original(...args);
+      });
+
+    const work = vi.fn().mockResolvedValue({
+      requested: 5,
+      fetched: 5,
+      errors: 0,
+      pruneFailures: 0,
+      bulkWriteError: null,
+    });
+    const result = await trackDatasetRun("adzuna", work);
+
+    findOneAndUpdateSpy.mockRestore();
+    expect(work).toHaveBeenCalledTimes(1);
+    // Ingest result is returned intact despite the state-write failure.
+    expect(result).toMatchObject({ fetched: 5 });
+
+    // Version did not advance — the write that would have advanced it is
+    // exactly the one that failed. The source is left "running"/wedged in
+    // runningSources (matches existing fail-open posture: logged, not fixed
+    // up), demonstrating why staleness takeover (Fix from the prior review)
+    // still matters for this failure mode.
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(0);
+  });
+
   it("allows takeover of a stale run whose lastAttemptAt exceeds the staleness window", async () => {
     const stale = await __datasetStateTestables.beginDatasetRun("adzuna");
     // Simulate a crashed run: back-date lastAttemptAt past the staleness window
@@ -241,6 +313,54 @@ describe("DatasetState", () => {
     expect(after.version).toBe(1);
     expect(after.sources.adzuna.lastSummary.fetched).toBe(9);
     expect(after.runningSources).toEqual([]);
+  });
+
+  it("classifies an all-requests-failed run as failed and advances nothing", async () => {
+    const result = await trackDatasetRun("adzuna", async () => ({
+      requested: 5,
+      fetched: 0,
+      unique: 0,
+      upserted: 0,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 5,
+      bulkWriteError: null,
+    }));
+    // trackDatasetRun does not throw for this case — the work callback
+    // resolved (it just reported total failure in its own return shape).
+    expect(result).toMatchObject({ errors: 5, requested: 5 });
+
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(0);
+    expect(meta.asOf).toBeNull();
+    expect(meta.sources.adzuna.status).toBe("failed");
+    expect(meta.sources.adzuna.lastFailureAt).not.toBeNull();
+    expect(meta.sources.adzuna.lastSuccessAt).toBeNull();
+    expect(meta.sources.adzuna.lastPartialAt).toBeNull();
+    expect(meta.runningSources).toEqual([]);
+  });
+
+  it("still classifies a mixed success/error run as partial (not failed)", async () => {
+    await trackDatasetRun("adzuna", async () => ({
+      requested: 5,
+      fetched: 3,
+      unique: 3,
+      upserted: 3,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 2,
+      bulkWriteError: null,
+    }));
+    const meta = await getDatasetMetadataInternal();
+    // errors (2) < requested (5) — some requests succeeded, so this is a
+    // partial run, not a total failure. Version DOES advance for partial.
+    expect(meta.version).toBe(1);
+    expect(meta.asOf).not.toBeNull();
+    expect(meta.sources.adzuna.status).toBe("partial");
+    expect(meta.sources.adzuna.lastPartialAt).not.toBeNull();
+    expect(meta.sources.adzuna.lastFailureAt).toBeNull();
   });
 
   it("does not falsely settle ingestion when only one of two sources completes", async () => {
