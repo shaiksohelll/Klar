@@ -25,12 +25,17 @@ function assertSource(source) {
 // presumed crashed (process killed, deploy restart, etc.) — the flag must not
 // stay wedged forever, so a stale run is eligible for takeover.
 //
-// Measured worst-case run duration is ~70s (JSearch, all 6 role queries
-// hitting their 10s fetch timeout back-to-back with the mandatory 1.2s
-// inter-request delay). This window exists for CRASH recovery, not slow-run
-// tolerance — 30 min is ~25x that worst case on purpose. Revisit this value
-// if the ingest cadence ever moves to sub-30-min intervals.
+// Live runs renew their claim via a heartbeat (see HEARTBEAT_INTERVAL_MS),
+// so this window now guards CRASH RECOVERY only — takeover happens when
+// heartbeats have stopped (dead process), never on a slow-but-alive run.
+// 30 min is intentionally >> HEARTBEAT_INTERVAL_MS (5 min) so a single
+// missed heartbeat doesn't trigger a false takeover.
 export const STALE_RUN_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+
+// How often a live run bumps lastAttemptAt to prove it's still alive.
+// Must be << STALE_RUN_WINDOW_MS so the claim never expires while a
+// healthy run is executing.
+export const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 function safeError(error) {
   return (error instanceof Error ? error.message : String(error ?? "Unknown error")).slice(0, 500);
@@ -44,12 +49,11 @@ function sanitizeSummary(result) {
   return summary;
 }
 
-function classifyResult(source, result) {
+function classifyResult(result) {
   const requested = Number(result?.requested ?? 0);
   // Zero-request runs (e.g. JSearch's free-tier early-return when
-  // JSEARCH_API_KEY is unset, or an Adzuna call with an empty search-term
-  // list) made no attempt at all — classify as "skipped" for EVERY source,
-  // not just jsearch. Nothing was fetched, so this must never read as
+  // JSEARCH_API_KEY is unset). A defensive no-op case for any source that
+  // returns requested: 0. Nothing was fetched, so this must never read as
   // "succeeded" and advance version/asOf off a run that did nothing.
   if (requested === 0) return "skipped";
   const errors = Number(result?.errors ?? 0);
@@ -134,7 +138,7 @@ async function beginDatasetRun(source) {
 
 async function completeDatasetRun(run, result) {
   const completedAt = new Date();
-  const status = classifyResult(run.source, result);
+  const status = classifyResult(result);
   const prefix = `sources.${run.source}`;
   const advancesDataset = status === "succeeded" || status === "partial";
   const set = {
@@ -225,6 +229,25 @@ export async function trackDatasetRun(source, work) {
     return { skipped: true, reason: run.reason };
   }
 
+  // ── Heartbeat: renew the claim while work() is executing ──────────────
+  // Bumps lastAttemptAt every HEARTBEAT_INTERVAL_MS so a slow-but-alive run
+  // never looks stale. Write failures are logged and swallowed (fail-open —
+  // a heartbeat must never kill a healthy run). The timer is unref'd so it
+  // can't keep a shutting-down process alive, and cleared in finally so it
+  // can never outlive the run.
+  const prefix = `sources.${source}`;
+  const heartbeat = setInterval(async () => {
+    try {
+      await DatasetState.updateOne(
+        { _id: DATASET_ID, [`${prefix}.runId`]: run.runId },
+        { $set: { [`${prefix}.lastAttemptAt`]: new Date() } },
+      );
+    } catch (err) {
+      console.warn(`heartbeat write failed [${source}]:`, safeError(err));
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+  heartbeat.unref();
+
   try {
     const result = await work();
     if (run) {
@@ -244,6 +267,8 @@ export async function trackDatasetRun(source, work) {
       }
     }
     throw error;
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 

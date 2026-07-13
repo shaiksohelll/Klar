@@ -6,6 +6,7 @@ import {
   __datasetStateTestables,
   getDatasetMetadataInternal,
   getPublicDatasetMetadata,
+  HEARTBEAT_INTERVAL_MS,
   STALE_RUN_WINDOW_MS,
   trackDatasetRun,
 } from "../lib/datasetState.js";
@@ -96,9 +97,8 @@ describe("DatasetState", () => {
   // to the hasProblems check (errors:0, pruneFailures:0, no bulkWriteError —
   // all false) and was misclassified "succeeded", which WOULD have advanced
   // version/asOf off a run that fetched nothing. Now requested === 0 ->
-  // "skipped" for every source, and "skipped" never advances (advancesDataset
-  // only true for "succeeded"/"partial" — that part of the contract was
-  // already correct, only the classification was source-specific and wrong).
+  // "skipped" for every source, and "skipped" never advances.
+  // Fix G3: the unused `source` parameter was removed from classifyResult.
   it("does not advance the version when Adzuna makes a zero-request run (same as JSearch)", async () => {
     await trackDatasetRun("adzuna", async () => ({
       requested: 0,
@@ -492,5 +492,114 @@ describe("DatasetState", () => {
     expect(meta.runningSources).toEqual(["jsearch"]);
     expect(meta.sources.adzuna.status).toBe("succeeded");
     expect(meta.sources.jsearch.status).toBe("running");
+  });
+
+  // ── Fix G1: heartbeat tests ─────────────────────────────────────────────
+
+  it("a run whose lastAttemptAt is renewed inside the window cannot be taken over", async () => {
+    // Begin run A — it owns the source.
+    const runA = await __datasetStateTestables.beginDatasetRun("adzuna");
+    expect(runA.skipped).toBeUndefined();
+
+    // Simulate "time passes but heartbeat keeps it fresh": update
+    // lastAttemptAt to (now - 1 minute) — well within the window.
+    const recentHeartbeat = new Date(Date.now() - 60_000);
+    await DatasetState.updateOne(
+      { _id: "jobs" },
+      { $set: { "sources.adzuna.lastAttemptAt": recentHeartbeat } },
+    );
+
+    // A second begin must be REFUSED — the heartbeat kept the claim alive.
+    const runB = await __datasetStateTestables.beginDatasetRun("adzuna");
+    expect(runB.skipped).toBe(true);
+    expect(runB.reason).toBe("overlap");
+
+    // The original run still completes normally.
+    await __datasetStateTestables.completeDatasetRun(runA, {
+      requested: 1,
+      fetched: 1,
+      errors: 0,
+      pruneFailures: 0,
+      bulkWriteError: null,
+    });
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(1);
+    expect(meta.runningSources).toEqual([]);
+  });
+
+  it("heartbeat interval is cleared after completion AND after a thrown work (no timer leak)", async () => {
+    const clearIntervalSpy = vi.spyOn(global, "clearInterval");
+
+    // Case 1: successful work()
+    await trackDatasetRun("adzuna", async () => ({
+      requested: 1,
+      fetched: 1,
+      unique: 1,
+      upserted: 1,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 0,
+      bulkWriteError: null,
+    }));
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    clearIntervalSpy.mockClear();
+
+    // Case 2: work() throws
+    await expect(
+      trackDatasetRun("adzuna", async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+
+    clearIntervalSpy.mockRestore();
+  });
+
+  it("a heartbeat write failure does not fail the run", async () => {
+    // Stub DatasetState.updateOne to fail ONLY for heartbeat writes.
+    // beginDatasetRun also calls updateOne (the upsert-or-create), so we
+    // let the first call through and reject subsequent ones.
+    const original = DatasetState.updateOne.bind(DatasetState);
+    let callCount = 0;
+    const updateOneSpy = vi
+      .spyOn(DatasetState, "updateOne")
+      .mockImplementation((...args) => {
+        callCount++;
+        // Call 1 = beginDatasetRun's upsert-or-create — pass through.
+        if (callCount <= 1) return original(...args);
+        // Subsequent calls = heartbeat writes — reject.
+        return Promise.reject(new Error("heartbeat mongo blip"));
+      });
+
+    // Use fake timers so we can fire the heartbeat synchronously.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    const workPromise = trackDatasetRun("adzuna", async () => {
+      // Advance time to trigger one heartbeat cycle (which will fail).
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS + 100);
+      return {
+        requested: 2,
+        fetched: 2,
+        unique: 2,
+        upserted: 2,
+        modified: 0,
+        removed: 0,
+        pruneFailures: 0,
+        errors: 0,
+        bulkWriteError: null,
+      };
+    });
+
+    const result = await workPromise;
+
+    vi.useRealTimers();
+    updateOneSpy.mockRestore();
+
+    // The run succeeded despite the heartbeat write failing.
+    expect(result).toMatchObject({ fetched: 2 });
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.sources.adzuna.status).toBe("succeeded");
+    expect(meta.version).toBe(1);
   });
 });
