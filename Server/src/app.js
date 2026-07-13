@@ -28,6 +28,7 @@ import { clearPairsCache } from "./aggregations/skillPairs.js";
 import Job from "./models/Job.js";
 import { SALARY_BAND_IDS } from "./lib/salaryBands.js";
 import Watchlist from "./models/Watchlist.js";
+import { getPublicDatasetMetadata, emptyPublicDatasetMetadata } from "./lib/datasetState.js";
 
 // ── Shared query-param parsers ─────────────────────────────────────────────
 
@@ -406,12 +407,41 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 24);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
     const result = await getTrendingSkills({ role, months, limit, remote: rp.remote, disclosed: dp.disclosed, country: cp.country, ...(sp.salary ? { salary: sp.salary } : {}) });
-    // Most recently touched job = how fresh the dataset is.
+
+    // ── Dataset-state metadata (canonical freshness truth) ─────────────────
+    // Public-safe view only: no runId / lastError / provider bodies / Mongo
+    // detail ever reach the client. A read failure must NOT break ranking, so
+    // fall back to the honest empty contract and log server-side only.
+    let dataset;
+    try {
+      dataset = await getPublicDatasetMetadata();
+    } catch (err) {
+      console.warn(`dataset metadata read failed: ${err?.message}`);
+      dataset = emptyPublicDatasetMetadata();
+    }
+
+    // Freshness precedence: canonical DatasetState.asOf first; before the first
+    // tracked ingest (asOf === null) fall back to the newest Job updatedAt.
+    // Never the browser fetch time — the fallback stays distinct from
+    // DatasetState truth.
     const newest = await Job.findOne()
       .sort({ updatedAt: -1 })
       .select("updatedAt")
       .lean();
-    res.json({ ok: true, ...result, lastUpdated: newest?.updatedAt || null });
+    const newestJobUpdatedAt = newest?.updatedAt || null;
+
+    // COMPARABILITY INVARIANT: a dataset version is eligible for client
+    // rank-change comparison ONLY when dataset.ingestionInProgress === false.
+    // The version may advance once per completed source run, so during a
+    // combined ingest an intermediate version can exist while the other source
+    // is still running. A future client must not fire final rank-change
+    // announcements or resolve animations while ingestionInProgress is true.
+    res.json({
+      ok: true,
+      ...result,
+      lastUpdated: dataset.asOf ?? newestJobUpdatedAt ?? null,
+      dataset,
+    });
   } catch (err) {
     next(err);
   }

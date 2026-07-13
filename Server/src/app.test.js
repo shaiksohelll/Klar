@@ -80,6 +80,53 @@ vi.mock("./routes/skillDetail.js", async () => {
   const r = Router();
   return { default: r, clearDetailCache: vi.fn() };
 });
+// ── Mock DatasetState reader (no live Mongo in these route tests) ──────────
+// Returns only the public-safe shape; emptyPublicDatasetMetadata mirrors the
+// real fail-safe fallback the route uses when the read throws.
+const PUBLIC_SOURCE_IDLE = {
+  status: "idle",
+  lastAttemptAt: null,
+  lastCompletedAt: null,
+  lastSuccessAt: null,
+  lastPartialAt: null,
+  lastFailureAt: null,
+  hasError: false,
+};
+vi.mock("./lib/datasetState.js", () => ({
+  getPublicDatasetMetadata: vi.fn().mockResolvedValue({
+    version: 3,
+    asOf: "2024-06-01T00:00:00.000Z",
+    ingestionInProgress: false,
+    runningSources: [],
+    sources: {
+      adzuna: {
+        status: "succeeded",
+        lastAttemptAt: "2024-06-01T00:00:00.000Z",
+        lastCompletedAt: "2024-06-01T00:00:00.000Z",
+        lastSuccessAt: "2024-06-01T00:00:00.000Z",
+        lastPartialAt: null,
+        lastFailureAt: null,
+        hasError: false,
+      },
+      jsearch: {
+        status: "idle",
+        lastAttemptAt: null,
+        lastCompletedAt: null,
+        lastSuccessAt: null,
+        lastPartialAt: null,
+        lastFailureAt: null,
+        hasError: false,
+      },
+    },
+  }),
+  emptyPublicDatasetMetadata: () => ({
+    version: 0,
+    asOf: null,
+    ingestionInProgress: false,
+    runningSources: [],
+    sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
+  }),
+}));
 // ── Import AFTER env + mocks are set ───────────────────────────────────────
 const { default: app, clearCountriesCache } = await import("./app.js");
 const { default: request } = await import("supertest");
@@ -95,6 +142,7 @@ const { clearCompaniesCache } = await import("./aggregations/topCompanies.js");
 const { clearSkillGapRoiCache } = await import("./aggregations/skillGapRoi.js");
 const { clearDetailCache } = await import("./routes/skillDetail.js");
 const { default: Job } = await import("./models/Job.js");
+const { getPublicDatasetMetadata } = await import("./lib/datasetState.js");
 
 describe("POST /api/ingest", () => {
   beforeAll(() => {
@@ -920,5 +968,116 @@ describe("POST /api/admin/backfill-geo — cache invalidation", () => {
       matchedCount: 50,
     });
     expect(res.body.updated).toBe(10);
+  });
+});
+
+// ── DatasetState integration on /api/skills/trending (Gate 0.2B) ──────────
+describe("GET /api/skills/trending (dataset metadata)", () => {
+  beforeEach(() => {
+    // Restore the default public metadata resolution between tests so a
+    // *Once override in one test never bleeds into the next.
+    getPublicDatasetMetadata.mockResolvedValue({
+      version: 3,
+      asOf: "2024-06-01T00:00:00.000Z",
+      ingestionInProgress: false,
+      runningSources: [],
+      sources: {
+        adzuna: {
+          status: "succeeded",
+          lastAttemptAt: "2024-06-01T00:00:00.000Z",
+          lastCompletedAt: "2024-06-01T00:00:00.000Z",
+          lastSuccessAt: "2024-06-01T00:00:00.000Z",
+          lastPartialAt: null,
+          lastFailureAt: null,
+          hasError: false,
+        },
+        jsearch: {
+          status: "idle",
+          lastAttemptAt: null,
+          lastCompletedAt: null,
+          lastSuccessAt: null,
+          lastPartialAt: null,
+          lastFailureAt: null,
+          hasError: false,
+        },
+      },
+    });
+  });
+
+  it("includes a public-safe dataset object in the response", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.dataset).toBeDefined();
+    expect(res.body.dataset).toMatchObject({
+      version: 3,
+      asOf: "2024-06-01T00:00:00.000Z",
+      ingestionInProgress: false,
+      runningSources: [],
+    });
+    expect(res.body.dataset.sources.adzuna.status).toBe("succeeded");
+    expect(res.body.dataset.sources.jsearch.status).toBe("idle");
+  });
+
+  it("prefers dataset.asOf for lastUpdated over the newest Job updatedAt", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    // Job mock's newest updatedAt is 2024-01-01; asOf (2024-06-01) must win.
+    expect(res.body.lastUpdated).toBe("2024-06-01T00:00:00.000Z");
+  });
+
+  it("falls back to newest Job updatedAt when dataset.asOf is null", async () => {
+    getPublicDatasetMetadata.mockResolvedValueOnce({
+      version: 0,
+      asOf: null,
+      ingestionInProgress: false,
+      runningSources: [],
+      sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
+    });
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");
+    expect(res.body.dataset.asOf).toBeNull();
+  });
+
+  it("still serves ranking (200) when the metadata read throws", async () => {
+    getPublicDatasetMetadata.mockRejectedValueOnce(new Error("mongo down"));
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    // Ranking payload intact.
+    expect(typeof res.body.totalJobs).toBe("number");
+    // Fallback dataset is the honest empty contract, not the leaked error.
+    expect(res.body.dataset).toMatchObject({ version: 0, asOf: null, ingestionInProgress: false });
+    expect(JSON.stringify(res.body)).not.toContain("mongo down");
+    // asOf null → freshness falls back to newest Job updatedAt.
+    expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");
+  });
+
+  it("never exposes lastError, runId, or internal summaries in dataset", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    for (const src of ["adzuna", "jsearch"]) {
+      const s = res.body.dataset.sources[src];
+      expect(s).toHaveProperty("hasError");
+      expect(s).not.toHaveProperty("lastError");
+      expect(s).not.toHaveProperty("runId");
+      expect(s).not.toHaveProperty("lastSummary");
+    }
+    const serialized = JSON.stringify(res.body.dataset);
+    expect(serialized).not.toContain("lastError");
+    expect(serialized).not.toContain("runId");
+    expect(serialized).not.toContain("lastSummary");
+  });
+
+  it("keeps existing trending response fields intact alongside dataset", async () => {
+    const res = await request(app).get("/api/skills/trending");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.totalJobs).toBe(100);
+    expect(Array.isArray(res.body.skills)).toBe(true);
+    expect(res.body.velocityReady).toBe(true);
+    expect(res.body).toHaveProperty("lastUpdated");
+    expect(res.body).toHaveProperty("dataset");
   });
 });

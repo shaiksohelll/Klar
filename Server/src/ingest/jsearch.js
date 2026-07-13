@@ -12,6 +12,7 @@ import { clearMomentumCache } from "../aggregations/skillMomentum.js";
 import { clearSkillForecastCache } from "../aggregations/skillForecast.js";
 import { clearSkillGapRoiCache } from "../aggregations/skillGapRoi.js";
 import { recordDailySkillBuckets } from "./snapshot.js";
+import { trackDatasetRun } from "../lib/datasetState.js";
 
 // JSearch (RapidAPI) — https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
 //
@@ -142,7 +143,7 @@ function mapJob(item, roleQuery) {
  * @param {{ country?: string, pages?: number, datePosted?: string }} opts
  * @returns {Promise<{ requested: number, fetched: number, unique: number, upserted: number, modified: number }>}
  */
-export async function ingestJSearch({
+async function ingestJSearchImpl({
   country = "in",
   pages = 1,
   datePosted = "month",
@@ -339,4 +340,8 @@ export async function ingestJSearch({
   };
   console.log("🔄 JSearch ingest:", summary);
   return summary;
+}
+
+export async function ingestJSearch(options = {}) {
+  return trackDatasetRun("jsearch", () => ingestJSearchImpl(options));
 }
