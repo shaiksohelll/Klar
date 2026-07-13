@@ -423,12 +423,17 @@ app.get("/api/skills/trending", readLimiter, async (req, res, next) => {
     // Freshness precedence: canonical DatasetState.asOf first; before the first
     // tracked ingest (asOf === null) fall back to the newest Job updatedAt.
     // Never the browser fetch time — the fallback stays distinct from
-    // DatasetState truth.
-    const newest = await Job.findOne()
-      .sort({ updatedAt: -1 })
-      .select("updatedAt")
-      .lean();
-    const newestJobUpdatedAt = newest?.updatedAt || null;
+    // DatasetState truth. Only run the fallback query when it can actually
+    // matter (asOf is null) — this is a hot path, so skip the extra Job
+    // lookup entirely once DatasetState has a real asOf.
+    let newestJobUpdatedAt = null;
+    if (dataset.asOf == null) {
+      const newest = await Job.findOne()
+        .sort({ updatedAt: -1 })
+        .select("updatedAt")
+        .lean();
+      newestJobUpdatedAt = newest?.updatedAt || null;
+    }
 
     // COMPARABILITY INVARIANT: a dataset version is eligible for client
     // rank-change comparison ONLY when dataset.ingestionInProgress === false.

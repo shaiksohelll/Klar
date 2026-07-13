@@ -20,6 +20,12 @@ function assertSource(source) {
   if (!SOURCES.has(source)) throw new Error(`Unknown dataset source: ${source}`);
 }
 
+// A run is considered active (still writing) while sources.<source>.status is
+// "running" AND its lastAttemptAt is within this window. Anything older is
+// presumed crashed (process killed, deploy restart, etc.) — the flag must not
+// stay wedged forever, so a stale run is eligible for takeover.
+export const STALE_RUN_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+
 function safeError(error) {
   return (error instanceof Error ? error.message : String(error ?? "Unknown error")).slice(0, 500);
 }
@@ -41,16 +47,54 @@ function classifyResult(source, result) {
   return hasProblems ? "partial" : "succeeded";
 }
 
+/**
+ * Begin a dataset run for `source`.
+ *
+ * Refuses (returns a skipped descriptor, does NOT touch runId/status/
+ * runningSources) when that source already has an active run whose
+ * lastAttemptAt is within STALE_RUN_WINDOW_MS — this is what prevents a
+ * second concurrent run for the same source from hijacking runId out from
+ * under the first. Without this guard, run B could overwrite run A's runId
+ * and later settle (complete/fail) the source out of runningSources while
+ * run A is still writing, making ingestionInProgress read false mid-write.
+ *
+ * A run whose lastAttemptAt is OLDER than the staleness window is presumed
+ * crashed (killed process, deploy restart, etc.) and is eligible for
+ * takeover — otherwise a crashed run would wedge the source in
+ * runningSources (and ingestionInProgress=true) forever, since nothing is
+ * left to call completeDatasetRun/failDatasetRun with the orphaned runId.
+ */
 async function beginDatasetRun(source) {
   assertSource(source);
   const runId = crypto.randomUUID();
   const startedAt = new Date();
   const prefix = `sources.${source}`;
+  const staleThreshold = new Date(startedAt.getTime() - STALE_RUN_WINDOW_MS);
 
-  await DatasetState.findOneAndUpdate(
-    { _id: DATASET_ID },
+  // Ensure the singleton document exists first. Two concurrent first-ever
+  // calls can both race this upsert and one may lose with a duplicate-key
+  // error (fixed _id, no unique index tricks needed) — that's fine, it just
+  // means the other call already created the doc, so swallow E11000 only.
+  try {
+    await DatasetState.updateOne(
+      { _id: DATASET_ID },
+      { $setOnInsert: { _id: DATASET_ID, version: 0 } },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
+  }
+
+  const updated = await DatasetState.findOneAndUpdate(
     {
-      $setOnInsert: { _id: DATASET_ID, version: 0 },
+      _id: DATASET_ID,
+      $or: [
+        { [`${prefix}.status`]: { $ne: "running" } },
+        { [`${prefix}.lastAttemptAt`]: null },
+        { [`${prefix}.lastAttemptAt`]: { $lt: staleThreshold } },
+      ],
+    },
+    {
       $addToSet: { runningSources: source },
       $set: {
         [`${prefix}.runId`]: runId,
@@ -59,8 +103,13 @@ async function beginDatasetRun(source) {
         [`${prefix}.lastError`]: null,
       },
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { new: true },
   );
+
+  if (!updated) {
+    // Active, non-stale run already owns this source — refuse the takeover.
+    return { source, runId: null, startedAt, skipped: true, reason: "overlap" };
+  }
 
   return { source, runId, startedAt };
 }
@@ -117,6 +166,15 @@ export async function trackDatasetRun(source, work) {
     run = await beginDatasetRun(source);
   } catch (error) {
     console.warn(`dataset state begin failed [${source}]:`, safeError(error));
+  }
+
+  if (run?.skipped) {
+    // Another active (non-stale) run already owns this source — do not run
+    // `work` at all. Running it anyway is the overlap this guard exists to
+    // prevent (duplicate provider calls + concurrent writes to the same
+    // source's Job rows).
+    console.warn(`dataset run skipped [${source}]: an active run is already in progress`);
+    return { skipped: true, reason: run.reason };
   }
 
   try {

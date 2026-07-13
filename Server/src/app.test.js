@@ -1019,14 +1019,18 @@ describe("GET /api/skills/trending (dataset metadata)", () => {
     expect(res.body.dataset.sources.jsearch.status).toBe("idle");
   });
 
-  it("prefers dataset.asOf for lastUpdated over the newest Job updatedAt", async () => {
+  it("prefers dataset.asOf for lastUpdated over the newest Job updatedAt, and skips the fallback query", async () => {
+    // asOf is present (default mock: "2024-06-01T00:00:00.000Z") — the hot
+    // path must skip the newest-Job-updatedAt fallback query entirely.
+    Job.findOne.mockClear();
     const res = await request(app).get("/api/skills/trending");
     expect(res.status).toBe(200);
     // Job mock's newest updatedAt is 2024-01-01; asOf (2024-06-01) must win.
     expect(res.body.lastUpdated).toBe("2024-06-01T00:00:00.000Z");
+    expect(Job.findOne).not.toHaveBeenCalled();
   });
 
-  it("falls back to newest Job updatedAt when dataset.asOf is null", async () => {
+  it("falls back to newest Job updatedAt when dataset.asOf is null, and runs the fallback query", async () => {
     getPublicDatasetMetadata.mockResolvedValueOnce({
       version: 0,
       asOf: null,
@@ -1034,10 +1038,12 @@ describe("GET /api/skills/trending (dataset metadata)", () => {
       runningSources: [],
       sources: { adzuna: { ...PUBLIC_SOURCE_IDLE }, jsearch: { ...PUBLIC_SOURCE_IDLE } },
     });
+    Job.findOne.mockClear();
     const res = await request(app).get("/api/skills/trending");
     expect(res.status).toBe(200);
     expect(res.body.lastUpdated).toBe("2024-01-01T00:00:00Z");
     expect(res.body.dataset.asOf).toBeNull();
+    expect(Job.findOne).toHaveBeenCalledTimes(1);
   });
 
   it("still serves ranking (200) when the metadata read throws", async () => {
