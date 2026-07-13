@@ -184,30 +184,34 @@ describe("POST /api/ingest", () => {
   it("logs a source as skipped (not complete) when its result is a refusal", async () => {
     vi.clearAllMocks();
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
-    ingestJSearch.mockResolvedValueOnce({ fetched: 3, upserted: 1 });
+    try {
+      ingestAdzuna.mockResolvedValueOnce({ skipped: true, reason: "overlap" });
+      ingestJSearch.mockResolvedValueOnce({ fetched: 3, upserted: 1 });
 
-    const res = await request(app)
-      .post("/api/ingest")
-      .set("x-ingest-secret", "test-secret");
+      const res = await request(app)
+        .post("/api/ingest")
+        .set("x-ingest-secret", "test-secret");
 
-    // Response contract is unchanged: 202 regardless of what the background
-    // per-source runs eventually report.
-    expect(res.status).toBe(202);
+      // Response contract is unchanged: 202 regardless of what the background
+      // per-source runs eventually report.
+      expect(res.status).toBe(202);
 
-    await vi.waitFor(() => {
-      expect(ingestAdzuna).toHaveBeenCalled();
-      expect(ingestJSearch).toHaveBeenCalled();
-    });
-    // Let the background IIFE's .finally() / log lines run.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() => {
+        expect(ingestAdzuna).toHaveBeenCalled();
+        expect(ingestJSearch).toHaveBeenCalled();
+      });
+      // Let the background IIFE's .finally() / log lines run.
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const calls = logSpy.mock.calls.map((args) => args[0]);
-    expect(calls).toContain("Adzuna ingestion skipped");
-    expect(calls).not.toContain("Adzuna ingestion complete");
-    expect(calls).toContain("JSearch ingestion complete");
-
-    logSpy.mockRestore();
+      const calls = logSpy.mock.calls.map((args) => args[0]);
+      expect(calls).toContain("Adzuna ingestion skipped");
+      expect(calls).not.toContain("Adzuna ingestion complete");
+      expect(calls).toContain("JSearch ingestion complete");
+    } finally {
+      // try/finally so a failed assertion above still restores console.log
+      // instead of leaking the mock into later tests.
+      logSpy.mockRestore();
+    }
   });
 });
 

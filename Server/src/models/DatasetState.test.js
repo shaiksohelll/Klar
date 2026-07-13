@@ -91,6 +91,66 @@ describe("DatasetState", () => {
     expect(meta.sources.jsearch.status).toBe("skipped");
   });
 
+  // Fix F1: classifyResult previously special-cased jsearch for the
+  // requested:0 -> "skipped" check. A zero-request Adzuna run fell through
+  // to the hasProblems check (errors:0, pruneFailures:0, no bulkWriteError —
+  // all false) and was misclassified "succeeded", which WOULD have advanced
+  // version/asOf off a run that fetched nothing. Now requested === 0 ->
+  // "skipped" for every source, and "skipped" never advances (advancesDataset
+  // only true for "succeeded"/"partial" — that part of the contract was
+  // already correct, only the classification was source-specific and wrong).
+  it("does not advance the version when Adzuna makes a zero-request run (same as JSearch)", async () => {
+    await trackDatasetRun("adzuna", async () => ({
+      requested: 0,
+      fetched: 0,
+      unique: 0,
+      upserted: 0,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 0,
+      bulkWriteError: null,
+    }));
+    const meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(0);
+    expect(meta.asOf).toBeNull();
+    expect(meta.sources.adzuna.status).toBe("skipped");
+    expect(meta.sources.adzuna.lastSuccessAt).toBeNull();
+  });
+
+  it("still advances the version for a normal (non-zero-request) run of either source", async () => {
+    await trackDatasetRun("adzuna", async () => ({
+      requested: 4,
+      fetched: 4,
+      unique: 4,
+      upserted: 4,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 0,
+      bulkWriteError: null,
+    }));
+    let meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(1);
+    expect(meta.asOf).not.toBeNull();
+    expect(meta.sources.adzuna.status).toBe("succeeded");
+
+    await trackDatasetRun("jsearch", async () => ({
+      requested: 6,
+      fetched: 6,
+      unique: 6,
+      upserted: 6,
+      modified: 0,
+      removed: 0,
+      pruneFailures: 0,
+      errors: 0,
+      bulkWriteError: null,
+    }));
+    meta = await getDatasetMetadataInternal();
+    expect(meta.version).toBe(2);
+    expect(meta.sources.jsearch.status).toBe("succeeded");
+  });
+
   it("records failure without advancing and rethrows", async () => {
     await expect(
       trackDatasetRun("adzuna", async () => {
@@ -118,6 +178,7 @@ describe("DatasetState", () => {
     expect(second.skipped).toBeUndefined();
 
     const stale = await __datasetStateTestables.completeDatasetRun(first, {
+      requested: 1,
       fetched: 1,
       errors: 0,
       pruneFailures: 0,
@@ -125,6 +186,7 @@ describe("DatasetState", () => {
     });
     expect(stale).toBeNull();
     await __datasetStateTestables.completeDatasetRun(second, {
+      requested: 1,
       fetched: 2,
       errors: 0,
       pruneFailures: 0,
@@ -182,6 +244,7 @@ describe("DatasetState", () => {
 
     // The original run can still complete normally afterwards.
     await __datasetStateTestables.completeDatasetRun(first, {
+      requested: 4,
       fetched: 4,
       errors: 0,
       pruneFailures: 0,
@@ -296,6 +359,7 @@ describe("DatasetState", () => {
 
     // The orphaned stale run can no longer settle anything (runId mismatch).
     const orphanSettle = await __datasetStateTestables.completeDatasetRun(stale, {
+      requested: 1,
       fetched: 1,
       errors: 0,
       pruneFailures: 0,
@@ -305,6 +369,7 @@ describe("DatasetState", () => {
 
     // The new run settles normally.
     await __datasetStateTestables.completeDatasetRun(takeover, {
+      requested: 9,
       fetched: 9,
       errors: 0,
       pruneFailures: 0,
@@ -383,6 +448,11 @@ describe("DatasetState", () => {
     const pubAfter = await getPublicDatasetMetadata();
     expect(pubAfter.sources.adzuna.status).toBe("succeeded");
     expect(pubAfter.sources.adzuna.hasError).toBe(false);
+
+    // Internal reader too: lastError itself (not just the derived hasError
+    // flag) must be cleared back to null by the successful run's $set.
+    const internalAfter = await getDatasetMetadataInternal();
+    expect(internalAfter.sources.adzuna.lastError).toBeNull();
   });
 
   it("still classifies a mixed success/error run as partial (not failed)", async () => {
@@ -411,6 +481,7 @@ describe("DatasetState", () => {
     const adzunaRun = await __datasetStateTestables.beginDatasetRun("adzuna");
     await __datasetStateTestables.beginDatasetRun("jsearch");
     await __datasetStateTestables.completeDatasetRun(adzunaRun, {
+      requested: 3,
       fetched: 3,
       errors: 0,
       pruneFailures: 0,

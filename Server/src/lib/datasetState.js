@@ -45,8 +45,13 @@ function sanitizeSummary(result) {
 }
 
 function classifyResult(source, result) {
-  if (source === "jsearch" && Number(result?.requested ?? 0) === 0) return "skipped";
   const requested = Number(result?.requested ?? 0);
+  // Zero-request runs (e.g. JSearch's free-tier early-return when
+  // JSEARCH_API_KEY is unset, or an Adzuna call with an empty search-term
+  // list) made no attempt at all — classify as "skipped" for EVERY source,
+  // not just jsearch. Nothing was fetched, so this must never read as
+  // "succeeded" and advance version/asOf off a run that did nothing.
+  if (requested === 0) return "skipped";
   const errors = Number(result?.errors ?? 0);
   // Total failure: every request errored out (and there was at least one
   // request to make). Nothing usable landed, so this must NOT be reported as
