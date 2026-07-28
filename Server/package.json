@@ -29,7 +29,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "mongoose": "^9.6.3"
+    "mongoose": "^9.7.2"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.2",
